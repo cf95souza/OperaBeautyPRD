@@ -248,7 +248,7 @@ const PublicBooking = ({ branding }) => {
           <div className="text-center py-10 space-y-12 animate-in fade-in zoom-in duration-700">
              <div className="w-24 h-24 bg-accent/5 text-accent rounded-[2.5rem] flex items-center justify-center mx-auto border border-accent/10 shadow-inner"><Crown size={48} /></div>
              <div className="space-y-4">
-                <h2 className="text-4xl font-black text-slate-900 tracking-tighter leading-[0.9]">BEM-VINDA AO <br/> <span className="text-accent">{branding?.salonName || 'Capelli'}</span></h2>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tighter leading-[0.9]">BEM-VINDO(A) AO <br/> <span className="text-accent">{branding?.salonName || 'Capelli'}</span></h2>
                 <p className="text-slate-500 font-medium text-lg max-w-xs mx-auto">Sua jornada de beleza começa agora.</p>
              </div>
              <button onClick={() => setStep('identify')} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black text-lg shadow-2xl active:scale-95 transition-all uppercase">Iniciar Agendamento</button>
@@ -268,8 +268,8 @@ const PublicBooking = ({ branding }) => {
         {step === 'register' && (
           <div className="space-y-8 animate-in slide-in-from-bottom-12 duration-500">
              <div className="text-center space-y-2">
-                <h2 className="text-3xl font-black tracking-tighter text-slate-900 uppercase leading-none">Novo Cadastro</h2>
-                <p className="text-slate-400 font-medium">Parece que você é nova por aqui! <br/> Complete seu cadastro para continuar.</p>
+                <h2 className="text-3xl font-black tracking-tighter text-slate-900 uppercase leading-none">Novo(a) por aqui?</h2>
+                <p className="text-slate-400 font-medium">Complete seu cadastro para continuar agora.</p>
              </div>
              <form onSubmit={handleRegister} className="space-y-6">
                 <div className="space-y-4">
@@ -308,7 +308,7 @@ const PublicBooking = ({ branding }) => {
 
         {step === 'action' && (
           <div className="grid gap-6 animate-in fade-in duration-500 py-6">
-             <div className="text-left space-y-1 mb-4"><p className="text-accent font-black text-xs uppercase tracking-widest leading-none">Bem-vinda de volta</p><h2 className="text-4xl font-black tracking-tighter text-slate-900 uppercase leading-none">Olá, {client?.name.split(' ')[0]}!</h2></div>
+             <div className="text-left space-y-1 mb-4"><p className="text-accent font-black text-xs uppercase tracking-widest leading-none">Bem-vindo(a) de volta</p><h2 className="text-4xl font-black tracking-tighter text-slate-900 uppercase leading-none">Olá, {client?.name.split(' ')[0]}!</h2></div>
              <button onClick={startBooking} className="flex flex-col items-start gap-4 p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:border-accent hover:shadow-2xl transition-all group text-left shadow-sm">
                 <div className="w-14 h-14 bg-accent/10 text-accent rounded-2xl flex items-center justify-center group-hover:bg-accent group-hover:text-white transition-all"><Calendar size={28} /></div>
                 <div><h4 className="font-black text-slate-900 text-xl uppercase leading-tight">Novo Agendamento</h4><p className="text-sm text-slate-400 font-medium mt-1">Reserve seu próximo horário na agenda.</p></div>

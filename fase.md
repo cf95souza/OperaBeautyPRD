@@ -115,6 +115,13 @@ Este arquivo rastreia o progresso do desenvolvimento do sistema de gestão do sa
 - [x] Mapeamento e substituição de textos engessados "Capelli" em todas as pontas do sistema.
 - [x] Consumo dinâmico da base de `cap_settings` para nome fantasia operando em nuvem. Logo e títulos atualizam instantaneamente.
 
+## Fase 18: Branding Dinâmico e Linguagem Neutra [CONCLUÍDA] ✅
+- [x] Implementação de Favicon e Título dinâmicos baseados nas configurações do salão.
+- [x] Ajuste global de linguagem para formato neutro (ex: "Bem-vindo(a)", "Novo(a) Cliente").
+- [x] Neutralização de cargos (Administrador(a), Proprietário(a)) no Layout e portal.
+- [x] Revisão de mensagens automáticas (Aniversários e Manutenção) para tom inclusivo.
+- [x] Sincronização e verificação de consistência visual White Label.
+
 ## Fase 16: Estabilização de Fluxos Zero-Data
 - [x] **Cadastro Automático**: Implementada a interface de registro para novos clientes no portal público, permitindo a entrada de Nome e Data de Nascimento. (Concluído)
 - [x] **Limpeza de Base**: Script de truncate estruturado para preservar usuários e configurações durante resets de sistema. (Concluído)

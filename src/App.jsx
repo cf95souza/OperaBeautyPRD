@@ -70,7 +70,7 @@ const Login = ({ setProfile, setSession, branding }) => {
       <div className="w-full max-w-md space-y-12 animate-in fade-in duration-1000">
         <div className="text-center space-y-4">
           <h1 className="text-5xl font-serif text-slate-900 tracking-tight">{branding?.salonName || 'Capelli'}</h1>
-          <p className="text-slate-500 uppercase tracking-widest text-[10px] font-bold">Acesso ao Sistema</p>
+          <p className="text-slate-500 uppercase tracking-widest text-[10px] font-bold">Acesso ao Sistema • Bem-vindo(a)</p>
         </div>
         
         <form onSubmit={handleLogin} className="space-y-6">
@@ -147,7 +147,7 @@ function App() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [initializing, setInitializing] = useState(true);
-  const [branding, setBranding] = useState({ salonName: 'Capelli', primaryColor: '#be185d' });
+  const [branding, setBranding] = useState({ salonName: 'Capelli', primaryColor: '#be185d', logoUrl: '' });
 
   const fetchProfile = async (userId) => {
     try {
@@ -227,9 +227,31 @@ function App() {
     };
 
     const loadBranding = async () => {
-      const { data } = await supabase.from('cap_settings').select('primary_color, salon_name').maybeSingle();
+      const { data } = await supabase.from('cap_settings').select('primary_color, salon_name, logo_url').maybeSingle();
       if (data) {
-        setBranding({ salonName: data.salon_name || 'Capelli', primaryColor: data.primary_color || '#be185d' });
+        setBranding({ 
+          salonName: data.salon_name || 'Capelli', 
+          primaryColor: data.primary_color || '#be185d',
+          logoUrl: data.logo_url || ''
+        });
+
+        // 1. Título da Aba
+        if (data.salon_name) {
+          document.title = data.salon_name;
+        }
+
+        // 2. Favicon Dinâmico
+        if (data.logo_url) {
+          let link = document.querySelector("link[rel~='icon']");
+          if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.getElementsByTagName('head')[0].appendChild(link);
+          }
+          link.href = data.logo_url;
+        }
+
+        // 3. Cor de Acento
         if (data.primary_color) {
           document.documentElement.style.setProperty('--dynamic-accent', data.primary_color);
         }

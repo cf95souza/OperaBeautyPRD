@@ -161,7 +161,7 @@ const Services = ({ profile }) => {
         </div>
         {!isProfessional && (
           <button onClick={() => handleOpenModal()} className="btn-accent text-sm">
-            <Plus size={16} /> Novo Serviço
+            <Plus size={16} /> Novo(a) Serviço
           </button>
         )}
       </div>
@@ -256,7 +256,7 @@ const Services = ({ profile }) => {
           <div className="bg-white rounded-lg shadow-card w-full max-w-lg my-8 animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
-                {editingService ? 'Editar Serviço' : 'Novo Serviço'}
+                {editingService ? 'Editar Serviço' : 'Novo(a) Serviço'}
               </h3>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-900"><X size={20} /></button>
             </div>

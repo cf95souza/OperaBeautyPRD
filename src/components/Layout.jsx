@@ -134,7 +134,7 @@ const Layout = ({ children, user, profile, branding }) => {
             <div className="flex items-center gap-3 pl-6 border-l border-slate-100">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-slate-900 leading-none">{profile?.full_name || 'Carregando...'}</p>
-                <p className="text-[10px] text-slate-500 uppercase tracking-tighter mt-1">{profile?.role === 'admin' ? 'Administrador' : 'Profissional'}</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-tighter mt-1">{profile?.role === 'admin' ? 'Administrador(a)' : 'Profissional'}</p>
               </div>
               <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-black shrink-0 uppercase">
                 {profile?.full_name?.[0]}

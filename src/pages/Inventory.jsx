@@ -178,7 +178,7 @@ const Inventory = ({ profile }) => {
             }}
             className="btn-accent text-sm"
           >
-            <Plus size={16} /> Novo Produto
+            <Plus size={16} /> Novo(a) Produto
           </button>
         )}
       </div>
@@ -404,7 +404,7 @@ const Inventory = ({ profile }) => {
           <div className="bg-white rounded-lg shadow-card w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
-                {editingItem ? 'Editar Produto' : 'Adicionar ao Estoque'}
+                {editingItem ? 'Editar Produto / Insumo' : 'Entrada de Estoque'}
               </h3>
               <button 
                 onClick={() => setShowModal(false)}

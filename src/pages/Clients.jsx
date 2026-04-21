@@ -132,7 +132,7 @@ const Clients = () => {
           }}
           className="btn-accent text-sm"
         >
-          <Plus size={16} /> Novo Cliente
+          <Plus size={16} /> Novo(a) Cliente
         </button>
       </div>
 
@@ -312,7 +312,7 @@ const Clients = () => {
           <div className="bg-white rounded-lg shadow-card w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
-                {editingClient ? 'Editar Cliente' : 'Novo Cliente'}
+                {editingClient ? 'Editar Cliente' : 'Novo(a) Cliente'}
               </h3>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-900"><X size={20} /></button>
             </div>

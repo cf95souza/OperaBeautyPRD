@@ -169,7 +169,7 @@ const Employees = () => {
           }}
           className="btn-accent text-sm"
         >
-          <Plus size={16} /> Novo Profissional
+          <Plus size={16} /> Novo(a) Profissional
         </button>
       </div>
 
@@ -211,7 +211,7 @@ const Employees = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-[9px] font-extrabold uppercase border px-2 py-0.5 rounded-full ${emp.role === 'admin' ? 'border-amber-200 text-amber-600 bg-amber-50' : 'border-slate-200 text-slate-500 bg-slate-50'}`}>
-                        {emp.role === 'admin' ? 'Proprietário' : 'Profissional'}
+                        {emp.role === 'admin' ? 'Proprietário(a)' : 'Profissional'}
                       </span>
                       <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${emp.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
                         {emp.is_active ? 'Habilitado' : 'Inativo'}
@@ -289,7 +289,7 @@ const Employees = () => {
                   className="input-base"
                 >
                   <option value="professional">Profissional de Beleza</option>
-                  <option value="admin">Gestor / Proprietário</option>
+                  <option value="admin">Gestor(a) / Proprietário(a)</option>
                 </select>
               </div>
 

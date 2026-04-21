@@ -104,7 +104,7 @@ const Maintenance = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl text-slate-900 tracking-tight leading-none">Ações Proativas</h2>
-          <p className="text-sm text-slate-500 mt-1">Antecipe o retorno das clientes com inteligência.</p>
+          <p className="text-sm text-slate-500 mt-1">Antecipe o retorno de clientes com inteligência.</p>
         </div>
         
         <div className="flex items-center gap-3">
@@ -138,7 +138,7 @@ const Maintenance = () => {
              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
                 <Bell className="text-slate-200" size={32} />
              </div>
-             <p className="text-slate-400 font-serif">Nenhuma cliente precisa de manutenção nos próximos dias.</p>
+             <p className="text-slate-400 font-serif">Nenhum(a) cliente precisa de manutenção nos próximos dias.</p>
           </div>
         ) : (
           filteredAlerts.map((item) => (
