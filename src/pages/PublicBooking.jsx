@@ -34,8 +34,10 @@ import {
   isSameDay
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useNotification } from '../context/NotificationProvider';
 
 const PublicBooking = ({ branding }) => {
+  const { showSuccess, showError } = useNotification();
   const [step, setStep] = useState('welcome'); 
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState({ salon_name: 'Capelli', primary_color: '#be185d', logo_url: '' });
@@ -84,11 +86,13 @@ const PublicBooking = ({ branding }) => {
     e.preventDefault();
     setLoading(true);
     const { data, error } = await supabase.from('cap_clients').insert([{ name: registrationData.name, phone, birth_date: registrationData.birth_date || null }]).select().maybeSingle();
+    
     if (data) {
+      showSuccess(`Bem-vindo(a), ${data.name}!`);
       setClient(data);
       setStep('action');
     } else {
-      alert('Erro: ' + error.message);
+      showError('Erro ao realizar cadastro: ' + error.message);
     }
     setLoading(false);
   };
@@ -223,8 +227,9 @@ const PublicBooking = ({ branding }) => {
 
       const servicesToInsert = selectedServices.map(s => ({ appointment_id: newApp.id, service_id: s.id, price_at_time: s.price, duration_at_time: s.duration_minutes }));
       await supabase.from('cap_appointment_services').insert(servicesToInsert);
+      showSuccess('Horário reservado com sucesso!');
       setStep('success');
-    } catch (err) { alert(err.message); }
+    } catch (err) { showError(err.message); }
     setLoading(false);
   };
 

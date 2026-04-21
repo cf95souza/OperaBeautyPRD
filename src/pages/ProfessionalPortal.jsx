@@ -24,9 +24,10 @@ import {
 import { format, isSameDay, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { NavLink } from 'react-router-dom';
+import { useNotification } from '../context/NotificationProvider';
 
-const ProfessionalPortal = () => {
-  const [profile, setProfile] = useState(null);
+const ProfessionalPortal = ({ profile, onLogout }) => {
+  const { showSuccess, showError } = useNotification();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
@@ -65,30 +66,18 @@ const ProfessionalPortal = () => {
         }
       }
     }, 100);
-  }, [selectedDate]); // Re-fetch on date change
+  }, [selectedDate, profile]); // Re-fetch on date or profile change
 
   const fetchData = async () => {
+    if (!profile) return;
     setLoading(true);
-    const savedSession = localStorage.getItem('cap_internal_session');
-    let userId = null;
 
-    if (savedSession) {
-      userId = JSON.parse(savedSession).user_id || JSON.parse(savedSession).id;
-    } else {
-      const { data: { session } } = await supabase.auth.getSession();
-      userId = session?.user?.id;
-    }
+    const userId = profile.id || profile.user_id;
 
-    if (!userId) {
-      window.location.href = '/login';
-      return;
-    }
-
-    const { data: prof } = await supabase.from('cap_profiles').select('*').eq('id', userId).single();
-    setProfile(prof);
-
-    const startOfDayStr = new Date(selectedDate.setHours(0,0,0,0)).toISOString();
-    const endOfDayStr = new Date(selectedDate.setHours(23,59,59,999)).toISOString();
+    const startOfDayStr = new Date(selectedDate);
+    startOfDayStr.setHours(0,0,0,0);
+    const endOfDayStr = new Date(selectedDate);
+    endOfDayStr.setHours(23,59,59,999);
 
     const { data: apps } = await supabase
       .from('cap_appointments')
@@ -142,7 +131,7 @@ const ProfessionalPortal = () => {
         .upload(filePath, selectedFile);
         
       if (uploadError) {
-        alert('Erro ao enviar foto: ' + uploadError.message);
+        showError('Erro ao enviar foto: ' + uploadError.message);
         setIsSubmittingNote(false);
         return;
       }
@@ -172,8 +161,9 @@ const ProfessionalPortal = () => {
         .eq('client_id', selectedAppointment.client_id)
         .order('created_at', { ascending: false });
       setClientNotes(data || []);
+      showSuccess('Anotação salva com sucesso!');
     } else {
-      alert('Erro ao salvar anotação: ' + error.message);
+      showError('Erro ao salvar anotação: ' + error.message);
     }
     
     setIsSubmittingNote(false);
@@ -187,8 +177,9 @@ const ProfessionalPortal = () => {
       .eq('id', appointmentId);
 
     if (error) {
-      alert('Erro ao atualizar status: ' + error.message);
+      showError('Erro ao atualizar status: ' + error.message);
     } else {
+      showSuccess(`Status atualizado para: ${newStatus === 'completed' ? 'Concluído' : newStatus === 'in_progress' ? 'Em Atendimento' : 'Agendado'}`);
       await fetchData();
       if (selectedAppointment && selectedAppointment.id === appointmentId) {
         setSelectedAppointment(prev => ({ ...prev, status: newStatus }));
@@ -197,10 +188,8 @@ const ProfessionalPortal = () => {
     setUpdatingId(null);
   };
 
-  const handleLogout = async () => {
-    localStorage.removeItem('cap_internal_session');
-    await supabase.auth.signOut();
-    window.location.href = '/login';
+  const handleLogoutLocal = async () => {
+    if (onLogout) await onLogout();
   };
 
   return (

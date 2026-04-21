@@ -14,8 +14,10 @@ import {
   MessageCircle,
   ChevronRight
 } from 'lucide-react';
+import { useNotification } from '../context/NotificationProvider';
 
 const Clients = () => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -72,29 +74,33 @@ const Clients = () => {
 
       if (error) {
         console.error('Erro de permissão ou banco:', error);
-        alert(`Erro ao salvar cliente: ${error.message} (Verifique se as permissões de banco estão corretas)`);
+        showError(`Erro ao salvar cliente: ${error.message}`);
       } else {
+        showSuccess(editingClient ? 'Cliente atualizado!' : 'Novo(a) cliente cadastrado(a)!');
         setShowModal(false);
         setFormData({ name: '', phone: '', birth_date: '' });
         await fetchClients();
       }
     } catch (err) {
       console.error('Crash in handleSave:', err);
-      alert('Erro inesperado ao salvar.');
+      showError('Erro inesperado ao salvar.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Excluir cadastro deste cliente?')) {
+    if (await confirm('Deseja realmente excluir o cadastro deste cliente? Esta ação removerá o acesso ao histórico básico.')) {
       const { error } = await supabase
         .from('cap_clients')
         .delete()
         .eq('id', id);
       
-      if (error) alert('Erro ao excluir: ' + error.message);
-      else fetchClients();
+      if (error) showError('Erro ao excluir: ' + error.message);
+      else {
+        showSuccess('Cadastro removido com sucesso!');
+        fetchClients();
+      }
     }
   };
 

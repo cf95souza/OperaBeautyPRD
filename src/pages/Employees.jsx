@@ -17,8 +17,10 @@ import {
   Key,
   ShieldOff
 } from 'lucide-react';
+import { useNotification } from '../context/NotificationProvider';
 
 const Employees = () => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -65,7 +67,7 @@ const Employees = () => {
         })
         .eq('id', editingEmployee.id);
 
-      if (error) alert('Erro ao atualizar: ' + error.message);
+      if (error) showError('Erro ao atualizar: ' + error.message);
       else {
         // Se preencheu nova senha no modal de edição, faz o reset automático
         if (formData.password) {
@@ -73,7 +75,10 @@ const Employees = () => {
              p_user_id: editingEmployee.id,
              p_new_password: formData.password
            });
-           if (resetErr) alert('Nome atualizado, mas erro ao resetar senha: ' + resetErr.message);
+           if (resetErr) showError('Nome atualizado, mas erro ao resetar senha: ' + resetErr.message);
+           else showSuccess('Profissional atualizado com sucesso!');
+        } else {
+          showSuccess('Profissional atualizado com sucesso!');
         }
         setShowModal(false);
         fetchEmployees();
@@ -88,8 +93,9 @@ const Employees = () => {
       });
 
       if (error) {
-        alert('Erro ao criar profissional: ' + error.message);
+        showError('Erro ao criar profissional: ' + error.message);
       } else {
+        showSuccess('Profissional cadastrado com sucesso!');
         setShowModal(false);
         fetchEmployees();
       }
@@ -108,9 +114,9 @@ const Employees = () => {
     });
 
     if (error) {
-      alert('Erro ao resetar senha: ' + error.message);
+      showError('Erro ao resetar senha: ' + error.message);
     } else {
-      alert('Senha atualizada com sucesso!');
+      showSuccess('Senha atualizada com sucesso!');
       setResetModal({ show: false, employee: null, newPassword: '' });
     }
     setLoading(false);
@@ -124,18 +130,19 @@ const Employees = () => {
       .eq('professional_id', emp.id);
 
     if (count > 0) {
-      alert('Não é possível excluir este profissional pois ele possui histórico de atendimentos. Use a função "Inativar" para remover o acesso.');
+      showError('Não é possível excluir este profissional pois ele possui histórico de atendimentos. Use a função "Inativar" para remover o acesso.');
       return;
     }
 
-    if (window.confirm(`Deseja excluir DEFINITIVAMENTE o registro de ${emp.full_name}?`)) {
+    if (await confirm(`Deseja excluir DEFINITIVAMENTE o registro de ${emp.full_name}?`)) {
       setLoading(true);
-      // Nota: No Supabase, deletar do auth.users requer admin triggers ou edge functions.
-      // Aqui deletamos o perfil. O usuário do auth permanecerá órfão (ou podemos inativar).
       const { error } = await supabase.from('cap_profiles').delete().eq('id', emp.id);
       
-      if (error) alert('Erro ao excluir: ' + error.message);
-      else fetchEmployees();
+      if (error) showError('Erro ao excluir: ' + error.message);
+      else {
+        showSuccess('Profissional excluído com sucesso!');
+        fetchEmployees();
+      }
       setLoading(false);
     }
   };
@@ -146,8 +153,11 @@ const Employees = () => {
       .update({ is_active: !emp.is_active })
       .eq('id', emp.id);
     
-    if (error) alert('Erro ao atualizar status: ' + error.message);
-    else fetchEmployees();
+    if (error) showError('Erro ao atualizar status: ' + error.message);
+    else {
+      showSuccess(`Profissional ${!emp.is_active ? 'reativado' : 'inativado'} com sucesso!`);
+      fetchEmployees();
+    }
   };
 
   const filteredEmployees = employees.filter(e => 

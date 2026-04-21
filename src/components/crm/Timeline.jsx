@@ -12,8 +12,10 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useNotification } from '../../context/NotificationProvider';
 
 const Timeline = ({ clientId }) => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState('');
@@ -94,29 +96,31 @@ const Timeline = ({ clientId }) => {
 
       setContent('');
       clearImage();
+      showSuccess('Publicação enviada para a timeline!');
       fetchNotes();
     } catch (error) {
-      alert('Erro ao postar na timeline: ' + error.message);
+      showError('Erro ao postar na timeline: ' + error.message);
     } finally {
       setUploading(false);
     }
   };
 
   const deleteNote = async (id, imagePath) => {
-    if (!window.confirm('Excluir esta publicação da timeline?')) return;
+    if (await confirm('Deseja excluir esta publicação definitivamente? Esta ação não pode ser desfeita.')) {
+      const { error } = await supabase
+        .from('cap_timeline_notes')
+        .delete()
+        .eq('id', id);
 
-    const { error } = await supabase
-      .from('cap_timeline_notes')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      alert('Erro ao excluir nota');
-    } else {
-      if (imagePath) {
-        await supabase.storage.from('client-media').remove([imagePath]);
+      if (error) {
+        showError('Erro ao excluir nota');
+      } else {
+        if (imagePath) {
+          await supabase.storage.from('client-media').remove([imagePath]);
+        }
+        showSuccess('Publicação removida com sucesso!');
+        fetchNotes();
       }
-      fetchNotes();
     }
   };
 

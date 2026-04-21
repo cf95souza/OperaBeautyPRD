@@ -17,11 +17,22 @@ import PublicBooking from './pages/PublicBooking';
 import Maintenance from './pages/Maintenance';
 import ProfileSettings from './pages/ProfileSettings';
 import ProfessionalPortal from './pages/ProfessionalPortal';
-import { Clock, Bell, ShieldOff, AlertCircle, Loader2 } from 'lucide-react';
+import { Clock, Bell, ShieldOff, AlertCircle, Loader2, Crown } from 'lucide-react';
+import { NotificationProvider } from './context/NotificationProvider';
 
 // --- Protected Route Wrapper ---
 const ProtectedRoute = ({ children, allowedRoles, profile, session, initializing }) => {
-  if (initializing) return null;
+  if (initializing) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#fdfcfb]">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-accent rounded-full animate-spin"></div>
+          <Crown className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-accent/20 w-6 h-6" />
+        </div>
+        <p className="mt-6 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] animate-pulse">Sincronizando Acesso...</p>
+      </div>
+    );
+  }
   if (!session) return <Navigate to="/login" replace />;
   if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
     return <Navigate to={profile.role === 'professional' ? '/portal' : '/'} replace />;
@@ -166,6 +177,13 @@ function App() {
     }
   };
 
+  const handleLogout = async () => {
+    localStorage.removeItem('cap_internal_session');
+    await supabase.auth.signOut();
+    setSession(null);
+    setProfile(null);
+  };
+
   useEffect(() => {
     let mounted = true;
     let profileSubscription = null;
@@ -184,11 +202,21 @@ function App() {
         // 1. Verificar Sessão Interna (LocalStorage)
         const savedSession = localStorage.getItem('cap_internal_session');
         if (savedSession) {
-          const internalUser = JSON.parse(savedSession);
-          setProfile(internalUser);
-          setSession({ user: { id: internalUser.user_id, email: internalUser.access_email }, isInternal: true });
-          setInitializing(false);
-          return;
+          try {
+            const internalUser = JSON.parse(savedSession);
+            if (internalUser && (internalUser.user_id || internalUser.id)) {
+              setProfile(internalUser);
+              setSession({ 
+                user: { id: internalUser.user_id || internalUser.id, email: internalUser.access_email }, 
+                isInternal: true 
+              });
+              setInitializing(false);
+              return;
+            }
+          } catch (e) {
+            console.error("Erro ao decodificar sessão interna:", e);
+            localStorage.removeItem('cap_internal_session');
+          }
         }
 
         // 2. Pega a sessão oficial do Supabase
@@ -313,7 +341,8 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
+    <NotificationProvider>
+      <BrowserRouter>
       <Routes>
         {/* redirecionamento de profissional logado na raiz */}
         <Route 
@@ -333,7 +362,7 @@ function App() {
         {/* --- Protected Area (Admin/Profissional) --- */}
         <Route element={
           <ProtectedRoute session={session} profile={profile} initializing={initializing}>
-            <Layout user={session?.user} profile={profile} branding={branding} />
+            <Layout user={session?.user} profile={profile} branding={branding} onLogout={handleLogout} />
           </ProtectedRoute>
         }>
           <Route path="/dashboard" element={
@@ -377,14 +406,15 @@ function App() {
           <Route path="/minha-conta" element={<ProfileSettings />} />
           <Route path="/portal" element={
             <ProtectedRoute allowedRoles={['professional', 'admin']} session={session} profile={profile} initializing={initializing}>
-              <ProfessionalPortal />
+              <ProfessionalPortal profile={profile} onLogout={handleLogout} />
             </ProtectedRoute>
           } />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+      </BrowserRouter>
+    </NotificationProvider>
   );
 }
 

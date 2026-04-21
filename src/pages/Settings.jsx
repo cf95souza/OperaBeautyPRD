@@ -16,8 +16,10 @@ import {
   X,
   Scissors
 } from 'lucide-react';
+import { useNotification } from '../context/NotificationProvider';
 
 const Settings = () => {
+  const { showSuccess, showError, confirm } = useNotification();
   const [activeTab, setActiveTab] = useState('branding');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -70,7 +72,7 @@ const Settings = () => {
     ];
     
     const { error } = await supabase.from('cap_business_hours').insert(defaultHours);
-    if (error) alert('Erro ao inicializar: ' + error.message);
+    if (error) showError('Erro ao inicializar: ' + error.message);
     else fetchBusinessHours();
     setLoadingHours(false);
   };
@@ -83,8 +85,8 @@ const Settings = () => {
   const handleSaveBranding = async () => {
     setSaving(true);
     const { error } = await supabase.from('cap_settings').update(branding).eq('id', branding.id);
-    if (error) alert('Erro ao salvar branding: ' + error.message);
-    else alert('Identidade visual atualizada com sucesso!');
+    if (error) showError('Erro ao salvar branding: ' + error.message);
+    else showSuccess('Identidade visual atualizada com sucesso!');
     setSaving(false);
   };
 
@@ -106,9 +108,9 @@ const Settings = () => {
         .upsert(businessHours);
         
       if (error) throw error;
-      alert('Jornada semanal salva com sucesso!');
+      showSuccess('Jornada semanal salva com sucesso!');
     } catch (err) {
-      alert('Erro ao salvar horários: ' + err.message);
+      showError('Erro ao salvar horários: ' + err.message);
     }
     setSavingHours(false);
   };
@@ -117,13 +119,20 @@ const Settings = () => {
     e.preventDefault();
     if (!newBlockedDate.date) return;
     const { error } = await supabase.from('cap_blocked_dates').insert([{ blocked_date: newBlockedDate.date, reason: newBlockedDate.reason }]);
-    if (error) alert('Erro ao bloquear data: ' + error.message);
-    else { setNewBlockedDate({ date: '', reason: '' }); fetchBlockedDates(); }
+    if (error) showError('Erro ao bloquear data: ' + error.message);
+    else { 
+      showSuccess('Data bloqueada com sucesso!');
+      setNewBlockedDate({ date: '', reason: '' }); 
+      fetchBlockedDates(); 
+    }
   };
 
   const deleteBlockedDate = async (id) => {
-    await supabase.from('cap_blocked_dates').delete().eq('id', id);
-    fetchBlockedDates();
+    if (await confirm('Deseja realmente remover o bloqueio desta data? Esta ação permitirá novos agendamentos neste dia.')) {
+      await supabase.from('cap_blocked_dates').delete().eq('id', id);
+      showSuccess('Data desbloqueada com sucesso!');
+      fetchBlockedDates();
+    }
   };
 
   if (loading) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-accent" /></div>;

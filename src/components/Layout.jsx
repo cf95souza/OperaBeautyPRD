@@ -20,14 +20,13 @@ import {
 } from 'lucide-react';
 import ProfessionalSidebar from './ProfessionalSidebar';
 
-const Layout = ({ children, user, profile, branding }) => {
+const Layout = ({ children, user, profile, branding, onLogout }) => {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const isProfessional = profile?.role === 'professional';
 
   const handleLogout = async () => {
-    localStorage.removeItem('cap_internal_session');
-    await supabase.auth.signOut();
+    if (onLogout) await onLogout();
     navigate('/login');
   };
 

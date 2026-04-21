@@ -12,8 +12,10 @@ import {
   PlusCircle,
   MinusCircle
 } from 'lucide-react';
+import { useNotification } from '../context/NotificationProvider';
 
 const Services = ({ profile }) => {
+  const { showSuccess, showError } = useNotification();
   const isProfessional = profile?.role === 'professional';
   const [services, setServices] = useState([]);
   const [inventory, setInventory] = useState([]);
@@ -96,14 +98,14 @@ const Services = ({ profile }) => {
         .from('cap_services')
         .update(serviceData)
         .eq('id', editingService.id);
-      if (error) { alert(error.message); setLoading(false); return; }
+      if (error) { showError(error.message); setLoading(false); return; }
       serviceId = editingService.id;
     } else {
       const { data, error } = await supabase
         .from('cap_services')
         .insert([serviceData])
         .select();
-      if (error) { alert(error.message); setLoading(false); return; }
+      if (error) { showError(error.message); setLoading(false); return; }
       serviceId = data[0].id;
     }
 
@@ -126,6 +128,7 @@ const Services = ({ profile }) => {
     }
 
     setShowModal(false);
+    showSuccess(editingService ? 'Serviço atualizado com sucesso!' : 'Novo serviço cadastrado!');
     fetchData();
   };
 

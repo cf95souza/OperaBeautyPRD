@@ -13,8 +13,10 @@ import {
   EyeOff,
   History
 } from 'lucide-react';
+import { useNotification } from '../context/NotificationProvider';
 
 const Inventory = ({ profile }) => {
+  const { showSuccess, showError, confirm } = useNotification();
   const isProfessional = profile?.role === 'professional';
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -75,8 +77,9 @@ const Inventory = ({ profile }) => {
     }
 
     if (error) {
-      alert('Erro ao salvar item: ' + error.message);
+      showError('Erro ao salvar item: ' + error.message);
     } else {
+      showSuccess(editingItem ? 'Item atualizado com sucesso!' : 'Novo item cadastrado!');
       setShowModal(false);
       setEditingItem(null);
       setFormData({ name: '', quantity: '', unit: 'un', min_quantity: '' });
@@ -110,8 +113,11 @@ const Inventory = ({ profile }) => {
       .update({ is_active: !item.is_active })
       .eq('id', item.id);
     
-    if (error) alert('Erro ao alterar status: ' + error.message);
-    else fetchInventory();
+    if (error) showError('Erro ao alterar status: ' + error.message);
+    else {
+      showSuccess(`Item ${!item.is_active ? 'ativado' : 'inativado'} com sucesso!`);
+      fetchInventory();
+    }
   };
 
   const handleDelete = async (item) => {
@@ -126,14 +132,17 @@ const Inventory = ({ profile }) => {
       return;
     }
 
-    if (window.confirm(`Tem certeza que deseja excluir "${item.name}" definitivamente?`)) {
+    if (await confirm(`Tem certeza que deseja excluir "${item.name}" definitivamente? Esta ação não pode ser desfeita.`)) {
       const { error } = await supabase
         .from('cap_inventory')
         .delete()
         .eq('id', item.id);
       
-      if (error) alert('Erro ao excluir: ' + error.message);
-      else fetchInventory();
+      if (error) showError('Erro ao excluir: ' + error.message);
+      else {
+        showSuccess('Item excluído com sucesso!');
+        fetchInventory();
+      }
     }
   };
 
@@ -150,8 +159,9 @@ const Inventory = ({ profile }) => {
       .eq('id', replenishModal.item.id);
 
     if (error) {
-      alert('Erro ao repor estoque: ' + error.message);
+      showError('Erro ao repor estoque: ' + error.message);
     } else {
+      showSuccess(`Estoque de ${replenishModal.item.name} atualizado (+${replenishModal.amount})`);
       setReplenishModal({ show: false, item: null, amount: '' });
       fetchInventory();
     }
