@@ -69,17 +69,20 @@ const ProfessionalPortal = ({ profile, onLogout }) => {
   }, [selectedDate, profile]); // Re-fetch on date or profile change
 
   const fetchData = async () => {
-    if (!profile) return;
     setLoading(true);
+    const userId = profile?.id || profile?.user_id;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
 
-    const userId = profile.id || profile.user_id;
-
+    // Normalização de Datas para UTC (Início e Fim do Dia Selecionado)
     const startOfDayStr = new Date(selectedDate);
     startOfDayStr.setHours(0,0,0,0);
     const endOfDayStr = new Date(selectedDate);
     endOfDayStr.setHours(23,59,59,999);
 
-    const { data: apps } = await supabase
+    const { data: apps, error } = await supabase
       .from('cap_appointments')
       .select(`
         *,
@@ -91,11 +94,16 @@ const ProfessionalPortal = ({ profile, onLogout }) => {
         cap_services (name)
       `)
       .eq('professional_id', userId)
-      .gte('start_time', startOfDayStr)
-      .lte('start_time', endOfDayStr)
+      .gte('start_time', startOfDayStr.toISOString())
+      .lte('start_time', endOfDayStr.toISOString())
       .order('start_time', { ascending: true });
 
-    setAppointments(apps || []);
+    if (error) {
+      console.error("Erro ao buscar agenda:", error);
+      showError('Erro ao carregar agenda');
+    } else {
+      setAppointments(apps || []);
+    }
     setLoading(false);
   };
 
