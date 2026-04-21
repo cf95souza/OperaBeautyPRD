@@ -257,50 +257,103 @@ function App() {
     const loadBranding = async () => {
       const { data } = await supabase.from('cap_settings').select('primary_color, salon_name, logo_url').maybeSingle();
       if (data) {
-        setBranding({ 
-          salonName: data.salon_name || 'Capelli', 
-          primaryColor: data.primary_color || '#be185d',
-          logoUrl: data.logo_url || ''
-        });
+        const salonName = data.salon_name || 'Capelli';
+        const primaryColor = data.primary_color || '#be185d';
+        const logoUrl = data.logo_url || '/pwa-192x192.png';
+
+        setBranding({ salonName, primaryColor, logoUrl: data.logo_url || '' });
 
         // 1. Título da Aba
-        if (data.salon_name) {
-          document.title = data.salon_name;
-        }
+        document.title = salonName;
 
         // 2. Favicon Dinâmico
-        if (data.logo_url) {
-          let link = document.querySelector("link[rel~='icon']");
-          if (!link) {
-            link = document.createElement('link');
-            link.rel = 'icon';
-            document.getElementsByTagName('head')[0].appendChild(link);
-          }
-          link.href = data.logo_url;
+        let favLink = document.querySelector("link[rel~='icon']");
+        if (!favLink) {
+          favLink = document.createElement('link');
+          favLink.rel = 'icon';
+          document.getElementsByTagName('head')[0].appendChild(favLink);
         }
+        favLink.href = logoUrl;
 
-        // 3. Cor de Acento
-        if (data.primary_color) {
-          document.documentElement.style.setProperty('--dynamic-accent', data.primary_color);
+        // 3. Apple Touch Icon (iOS)
+        let appleIcon = document.querySelector("link[rel='apple-touch-icon']");
+        if (!appleIcon) {
+          appleIcon = document.createElement('link');
+          appleIcon.rel = 'apple-touch-icon';
+          document.getElementsByTagName('head')[0].appendChild(appleIcon);
         }
+        appleIcon.href = logoUrl;
+
+        // 4. Cor de Tema (Status Bar)
+        let themeMeta = document.querySelector("meta[name='theme-color']");
+        if (!themeMeta) {
+          themeMeta = document.createElement('meta');
+          themeMeta.name = 'theme-color';
+          document.getElementsByTagName('head')[0].appendChild(themeMeta);
+        }
+        themeMeta.content = primaryColor;
+        document.documentElement.style.setProperty('--dynamic-accent', primaryColor);
+
+        // 5. MANIFESTO PWA DINÂMICO
+        const myManifest = {
+          short_name: salonName,
+          name: salonName,
+          start_url: "/",
+          display: "standalone",
+          background_color: "#ffffff",
+          theme_color: primaryColor,
+          icons: [
+            {
+              src: logoUrl,
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "any maskable"
+            },
+            {
+              src: logoUrl,
+              sizes: "512x512",
+              type: "image/png"
+            }
+          ]
+        };
+        const stringManifest = JSON.stringify(myManifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        
+        let manifestLink = document.querySelector("link[rel='manifest']");
+        if (!manifestLink) {
+          manifestLink = document.createElement('link');
+          manifestLink.rel = 'manifest';
+          document.getElementsByTagName('head')[0].appendChild(manifestLink);
+        }
+        manifestLink.setAttribute('href', manifestURL);
       }
     };
 
     initApp();
     loadBranding();
 
-    // 2. Escuta mudanças oficiais, mas limpa a interna se necessário
+    // 2. Escuta mudanças oficiais, mas evita limpar a sessão se for um login interno (Professional)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
       if (!mounted) return;
       
+      const hasInternal = !!localStorage.getItem('cap_internal_session');
+
       if (event === 'SIGNED_OUT') {
         localStorage.removeItem('cap_internal_session');
+        setSession(null);
+        setProfile(null);
+        return;
       }
 
-      setSession(currentSession);
+      // IMPORTANTE: Se temos sessão oficial, usamos ela. 
+      // Se não temos sessão oficial MAS temos interna, NÃO limpamos o estado.
       if (currentSession) {
+        setSession(currentSession);
         fetchProfile(currentSession.user.id);
-      } else if (!localStorage.getItem('cap_internal_session')) {
+      } else if (!hasInternal) {
+        // Apenas limpa se não houver NENHUMA sessão (nem oficial, nem interna)
+        setSession(null);
         setProfile(null);
       }
     });
