@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap');
+
+@theme {
+  --color-primary: #0F172A; /* Slate-900 */
+  --color-secondary: #F8FAFC; /* Slate-50 */
+  --color-accent: var(--dynamic-accent, #BE185D);
+  --color-muted: #64748B; /* Slate-500 */
+  --color-surface: #FFFFFF;
+  --color-border: #F1F5F9; /* Slate-100 */
+  
+  --font-serif: "Playfair Display", serif;
+  --font-sans: Inter, sans-serif;
+
+  --shadow-premium: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+:root {
+  --dynamic-accent: #BE185D; /* Fallback inicial */
+  
+  /* Fluid Typography Scale (Ajustada para tamanhos mais suaves) */
+  --text-xs: clamp(0.7rem, 0.65rem + 0.2vw, 0.8rem);
+  --text-sm: clamp(0.8rem, 0.75rem + 0.2vw, 0.875rem);
+  --text-base: clamp(0.9rem, 0.85rem + 0.2vw, 1rem);
+  --text-lg: clamp(1rem, 0.95rem + 0.3vw, 1.25rem);
+  --text-xl: clamp(1.25rem, 1.1rem + 0.4vw, 1.5rem);
+  --text-2xl: clamp(1.5rem, 1.3rem + 0.5vw, 1.8rem);
+  
+  /* Fluid Spacing Scale */
+  --space-xs: clamp(0.25rem, 0.2rem + 0.25vw, 0.5rem);
+  --space-sm: clamp(0.5rem, 0.4rem + 0.5vw, 1rem);
+  --space-md: clamp(1rem, 0.8rem + 1vw, 2rem);
+  --space-lg: clamp(2rem, 1.5rem + 2.5vw, 4rem);
+
+  font-family: var(--font-sans);
+  background-color: var(--color-secondary);
+  color: var(--color-primary);
+}
+
+body {
+  @apply bg-secondary text-primary antialiased min-h-screen selection:bg-accent/10 selection:text-accent;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  @apply font-serif font-medium tracking-normal;
+}
+
+h1 { font-size: var(--text-2xl); }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-lg); }
+p { font-size: var(--text-base); }
+
+/* Base Utility Classes */
+.card-base {
+  @apply bg-surface border border-border shadow-premium rounded-lg transition-all duration-200;
+}
+
+.btn-primary {
+  @apply bg-primary text-white px-4 py-2 rounded-md font-medium hover:bg-slate-800 transition-all duration-150 flex items-center justify-center gap-2 disabled:opacity-50;
+}
+
+.btn-accent {
+  @apply bg-accent text-white px-4 py-2 rounded-md font-medium hover:bg-rose-800 transition-all duration-150 flex items-center justify-center gap-2;
+}
+
+.input-base {
+  @apply w-full px-3 py-2 bg-white border border-slate-200 rounded-md outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all text-sm;
+}
+
+/* Responsive Table utilities */
+@media (max-width: 768px) {
+  .responsive-table-container {
+    @apply space-y-4;
+  }
+  .responsive-table-row {
+    @apply bg-surface border border-border shadow-premium rounded-xl p-6 space-y-3 bg-white;
+  }
+  .responsive-table-cell {
+    @apply flex justify-between items-center text-xs;
+  }
+  .responsive-table-label {
+    @apply font-bold text-slate-400 uppercase tracking-widest text-[9px];
+  }
+}
