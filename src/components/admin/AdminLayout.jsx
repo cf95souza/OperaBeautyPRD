@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
+import NotificationDropdown from './NotificationDropdown';
 
 const AdminLayout = () => {
   const { tenant_slug } = useParams();
@@ -8,6 +9,18 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const { tenant, session, logout } = useTenant();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [notificationToast, setNotificationToast] = useState({ show: false, message: '' });
+
+  // Temporizador para esconder o toast de notificação após 3 segundos
+  useEffect(() => {
+    if (notificationToast.show) {
+      const timer = setTimeout(() => {
+        setNotificationToast({ show: false, message: '' });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notificationToast.show]);
+
 
   // Fecha o menu mobile quando a rota mudar
   useEffect(() => {
@@ -62,15 +75,23 @@ const AdminLayout = () => {
         
         {/* Header da Sidebar */}
         <div className="flex items-center justify-between mb-xl p-sm">
-          <div className="flex items-center gap-md">
-            <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center shrink-0">
+          <Link 
+            to={`/${tenant_slug}/staff/perfil`} 
+            className="flex items-center gap-md hover:opacity-85 transition-all group shrink-0"
+            title="Ver meu perfil"
+          >
+            <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-variant group-hover:border-primary border-2 border-transparent flex items-center justify-center shrink-0 transition-all">
               <span className="material-symbols-outlined text-on-surface-variant text-2xl">person</span>
             </div>
             <div>
-              <h2 className="font-label-md text-label-md text-on-surface">{session?.name || (isManager ? 'Gestor' : 'Profissional')}</h2>
-              <p className="font-label-sm text-label-sm text-secondary">{tenant?.name || 'Salão'}</p>
+              <h2 className="font-label-md text-label-md text-on-surface group-hover:text-primary transition-colors truncate max-w-[130px]">
+                {session?.name || (isManager ? 'Gestor' : 'Profissional')}
+              </h2>
+              <p className="font-label-sm text-label-sm text-secondary truncate max-w-[130px]">
+                {tenant?.name || 'Salão'}
+              </p>
             </div>
-          </div>
+          </Link>
           <button 
             className="md:hidden text-on-surface-variant hover:text-primary transition-colors"
             onClick={() => setIsMobileMenuOpen(false)}
@@ -118,7 +139,7 @@ const AdminLayout = () => {
       <div className="flex-1 w-full md:ml-80 flex flex-col min-h-screen">
         
         {/* TopAppBar (Mobile & Desktop) */}
-        <header className="flex justify-between items-center w-full px-gutter z-40 bg-surface shadow-[0px_4px_20px_rgba(0,0,0,0.04)] sticky top-0 shrink-0 pt-[max(env(safe-area-inset-top),_1rem)] pb-2 min-h-[4rem]">
+        <header className="flex justify-between items-center w-full px-gutter z-40 bg-surface shadow-[0px_4px_20px_rgba(0,0,0,0.04)] sticky top-0 shrink-0 pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 min-h-[4rem]">
           <div className="flex items-center gap-sm">
             <button 
               className="md:hidden text-primary hover:opacity-80 transition-opacity p-2 -ml-2"
@@ -128,15 +149,16 @@ const AdminLayout = () => {
             </button>
             <h1 className="font-headline-md text-headline-md text-primary tracking-tight">{tenant?.name || 'Salão'}</h1>
           </div>
-          {/* Trailing Avatar */}
+          {/* Trailing Icons */}
           <div className="flex items-center gap-md">
-            <button className="text-secondary hover:opacity-80 transition-opacity relative p-2 -mr-2">
-              <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
-            </button>
-            <div className="w-8 h-8 rounded-full bg-surface-variant overflow-hidden md:hidden flex items-center justify-center">
+            <NotificationDropdown />
+            <Link 
+              to={`/${tenant_slug}/staff/perfil`}
+              className="w-8 h-8 rounded-full bg-surface-variant hover:bg-surface-variant/80 transition-colors flex items-center justify-center overflow-hidden"
+              title="Meu Perfil"
+            >
               <span className="material-symbols-outlined text-on-surface-variant text-sm">person</span>
-            </div>
+            </Link>
           </div>
         </header>
 
@@ -145,6 +167,14 @@ const AdminLayout = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Toast de Notificação */}
+      {notificationToast.show && (
+        <div className="fixed top-20 right-4 z-[100] bg-surface text-on-surface px-md py-sm rounded-lg shadow-xl border border-primary/20 flex items-center gap-sm animate-fade-in-up">
+          <span className="material-symbols-outlined text-primary">notifications_active</span>
+          <span className="font-label-md text-label-md">{notificationToast.message}</span>
+        </div>
+      )}
 
     </div>
   );

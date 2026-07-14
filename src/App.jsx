@@ -1,26 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
-import { supabase } from './lib/supabase';
+import { api } from './lib/api';
+
 
 // --- Context ---
 import { NotificationProvider } from './context/NotificationProvider';
 import { Crown } from 'lucide-react';
-
-// --- Páginas (Ainda mantendo as antigas temporariamente para não quebrar o build) ---
-import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Clients from './pages/Clients';
-import Birthdays from './pages/Birthdays';
-import ClientDetail from './pages/ClientDetail';
-import Settings from './pages/Settings';
-import Agenda from './pages/Agenda';
-import Services from './pages/Services';
-import Employees from './pages/Employees';
-import Inventory from './pages/Inventory';
-import PublicBooking from './pages/PublicBooking';
-import Maintenance from './pages/Maintenance';
-import ProfileSettings from './pages/ProfileSettings';
-import ProfessionalPortal from './pages/ProfessionalPortal';
 
 // --- Páginas Novas do Design System ---
 import AcessoProfissional from './pages/AcessoProfissional';
@@ -41,6 +26,9 @@ import ResumoAgendamento from './pages/ResumoAgendamento';
 import { BookingProvider } from './context/BookingContext';
 import AdminLayout from './components/admin/AdminLayout';
 import LandingPage from './pages/LandingPage';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
+import PerfilProfissional from './pages/PerfilProfissional';
 
 // --- Contexto Multi-Tenant ---
 import { TenantProvider, useTenant } from './context/TenantContext';
@@ -62,13 +50,18 @@ const SuperAdminProtectedRoute = ({ children }) => {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.user?.email === 'cf95.souza@gmail.com') {
-        setAuthorized(true);
-      } else {
+      try {
+        const userData = await api.auth.me();
+        if (userData && userData.role === 'superadmin') {
+          setAuthorized(true);
+        } else {
+          setAuthorized(false);
+        }
+      } catch (err) {
         setAuthorized(false);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     checkAuth();
   }, []);
@@ -89,19 +82,6 @@ const StaffProtectedRoute = ({ children }) => {
     return <Navigate to={`/${tenant_slug}/staff/login`} replace />;
   }
 
-  return children || <Outlet />;
-};
-
-// --- Rota Protegida Antiga (Será refatorada na Fase 23+) ---
-const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { session, loading } = useTenant();
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Sincronizando...</div>;
-  if (!session) return <Navigate to="login" replace />; 
-
-  if (allowedRoles && session.role && !allowedRoles.includes(session.role)) {
-    return <Navigate to={session.role === 'professional' ? 'portal' : ''} replace />;
-  }
   return children || <Outlet />;
 };
 
@@ -137,6 +117,8 @@ function App() {
         <Routes>
           {/* Rota Raiz (SaaS Global) */}
           <Route path="/" element={<LandingPage />} />
+          <Route path="/privacidade" element={<PrivacyPolicy />} />
+          <Route path="/termos" element={<TermsOfService />} />
 
           {/* Rotas Super Admin (SaaS Mestre) */}
           <Route path="/superadmin/login" element={<SuperAdminLogin />} />
@@ -170,10 +152,11 @@ function App() {
             <Route path="cadastro" element={<CadastroCliente />} />
             <Route path="staff/login" element={<AcessoProfissional />} />
             <Route element={<StaffProtectedRoute />}>
-              <Route path="staff/ficha-cliente/:id" element={<FichaClienteCRM />} />
               <Route element={<AdminLayout />}>
                 <Route path="staff/agendamento/:id" element={<ResumoAgendamento />} />
+                <Route path="staff/ficha-cliente/:id" element={<FichaClienteCRM />} />
                 <Route path="staff/agenda-profissional" element={<AgendaProfissional />} />
+                <Route path="staff/perfil" element={<PerfilProfissional />} />
                 <Route path="staff/admin/dashboard" element={<DashboardAdmin />} />
                 <Route path="staff/admin/financeiro" element={<GestaoFinanceira />} />
                 <Route path="staff/admin/equipe" element={<GestaoEquipe />} />
@@ -186,23 +169,6 @@ function App() {
               </Route>
             </Route>
 
-            {/* Antigas rotas (mantidas para compatibilidade provisória) */}
-            <Route element={<ProtectedRoute />}>
-               <Route element={<Layout />}>
-                 {/* <Route path="dashboard" element={<Dashboard />} /> */}
-                 <Route path="clientes" element={<Clients />} />
-                 <Route path="clientes/:id" element={<ClientDetail />} />
-                 <Route path="aniversariantes" element={<Birthdays />} />
-                 <Route path="agenda" element={<Agenda />} />
-                 <Route path="servicos" element={<Services profile={profile} />} />
-                 <Route path="profissionais" element={<Employees />} />
-                 <Route path="estoque" element={<Inventory profile={profile} />} />
-                 <Route path="manutencao" element={<Maintenance />} />
-                 <Route path="configuracoes" element={<Settings />} />
-                 <Route path="minha-conta" element={<ProfileSettings />} />
-                 <Route path="portal" element={<ProfessionalPortal profile={profile} onLogout={() => setSession(null)} />} />
-               </Route>
-            </Route>
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

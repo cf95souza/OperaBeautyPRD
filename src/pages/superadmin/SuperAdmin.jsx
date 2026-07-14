@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import CreateTenantModal from '../../components/superadmin/CreateTenantModal';
 
 const SuperAdmin = () => {
@@ -13,9 +13,20 @@ const SuperAdmin = () => {
   const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 5;
 
+  const [metrics, setMetrics] = useState({
+    active_tenants: 0,
+    earnings_paid: 0,
+    earnings_pending: 0,
+    unique_clients: 0
+  });
+
   const [selectedTenant, setSelectedTenant] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [plans, setPlans] = useState([]);
 
   // Debounce search
   useEffect(() => {
@@ -28,28 +39,58 @@ const SuperAdmin = () => {
 
   useEffect(() => {
     fetchTenants();
+    fetchMetrics();
+    fetchPlans();
   }, [debouncedSearch, currentPage]);
+
+  const fetchPlans = async () => {
+    try {
+      const data = await api.plans.list();
+      if (data) setPlans(data);
+    } catch (err) {
+      console.error('Erro ao buscar planos', err);
+    }
+  };
+
+  const getPlanName = (price) => {
+    if (!price) return 'Personalizado';
+    const plan = plans.find(p => Number(p.price) === Number(price));
+    return plan ? plan.name : `R$ ${Number(price).toFixed(2)}`;
+  };
+
+  const fetchMetrics = async () => {
+    try {
+      const data = await api.superadmin.getDashboardMetrics();
+      if (data) setMetrics(data);
+    } catch (err) {
+      console.error('Erro ao buscar métricas', err);
+    }
+  };
 
   const fetchTenants = async () => {
     setLoading(true);
     try {
-      let query = supabase.from('cap_tenants').select('*', { count: 'exact' });
-
+      const data = await api.superadmin.listTenants();
+      
+      // Filtrar localmente por debouncedSearch
+      let filtered = data || [];
       if (debouncedSearch) {
-        query = query.ilike('name', `%${debouncedSearch}%`);
+        const query = debouncedSearch.toLowerCase();
+        filtered = filtered.filter(t => 
+          (t.name && t.name.toLowerCase().includes(query)) || 
+          (t.slug && t.slug.toLowerCase().includes(query))
+        );
       }
-
+      
+      // Ordenar alfabeticamente por name
+      filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      
+      setTotalCount(filtered.length);
+      
+      // Paginação
       const from = (currentPage - 1) * itemsPerPage;
-      const to = from + itemsPerPage - 1;
-
-      const { data, count, error } = await query
-        .order('name', { ascending: true })
-        .range(from, to);
-
-      if (error) throw error;
-
-      setTenants(data || []);
-      if (count !== null) setTotalCount(count);
+      const to = from + itemsPerPage;
+      setTenants(filtered.slice(from, to));
     } catch (err) {
       console.error('Erro ao buscar salões:', err);
     } finally {
@@ -64,8 +105,26 @@ const SuperAdmin = () => {
     setIsModalOpen(true);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleDeleteTenant = async () => {
+    if (!selectedTenant) return;
+    setIsDeleting(true);
+    try {
+      await api.superadmin.deleteTenant(selectedTenant.id);
+      setIsDeleteDialogOpen(false);
+      setIsModalOpen(false);
+      setSelectedTenant(null);
+      fetchTenants();
+      fetchMetrics();
+    } catch (err) {
+      console.error('Erro ao deletar salão', err);
+      alert('Erro ao deletar salão: ' + (err.message || 'Tente novamente.'));
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleLogout = () => {
+    api.auth.logout();
     navigate('/superadmin/login');
   };
 
@@ -114,7 +173,7 @@ const SuperAdmin = () => {
             </div>
             <div className="flex flex-col">
               <span className="font-label-md text-label-md text-on-surface">Super Admin</span>
-              <span className="font-label-sm text-label-sm text-secondary">cf95.souza@gmail.com</span>
+              <span className="font-label-sm text-label-sm text-secondary">Administrador do Sistema</span>
             </div>
           </div>
         </div>
@@ -164,10 +223,10 @@ const SuperAdmin = () => {
                 </div>
               </div>
               <div>
-                <div className="font-display-lg text-display-lg text-on-surface">1</div>
+                <div className="font-display-lg text-display-lg text-on-surface">{metrics.active_tenants}</div>
                 <div className="flex items-center gap-xs mt-1 text-on-primary-container font-label-sm text-label-sm">
                   <span className="material-symbols-outlined text-[16px]">trending_up</span>
-                  <span>+100% neste mês</span>
+                  <span>Na plataforma</span>
                 </div>
               </div>
             </div>
@@ -176,16 +235,16 @@ const SuperAdmin = () => {
             <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px] relative overflow-hidden">
               <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 100% 0%, var(--color-primary) 0%, transparent 50%)" }}></div>
               <div className="flex justify-between items-start relative z-10">
-                <span className="font-label-md text-label-md text-secondary">Receita Recorrente</span>
+                <span className="font-label-md text-label-md text-secondary">Faturamento (Pago)</span>
                 <div className="bg-surface-container-low p-2 rounded-full text-primary">
                   <span className="material-symbols-outlined">payments</span>
                 </div>
               </div>
               <div className="relative z-10">
-                <div className="font-display-lg text-display-lg text-on-surface">R$ 59,99</div>
+                <div className="font-display-lg text-display-lg text-on-surface">R$ {Number(metrics.earnings_paid).toFixed(2).replace('.', ',')}</div>
                 <div className="flex items-center gap-xs mt-1 text-on-primary-container font-label-sm text-label-sm">
                   <span className="material-symbols-outlined text-[16px]">trending_up</span>
-                  <span>+100% neste mês</span>
+                  <span>Receita já recebida</span>
                 </div>
               </div>
             </div>
@@ -225,35 +284,31 @@ const SuperAdmin = () => {
             {/* Inadimplência */}
             <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px]">
               <div className="flex justify-between items-start">
-                <span className="font-label-md text-label-md text-secondary">Faturas em Atraso</span>
+                <span className="font-label-md text-label-md text-secondary">Faturas Pendentes</span>
                 <div className="bg-error-container p-2 rounded-full text-on-error-container">
                   <span className="material-symbols-outlined">warning</span>
                 </div>
               </div>
               <div>
-                <div className="font-display-lg text-display-lg text-error">0</div>
+                <div className="font-display-lg text-display-lg text-error">R$ {Number(metrics.earnings_pending).toFixed(2).replace('.', ',')}</div>
                 <div className="flex items-center gap-xs mt-1 text-secondary font-label-sm text-label-sm">
-                  <span>R$ 0,00 a receber</span>
+                  <span>A receber / Em aberto</span>
                 </div>
               </div>
             </div>
 
-            {/* Server Usage */}
+            {/* Clientes Únicos */}
             <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px] relative overflow-hidden">
               <div className="flex justify-between items-start">
-                <span className="font-label-md text-label-md text-secondary">Uso do Servidor (DB)</span>
+                <span className="font-label-md text-label-md text-secondary">Clientes Únicos (Plataforma)</span>
                 <div className="bg-surface-container-low p-2 rounded-full text-primary">
-                  <span className="material-symbols-outlined">database</span>
+                  <span className="material-symbols-outlined">groups</span>
                 </div>
               </div>
               <div>
-                <div className="font-display-lg text-display-lg text-on-surface">24 MB</div>
+                <div className="font-display-lg text-display-lg text-on-surface">{metrics.unique_clients}</div>
                 <div className="flex items-center gap-xs mt-1 text-secondary font-label-sm text-label-sm">
-                  <span>Plano Supabase: 5% utilizado</span>
-                </div>
-                {/* Simple progress bar */}
-                <div className="w-full bg-surface-container-highest rounded-full h-1.5 mt-2">
-                  <div className="bg-primary h-1.5 rounded-full" style={{ width: '5%' }}></div>
+                  <span>Base consolidada sem duplicações</span>
                 </div>
               </div>
             </div>
@@ -313,7 +368,7 @@ const SuperAdmin = () => {
                         </td>
                         <td className="py-md px-md">
                           <span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-sm text-label-sm">
-                            {t.plan_id ? 'Premium' : 'Padrão'}
+                            {getPlanName(t.plan_price)}
                           </span>
                         </td>
                         <td className="py-md px-md">
@@ -359,7 +414,7 @@ const SuperAdmin = () => {
                     </div>
                     <div className="flex justify-between items-center mt-2 pt-2 border-t border-surface-variant">
                       <span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-sm text-label-sm">
-                        {t.plan_id ? 'Premium' : 'Padrão'}
+                        {getPlanName(t.plan_price)}
                       </span>
                       <div className="flex items-center gap-xs">
                         <div className={`w-2 h-2 rounded-full ${t.status === 'active' ? 'bg-[#10b981]' : 'bg-error'}`}></div>
@@ -436,7 +491,7 @@ const SuperAdmin = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-surface-container-lowest p-md rounded-xl border border-surface-variant">
                     <span className="block font-label-sm text-secondary mb-1">Plano Assinado</span>
-                    <span className="font-label-md text-on-surface">{selectedTenant.plan_id ? 'Premium' : 'Padrão'}</span>
+                    <span className="font-label-md text-on-surface">{getPlanName(selectedTenant.plan_price)}</span>
                   </div>
                   <div className="bg-surface-container-lowest p-md rounded-xl border border-surface-variant">
                     <span className="block font-label-sm text-secondary mb-1">Faturamento</span>
@@ -459,11 +514,48 @@ const SuperAdmin = () => {
                 </div>
               </div>
 
-              <div className="mt-8 flex justify-end gap-3">
+              <div className="mt-8 flex flex-col gap-3">
                 <a href={`/${selectedTenant.slug}`} target="_blank" rel="noopener noreferrer" className="px-6 py-2.5 text-sm font-label-md bg-primary-container text-on-primary-container rounded-full hover:brightness-95 transition-all flex items-center gap-2 w-full justify-center">
                   <span className="material-symbols-outlined text-[18px]">open_in_new</span>
                   Acessar Salão
                 </a>
+                <button onClick={() => setIsDeleteDialogOpen(true)} className="px-6 py-2.5 text-sm font-label-md bg-error-container text-error rounded-full hover:brightness-95 transition-all flex items-center gap-2 w-full justify-center">
+                  <span className="material-symbols-outlined text-[18px]">delete_forever</span>
+                  Deletar Salão
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL DE CONFIRMAÇÃO DE DELEÇÃO */}
+        {isDeleteDialogOpen && selectedTenant && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md" onClick={() => setIsDeleteDialogOpen(false)}>
+            <div className="bg-surface rounded-2xl w-full max-w-[400px] flex flex-col p-lg shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+              <div className="flex flex-col items-center text-center mb-6">
+                <div className="w-16 h-16 rounded-full bg-error-container text-error flex items-center justify-center mb-4">
+                  <span className="material-symbols-outlined text-[32px]">warning</span>
+                </div>
+                <h3 className="font-headline-sm text-headline-sm text-on-surface mb-2">Excluir Salão?</h3>
+                <p className="font-body-md text-secondary">
+                  Você está prestes a excluir o salão <strong>{selectedTenant.name}</strong>. Esta ação apagará TODOS os clientes, agendamentos, profissionais e configurações associadas a este salão e <strong>NÃO PODE SER DESFEITA</strong>.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsDeleteDialogOpen(false)} 
+                  disabled={isDeleting}
+                  className="flex-1 py-3 font-label-md bg-surface-container-high text-on-surface-variant rounded-full hover:bg-surface-variant transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleDeleteTenant} 
+                  disabled={isDeleting}
+                  className="flex-1 py-3 font-label-md bg-error text-on-error rounded-full hover:brightness-90 transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
+                >
+                  {isDeleting ? 'Deletando...' : 'Excluir'}
+                </button>
               </div>
             </div>
           </div>

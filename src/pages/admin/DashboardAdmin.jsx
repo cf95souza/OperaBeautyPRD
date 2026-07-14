@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import { format, isToday, parseISO, addDays, isWithinInterval, setYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -31,65 +31,41 @@ const DashboardAdmin = () => {
       const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
       const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999).toISOString();
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
 
-      // 1. Financeiro: Faturamento Hoje (Apenas 'completed')
-      const { data: apptHoje, error: errApptHoje } = await supabase
-        .from('cap_appointments')
-        .select('total_price')
-        .eq('tenant_id', tenant.id)
-        .eq('status', 'completed')
-        .gte('start_time', startOfToday)
-        .lte('start_time', endOfToday);
+      // 1. Agenda e Faturamento de Hoje
+      const apptHoje = await api.appointments.list({
+        start_date: startOfToday,
+        end_date: endOfToday
+      });
 
-      if (!errApptHoje && apptHoje) {
-        setFaturamentoHoje(apptHoje.reduce((sum, appt) => sum + Number(appt.total_price), 0));
-      }
+      const faturamentoHojeVal = apptHoje
+        .filter(appt => appt.status === 'completed')
+        .reduce((sum, appt) => sum + Number(appt.total_price), 0);
+      setFaturamentoHoje(faturamentoHojeVal);
+      setTotalAtendimentosHoje(apptHoje.length);
 
       // 2. Financeiro: Faturamento Mês
-      const { data: apptMes, error: errApptMes } = await supabase
-        .from('cap_appointments')
-        .select('total_price')
-        .eq('tenant_id', tenant.id)
-        .eq('status', 'completed')
-        .gte('start_time', startOfMonth);
+      const apptMes = await api.appointments.list({
+        start_date: startOfMonth,
+        end_date: endOfMonth
+      });
 
-      if (!errApptMes && apptMes) {
-        setFaturamentoMes(apptMes.reduce((sum, appt) => sum + Number(appt.total_price), 0));
-      }
-
-      // 3. Agenda: Atendimentos Hoje (Qualquer status)
-      const { data: agendaHoje, error: errAgenda } = await supabase
-        .from('cap_appointments')
-        .select('id')
-        .eq('tenant_id', tenant.id)
-        .gte('start_time', startOfToday)
-        .lte('start_time', endOfToday);
-      
-      if (!errAgenda && agendaHoje) {
-        setTotalAtendimentosHoje(agendaHoje.length);
-      }
+      const faturamentoMesVal = apptMes
+        .filter(appt => appt.status === 'completed')
+        .reduce((sum, appt) => sum + Number(appt.total_price), 0);
+      setFaturamentoMes(faturamentoMesVal);
 
       // 4. Estoque Baixo: quantity <= min_quantity
-      // Como não é possível fazer column comparison direto no postgrest sem RPC, 
-      // buscamos todos ativos e filtramos no JS (ideal criar RPC para grandes volumes)
-      const { data: invData, error: errInv } = await supabase
-        .from('cap_inventory')
-        .select('name, quantity, min_quantity, unit')
-        .eq('tenant_id', tenant.id);
-      
-      if (!errInv && invData) {
+      const invData = await api.inventory.list();
+      if (invData) {
         const baixos = invData.filter(item => Number(item.quantity) <= Number(item.min_quantity));
         setEstoqueBaixo(baixos);
       }
 
       // 5. Aniversariantes: próximos 30 dias
-      const { data: clientes, error: errCli } = await supabase
-        .from('cap_clients')
-        .select('name, phone, birth_date')
-        .eq('tenant_id', tenant.id)
-        .not('birth_date', 'is', null);
-
-      if (!errCli && clientes) {
+      const clientes = await api.clients.list(tenant.id);
+      if (clientes) {
         const todayDate = new Date();
         const limitDate = addDays(todayDate, 30);
         
@@ -115,26 +91,17 @@ const DashboardAdmin = () => {
       }
 
       // 6. Retornos de Manutenção (Próximos 30 dias)
-      const { data: apptsMaint, error: errMaint } = await supabase
-        .from('cap_appointments')
-        .select(`
-          id,
-          start_time,
-          cap_services!inner( name, maintenance_days ),
-          cap_clients ( name, phone )
-        `)
-        .eq('tenant_id', tenant.id)
-        .eq('status', 'completed');
-
-      if (!errMaint && apptsMaint) {
+      const apptsMaint = await api.appointments.list();
+      if (apptsMaint) {
         const todayDate = new Date();
         // Zera as horas para comparar apenas os dias
         const startOfTodayZero = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate());
         const limitDate = addDays(startOfTodayZero, 30);
         
         const retornosFiltrados = apptsMaint.filter(appt => {
-           if (!appt.cap_services || !appt.cap_services.maintenance_days) return false;
-           const mDays = appt.cap_services.maintenance_days;
+           if (appt.status !== 'completed') return false;
+           if (!appt.maintenance_days) return false;
+           const mDays = Number(appt.maintenance_days);
            if (mDays <= 0) return false;
            
            const dataServico = parseISO(appt.start_time);
@@ -142,9 +109,13 @@ const DashboardAdmin = () => {
            
            return dataRetorno >= startOfTodayZero && dataRetorno <= limitDate;
         }).map(appt => {
-           const dataRetorno = addDays(parseISO(appt.start_time), appt.cap_services.maintenance_days);
+           const dataRetorno = addDays(parseISO(appt.start_time), Number(appt.maintenance_days));
            return {
-             ...appt,
+             id: appt.id,
+             start_time: appt.start_time,
+             client_name: appt.client_name,
+             client_phone: appt.client_phone,
+             service_name: appt.service_name,
              dataRetorno
            };
         }).sort((a, b) => a.dataRetorno - b.dataRetorno);
@@ -350,8 +321,8 @@ const DashboardAdmin = () => {
                       <li key={i} className="flex flex-col gap-2 p-3 rounded-lg bg-surface-variant/30 hover:bg-surface-variant/50 transition-colors border border-outline-variant/50">
                         <div className="flex justify-between items-start">
                           <div className="flex flex-col">
-                            <span className="font-body-md text-on-surface font-bold">{ret.cap_clients?.name}</span>
-                            <span className="text-xs text-secondary">{ret.cap_clients?.phone}</span>
+                            <span className="font-body-md text-on-surface font-bold">{ret.client_name}</span>
+                            <span className="text-xs text-secondary">{ret.client_phone}</span>
                           </div>
                           <span className="bg-tertiary/10 border border-tertiary/20 px-2 py-1 rounded-md text-xs font-bold text-tertiary whitespace-nowrap">
                             {format(ret.dataRetorno, "dd/MMM", { locale: ptBR })}
@@ -359,7 +330,7 @@ const DashboardAdmin = () => {
                         </div>
                         <div className="flex items-center gap-1 text-xs text-secondary bg-surface-bright px-2 py-1 rounded w-fit border border-outline-variant/30">
                           <span className="material-symbols-outlined text-[14px]">spa</span>
-                          {ret.cap_services?.name}
+                          {ret.service_name}
                         </div>
                       </li>
                     ))}

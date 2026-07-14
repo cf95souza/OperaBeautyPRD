@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
+import { useNotification } from '../../context/NotificationProvider';
 
 const SettingsAdmin = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const navigate = useNavigate();
+  const { showSuccess, showError } = useNotification();
 
   const [gateway, setGateway] = useState('mercadopago');
   const [apiKey, setApiKey] = useState('');
@@ -18,7 +20,7 @@ const SettingsAdmin = () => {
 
   const fetchSettings = async () => {
     try {
-      const { data, error } = await supabase.from('cap_platform_settings').select('*').limit(1).maybeSingle();
+      const data = await api.superadmin.getPlatformSettings();
       if (data) {
         setGateway(data.payment_gateway || 'mercadopago');
         setApiKey(data.gateway_api_key || '');
@@ -26,7 +28,7 @@ const SettingsAdmin = () => {
         setSettingsId(data.id);
       }
     } catch (err) {
-      console.log('Nenhuma configuração encontrada ou erro na tabela:', err);
+      console.log('Nenhuma configuração encontrada:', err);
     }
   };
 
@@ -36,29 +38,24 @@ const SettingsAdmin = () => {
       const payload = {
         payment_gateway: gateway,
         gateway_api_key: apiKey,
-        gateway_public_key: publicKey,
-        updated_at: new Date()
+        gateway_public_key: publicKey
       };
 
-      if (settingsId) {
-        const { error } = await supabase.from('cap_platform_settings').update(payload).eq('id', settingsId);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase.from('cap_platform_settings').insert([payload]).select().single();
-        if (error) throw error;
-        if (data) setSettingsId(data.id);
+      const data = await api.superadmin.savePlatformSettings(payload);
+      if (data) {
+        setSettingsId(data.id);
       }
-      alert('Configurações do Gateway salvas com sucesso!');
+      showSuccess('Configurações do Gateway salvas com sucesso!');
     } catch (error) {
       console.error(error);
-      alert('Erro ao salvar as configurações. Verifique se a tabela cap_platform_settings foi criada no Supabase.');
+      showError('Erro ao salvar as configurações.');
     } finally {
       setSavingSettings(false);
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    api.auth.logout();
     navigate('/superadmin/login');
   };
 
@@ -108,7 +105,7 @@ const SettingsAdmin = () => {
             </div>
             <div className="flex flex-col">
               <span className="font-label-md text-label-md text-on-surface">Super Admin</span>
-              <span className="font-label-sm text-label-sm text-secondary">cf95.souza@gmail.com</span>
+              <span className="font-label-sm text-label-sm text-secondary">Administrador do Sistema</span>
             </div>
           </div>
         </div>
@@ -153,7 +150,7 @@ const SettingsAdmin = () => {
                     type="email" 
                     readOnly
                     className="w-full bg-surface-container-lowest border border-surface-variant rounded-lg p-3 outline-none text-secondary"
-                    value="cf95.souza@gmail.com"
+                    value="admin@sistema.com"
                   />
                   <p className="text-[12px] text-secondary mt-1">Email padrão do proprietário da plataforma. Não pode ser alterado por aqui.</p>
                 </div>

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useBooking } from '../context/BookingContext';
+import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
 
 const AgendamentoConfirmado = () => {
   const { tenant_slug } = useParams();
@@ -101,19 +102,13 @@ const AgendamentoConfirmado = () => {
 
   return (
     <div className="bg-[#f9f9f9] text-on-surface font-body-md selection:bg-primary-container min-h-screen">
-      <header className="w-full top-0 sticky bg-[#f9f9f9] shadow-sm z-50">
-        <div className="flex justify-between items-center px-[16px] py-[8px] w-full max-w-7xl mx-auto">
-          <div className="flex items-center gap-4">
-            <button onClick={handleClose} className="material-symbols-outlined text-primary hover:opacity-80 transition-opacity">
-              close
-            </button>
-          </div>
-          <h1 className="font-headline-md text-[24px] font-semibold text-primary tracking-tight">
-            {tenant?.name || 'Ethereal Grace'}
+      <header className="w-full top-0 sticky bg-[#f9f9f9] shadow-sm z-50 pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 md:pt-4">
+        <div className="flex justify-between items-center px-gutter py-sm w-full max-w-7xl mx-auto">
+          <div className="w-10"></div>{/* Spacer to keep title centered */}
+          <h1 className="font-headline-md text-headline-md-mobile md:text-headline-md text-primary tracking-tight text-center flex-1">
+            {tenant?.name || 'Carregando...'}
           </h1>
-          <div className="w-10 h-10 rounded-full bg-[#e4e2e1] overflow-hidden border border-[#d4c2c3]">
-             <span className="material-symbols-outlined mt-2 ml-2 text-[#656464]">person</span>
-          </div>
+          <div className="w-10"></div>{/* Spacer to keep title centered */}
         </div>
       </header>
 
@@ -207,7 +202,12 @@ const AgendamentoConfirmado = () => {
             </button>
           </div>
         </section>
+        {/* Espaçador de segurança para a BottomNavBar móvel */}
+        <div className="h-24 md:hidden"></div>
       </main>
+
+      {/* BottomNavBar (Mobile Only) */}
+      <ClienteBottomNavBar activeTab="home" tenantSlug={tenant_slug} />
     </div>
   );
 };

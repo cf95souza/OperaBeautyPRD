@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { format, addDays, startOfWeek, isSameDay, parseISO, startOfDay, endOfDay, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -18,11 +18,12 @@ const AgendaProfissional = () => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Generate 7 days for the scroller (starting from today)
+  const [weekStart, setWeekStart] = useState(() => startOfDay(new Date()));
+
+  // Generate 7 days for the scroller based on weekStart
   const daysScroller = useMemo(() => {
-    const today = new Date();
-    return Array.from({ length: 7 }).map((_, i) => addDays(today, i));
-  }, []);
+    return Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
+  }, [weekStart]);
 
   useEffect(() => {
     // If the user is just a professional, force 'me' view
@@ -43,29 +44,17 @@ const AgendaProfissional = () => {
       const start = startOfDay(selectedDate).toISOString();
       const end = endOfDay(selectedDate).toISOString();
 
-      let query = supabase
-        .from('cap_appointments')
-        .select(`
-          id,
-          start_time,
-          end_time,
-          status,
-          cap_clients (id, name, phone),
-          cap_services (id, name),
-          cap_staff (id, name)
-        `)
-        .eq('tenant_id', tenant.id)
-        .gte('start_time', start)
-        .lte('start_time', end)
-        .order('start_time', { ascending: true });
+      let filters = {
+        tenant_id: tenant.id,
+        start_date: start,
+        end_date: end
+      };
 
       if (viewMode === 'me') {
-        query = query.eq('staff_id', session.id);
+        filters.staff_id = session.id;
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      
+      const data = await api.appointments.list(filters);
       setAppointments(data || []);
     } catch (err) {
       console.error("Erro ao carregar agenda:", err);
@@ -121,9 +110,27 @@ const AgendaProfissional = () => {
       <div className="max-w-[1200px] mx-auto py-lg animate-fade-in-up">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-md mb-xl px-container-margin md:px-0">
           <div>
-            <h2 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-xs">
-               Agenda
-            </h2>
+            <div className="flex items-center gap-2 mb-xs">
+              <h2 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">
+                 Agenda
+              </h2>
+              <div className="relative">
+                <button className="p-2 text-primary hover:bg-primary-container hover:text-on-primary-container rounded-full transition-colors flex items-center justify-center">
+                  <span className="material-symbols-outlined">calendar_month</span>
+                </button>
+                <input 
+                  type="date" 
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const selected = new Date(e.target.value + 'T00:00:00');
+                      setWeekStart(selected);
+                      setSelectedDate(selected);
+                    }
+                  }}
+                />
+              </div>
+            </div>
             <p className="font-body-md text-body-md text-on-surface-variant capitalize">
                {format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
             </p>
@@ -149,24 +156,40 @@ const AgendaProfissional = () => {
         </div>
 
         {/* Date Scroller */}
-        <div className="flex gap-sm overflow-x-auto pb-sm mb-lg no-scrollbar px-container-margin md:px-0">
-          {daysScroller.map((day, i) => {
-            const isSelected = isSameDay(day, selectedDate);
-            return (
-              <button 
-                key={i}
-                onClick={() => setSelectedDate(day)}
-                className={`shrink-0 flex flex-col items-center justify-center w-16 h-20 rounded-xl transition-colors ${
-                  isSelected 
-                    ? 'bg-primary text-on-primary shadow-[0px_4px_20px_rgba(0,0,0,0.1)]' 
-                    : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-variant'
-                }`}
-              >
-                <span className="font-label-sm text-label-sm uppercase mb-1">{format(day, 'EEE', { locale: ptBR })}</span>
-                <span className="font-headline-md text-headline-md">{format(day, 'dd')}</span>
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2 mb-lg px-container-margin md:px-0">
+          <button 
+            onClick={() => setWeekStart(prev => addDays(prev, -7))}
+            className="shrink-0 w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant rounded-full transition-colors flex items-center justify-center shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+          </button>
+          
+          <div className="flex gap-sm overflow-x-auto pb-sm no-scrollbar flex-1">
+            {daysScroller.map((day, i) => {
+              const isSelected = isSameDay(day, selectedDate);
+              return (
+                <button 
+                  key={i}
+                  onClick={() => setSelectedDate(day)}
+                  className={`shrink-0 flex flex-col items-center justify-center w-16 h-20 rounded-xl transition-colors ${
+                    isSelected 
+                      ? 'bg-primary text-on-primary shadow-[0px_4px_20px_rgba(0,0,0,0.1)]' 
+                      : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-variant'
+                  }`}
+                >
+                  <span className="font-label-sm text-label-sm uppercase mb-1">{format(day, 'EEE', { locale: ptBR })}</span>
+                  <span className="font-headline-md text-headline-md">{format(day, 'dd')}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <button 
+            onClick={() => setWeekStart(prev => addDays(prev, 7))}
+            className="shrink-0 w-10 h-10 bg-surface-container-high text-on-surface hover:bg-surface-variant rounded-full transition-colors flex items-center justify-center shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+          </button>
         </div>
 
         {/* Timeline Grid (Lista Unificada) */}
@@ -210,19 +233,19 @@ const AgendaProfissional = () => {
                             >
                               <div className="flex-1 overflow-hidden pr-2">
                                 <div className="flex flex-wrap items-center gap-2 mb-1">
-                                  <h3 className="font-label-md text-label-md text-on-surface truncate">{appt.cap_services?.name || 'Serviço'}</h3>
+                                  <h3 className="font-label-md text-label-md text-on-surface truncate">{appt.service_name || 'Serviço'}</h3>
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 ${getStatusColor(appt.status)}`}>
                                     {getStatusLabel(appt.status)}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-on-surface-variant truncate">
-                                  <span className="font-medium">{appt.cap_clients?.name}</span>
+                                  <span className="font-medium">{appt.client_name || 'Cliente'}</span>
                                   {viewMode === 'all' && (
                                     <>
                                       <span className="w-1 h-1 rounded-full bg-surface-variant"></span>
                                       <span className="text-xs flex items-center gap-1 bg-surface-variant/50 px-1.5 py-0.5 rounded-md text-secondary">
                                         <span className="material-symbols-outlined text-[12px]">person</span>
-                                        {appt.cap_staff?.name}
+                                        {appt.staff_name}
                                       </span>
                                     </>
                                   )}

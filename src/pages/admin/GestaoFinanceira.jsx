@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { downloadCSV } from '../../utils/csv';
 
 const GestaoFinanceira = () => {
   const { tenant_slug } = useParams();
@@ -28,27 +29,16 @@ const GestaoFinanceira = () => {
     try {
       const today = new Date();
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
 
-      const { data: appointments, error } = await supabase
-        .from('cap_appointments')
-        .select(`
-          id,
-          total_price,
-          staff_commission_value,
-          start_time,
-          end_time,
-          cap_staff (id, name),
-          cap_services (id, name),
-          cap_clients (id, name)
-        `)
-        .eq('tenant_id', tenant.id)
-        .eq('status', 'completed')
-        .gte('start_time', startOfMonth)
-        .order('end_time', { ascending: false });
+      const data = await api.appointments.list({
+        start_date: startOfMonth,
+        end_date: endOfMonth
+      });
 
-      if (error) throw error;
+      const appointments = (data || []).filter(appt => appt.status === 'completed');
 
-      if (appointments && appointments.length > 0) {
+      if (appointments.length > 0) {
         const totalEntradas = appointments.reduce((sum, appt) => sum + Number(appt.total_price), 0);
         setEntradasMes(totalEntradas);
 
@@ -59,7 +49,7 @@ const GestaoFinanceira = () => {
 
         const revenueByService = {};
         appointments.forEach(appt => {
-          const sName = appt.cap_services?.name || 'Serviço Personalizado';
+          const sName = appt.service_name || 'Serviço Personalizado';
           revenueByService[sName] = (revenueByService[sName] || 0) + Number(appt.total_price);
         });
 
@@ -68,19 +58,28 @@ const GestaoFinanceira = () => {
 
         const comissoesMap = {};
         appointments.forEach(appt => {
-          const pId = appt.cap_staff?.id || 'unknown';
-          const pName = appt.cap_staff?.name || 'Profissional Removido';
+          const pId = appt.staff_id || 'unknown';
+          const pName = appt.staff_name || 'Profissional Removido';
           if (!comissoesMap[pId]) {
-            comissoesMap[pId] = { name: pName, commission: 0, revenue: 0 };
+            comissoesMap[pId] = { id: pId, name: pName, commission: 0, revenue: 0, pending: 0 };
           }
           comissoesMap[pId].commission += Number(appt.staff_commission_value || 0);
+          if (appt.commission_status === 'pending') {
+             comissoesMap[pId].pending += Number(appt.staff_commission_value || 0);
+          }
           comissoesMap[pId].revenue += Number(appt.total_price);
         });
         
         const comissoesArray = Object.values(comissoesMap).sort((a, b) => b.commission - a.commission);
         setComissoesPorProfissional(comissoesArray);
 
-        setTransacoes(appointments);
+        // Atualiza KPI comissões a pagar baseado no pendente
+        const totalPendente = comissoesArray.reduce((acc, curr) => acc + curr.pending, 0);
+        setComissoesPagar(totalPendente);
+
+        // Ordenar transações por end_time decrescente
+        const appointmentsSorted = appointments.sort((a, b) => new Date(b.end_time || b.start_time) - new Date(a.end_time || a.start_time));
+        setTransacoes(appointmentsSorted);
       } else {
         setEntradasMes(0);
         setTicketMedio(0);
@@ -99,6 +98,42 @@ const GestaoFinanceira = () => {
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const handlePayCommission = async (staffId, amount) => {
+    if (amount <= 0) {
+      alert('Não há comissões pendentes para este profissional.');
+      return;
+    }
+    if (window.confirm(`Confirma o pagamento de ${formatCurrency(amount)} em comissões pendentes?`)) {
+      try {
+        await api.appointments.payCommissions(staffId);
+        alert('Comissões pagas com sucesso!');
+        fetchFinanceData(); // recarrega os dados
+      } catch (error) {
+        alert(error.message || 'Erro ao pagar comissões.');
+      }
+    }
+  };
+
+  const handleExport = () => {
+    if (!transacoes || transacoes.length === 0) {
+      alert('Não há dados para exportar no período atual.');
+      return;
+    }
+    
+    // Mapear dados para retirar UUIDs e formatar nomes amigáveis para o CSV
+    const csvData = transacoes.map(t => ({
+      Data: format(parseISO(t.start_time || t.end_time), 'dd/MM/yyyy HH:mm'),
+      Cliente: t.client_name || 'Avulso',
+      Serviço: t.service_name,
+      Profissional: t.staff_name,
+      Valor_Cobrado: t.total_price,
+      Comissao_Gerada: t.staff_commission_value || 0,
+      Status_Comissao: t.commission_status === 'paid' ? 'Paga' : 'Pendente'
+    }));
+
+    downloadCSV(csvData, `relatorio_financeiro_${format(new Date(), 'MMM_yyyy')}.csv`);
   };
 
   if (loading) {
@@ -120,7 +155,10 @@ const GestaoFinanceira = () => {
               <p className="text-on-surface-variant font-body-lg text-body-lg">Visão detalhada de faturamento, ticket médio e comissões.</p>
             </div>
             <div className="flex gap-sm w-full md:w-auto">
-              <button className="flex-1 md:flex-none bg-surface-container-high text-on-surface font-label-md text-label-md px-md py-sm rounded-lg hover:bg-surface-variant transition-colors flex items-center justify-center gap-xs">
+              <button 
+                onClick={handleExport}
+                className="flex-1 md:flex-none bg-surface-container-high text-on-surface font-label-md text-label-md px-md py-sm rounded-lg hover:bg-surface-variant transition-colors flex items-center justify-center gap-xs"
+              >
                 <span className="material-symbols-outlined text-[18px]">download</span> Exportar Relatório
               </button>
             </div>
@@ -202,8 +240,8 @@ const GestaoFinanceira = () => {
                           <span className="material-symbols-outlined">point_of_sale</span>
                         </div>
                         <div>
-                          <p className="font-label-md text-label-md text-on-surface">{t.cap_clients?.name || 'Cliente Avulso'}</p>
-                          <p className="text-xs text-secondary truncate max-w-[150px] md:max-w-[250px]">{t.cap_services?.name || 'Serviço'}</p>
+                          <p className="font-label-md text-label-md text-on-surface">{t.client_name || 'Cliente Avulso'}</p>
+                          <p className="text-xs text-secondary truncate max-w-[150px] md:max-w-[250px]">{t.service_name || 'Serviço'}</p>
                         </div>
                       </div>
                       <div className="text-right">
@@ -233,23 +271,32 @@ const GestaoFinanceira = () => {
                           <div className="w-8 h-8 rounded-full bg-primary text-on-primary font-bold flex items-center justify-center text-xs">
                             {prof.name.substring(0, 2).toUpperCase()}
                           </div>
-                          <span className="font-label-md text-on-surface truncate max-w-[100px]">{prof.name}</span>
+                          <div>
+                            <p className="font-label-md text-on-surface truncate max-w-[100px] leading-tight">{prof.name}</p>
+                            <p className="text-[10px] text-secondary">Faturou: {formatCurrency(prof.revenue)}</p>
+                          </div>
                         </div>
-                        <span className="font-bold text-on-surface">{formatCurrency(prof.commission)}</span>
+                        <div className="text-right">
+                          <p className="text-xs text-secondary line-through opacity-70">Total: {formatCurrency(prof.commission)}</p>
+                          <span className="font-bold text-error block leading-tight">{formatCurrency(prof.pending)}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between items-center pl-10">
-                         <span className="text-xs text-secondary">Faturou:</span>
-                         <span className="text-xs text-secondary font-medium">{formatCurrency(prof.revenue)}</span>
+                      <div className="flex justify-end mt-2">
+                         <button 
+                           onClick={() => handlePayCommission(prof.id, prof.pending)}
+                           disabled={prof.pending <= 0}
+                           className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
+                             prof.pending > 0 
+                               ? 'bg-primary-container text-on-primary-container hover:bg-primary hover:text-on-primary' 
+                               : 'bg-surface-variant text-on-surface-variant cursor-not-allowed'
+                           }`}
+                         >
+                           {prof.pending > 0 ? 'Pagar Pendência' : 'Tudo Pago'}
+                         </button>
                       </div>
                     </div>
                   ))
                 )}
-              </div>
-              
-              <div className="mt-md pt-sm border-t border-surface-variant">
-                <button className="w-full bg-surface-container-highest text-on-surface font-label-md text-label-md px-md py-sm rounded-lg hover:bg-outline-variant transition-colors flex items-center justify-center gap-xs">
-                  <span className="material-symbols-outlined text-[18px]">price_check</span> Fechar Período
-                </button>
               </div>
             </div>
             

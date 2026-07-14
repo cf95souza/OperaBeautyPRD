@@ -1,10 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
+import { useNotification } from '../../context/NotificationProvider';
+
+const getStatusLabel = (status) => {
+  switch (status?.toLowerCase()) {
+    case 'scheduled': return 'Agendado';
+    case 'in-progress': return 'Em Andamento';
+    case 'completed': return 'Concluído';
+    case 'cancelled': return 'Cancelado';
+    default: return status || '';
+  }
+};
+
+const getStatusBadgeClass = (status) => {
+  switch (status?.toLowerCase()) {
+    case 'scheduled':
+      return 'bg-primary-container text-on-primary-container';
+    case 'in-progress':
+      return 'bg-[#3b82f6]/10 text-[#3b82f6]';
+    case 'completed':
+      return 'bg-[#10b981]/10 text-[#10b981]';
+    case 'cancelled':
+      return 'bg-error-container text-error';
+    default:
+      return 'bg-surface-container-high text-secondary';
+  }
+};
 
 const TenantDetailAdmin = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { showSuccess, showError, confirm } = useNotification();
   
   const [activeTab, setActiveTab] = useState('overview');
   const [tenant, setTenant] = useState(null);
@@ -15,6 +42,7 @@ const TenantDetailAdmin = () => {
   const [clients, setClients] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [plans, setPlans] = useState([]);
 
   // States for Editing
   const [editForm, setEditForm] = useState({
@@ -22,12 +50,15 @@ const TenantDetailAdmin = () => {
     slug: '',
     primary_color: '',
     secondary_color: '',
-    status: ''
+    status: '',
+    plan_price: 59.90,
+    plan_id: ''
   });
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchTenantData();
+    fetchPlans();
   }, [id]);
 
   useEffect(() => {
@@ -37,23 +68,28 @@ const TenantDetailAdmin = () => {
     if (activeTab === 'invoices') fetchInvoices();
   }, [activeTab]);
 
+  const fetchPlans = async () => {
+    try {
+      const data = await api.plans.list();
+      if (data) setPlans(data);
+    } catch (err) {
+      console.error('Erro ao buscar planos', err);
+    }
+  };
+
   const fetchTenantData = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('cap_tenants')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (error) throw error;
+      const data = await api.superadmin.getTenant(id);
       setTenant(data);
       setEditForm({
         name: data.name || '',
         slug: data.slug || '',
         primary_color: data.primary_color || '',
         secondary_color: data.secondary_color || '',
-        status: data.status || 'active'
+        status: data.status || 'active',
+        plan_price: data.plan_price || 59.90,
+        plan_id: data.plan_id || ''
       });
     } catch (error) {
       console.error('Error fetching tenant:', error);
@@ -64,8 +100,8 @@ const TenantDetailAdmin = () => {
 
   const fetchStaff = async () => {
     try {
-      const { data, error } = await supabase.from('cap_staff').select('*').eq('tenant_id', id);
-      if (!error) setStaff(data || []);
+      const data = await api.staff.list(id);
+      setStaff(data || []);
     } catch (error) {
       console.error('Error fetching staff:', error);
     }
@@ -73,8 +109,8 @@ const TenantDetailAdmin = () => {
 
   const fetchClients = async () => {
     try {
-      const { data, error } = await supabase.from('cap_clients').select('*').eq('tenant_id', id);
-      if (!error) setClients(data || []);
+      const data = await api.clients.list(id);
+      setClients(data || []);
     } catch (error) {
       console.error('Error fetching clients:', error);
     }
@@ -82,8 +118,8 @@ const TenantDetailAdmin = () => {
 
   const fetchAppointments = async () => {
     try {
-      const { data, error } = await supabase.from('cap_appointments').select('*').eq('tenant_id', id).order('created_at', { ascending: false }).limit(50);
-      if (!error) setAppointments(data || []);
+      const data = await api.appointments.list({ tenant_id: id, limit: 50 });
+      setAppointments(data || []);
     } catch (error) {
       console.error('Error fetching appointments:', error);
     }
@@ -91,8 +127,8 @@ const TenantDetailAdmin = () => {
 
   const fetchInvoices = async () => {
     try {
-      const { data, error } = await supabase.from('cap_invoices').select('*').eq('tenant_id', id).order('due_date', { ascending: false });
-      if (!error) setInvoices(data || []);
+      const data = await api.invoices.list(id);
+      setInvoices(data || []);
     } catch (error) {
       console.error('Error fetching invoices:', error);
     }
@@ -103,60 +139,67 @@ const TenantDetailAdmin = () => {
     if (!referenceMonth) return;
 
     try {
-      const { error } = await supabase.from('cap_invoices').insert([{
+      await api.invoices.create({
         tenant_id: id,
         amount: tenant.plan_price || 59.90,
         status: 'pending',
         due_date: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString().split('T')[0], // vence em 5 dias
         reference_month: referenceMonth
-      }]);
-      if (error) throw error;
-      alert('Fatura gerada com sucesso!');
+      });
+      showSuccess('Fatura gerada com sucesso!');
       fetchInvoices();
     } catch (err) {
       console.error(err);
-      alert('Erro ao gerar fatura.');
+      showError('Erro ao gerar fatura.');
     }
   };
 
   const handleMarkAsPaid = async (invoiceId) => {
-    if (!window.confirm('Marcar esta fatura como paga manualmente?')) return;
+    if (!(await confirm('Marcar esta fatura como paga manualmente?'))) return;
     try {
-      const { error } = await supabase.from('cap_invoices').update({
-        status: 'paid',
-        paid_at: new Date().toISOString(),
-        payment_method: 'manual'
-      }).eq('id', invoiceId);
-      
-      if (error) throw error;
-      alert('Fatura baixada com sucesso!');
+      await api.invoices.pay(invoiceId, 'manual');
+      showSuccess('Fatura baixada com sucesso!');
       fetchInvoices();
     } catch (err) {
       console.error(err);
-      alert('Erro ao dar baixa na fatura.');
+      showError('Erro ao dar baixa na fatura.');
+    }
+  };
+
+  const handlePlanChange = (planId) => {
+    const selectedPlan = plans.find(p => p.id === planId);
+    if (selectedPlan) {
+      setEditForm({
+        ...editForm,
+        plan_id: planId,
+        plan_price: Number(selectedPlan.price)
+      });
+    } else {
+      setEditForm({
+        ...editForm,
+        plan_id: '',
+        plan_price: 59.90
+      });
     }
   };
 
   const handleUpdateTenant = async () => {
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('cap_tenants')
-        .update({
-          name: editForm.name,
-          slug: editForm.slug,
-          primary_color: editForm.primary_color,
-          secondary_color: editForm.secondary_color,
-          status: editForm.status
-        })
-        .eq('id', id);
-      
-      if (error) throw error;
-      alert('Salão atualizado com sucesso!');
+      await api.superadmin.updateTenant(id, {
+        name: editForm.name,
+        slug: editForm.slug,
+        primary_color: editForm.primary_color,
+        secondary_color: editForm.secondary_color,
+        status: editForm.status,
+        plan_price: Number(editForm.plan_price),
+        plan_id: editForm.plan_id || null
+      });
+      showSuccess('Salão atualizado com sucesso!');
       fetchTenantData();
     } catch (error) {
       console.error('Error updating tenant:', error);
-      alert('Erro ao atualizar salão.');
+      showError('Erro ao atualizar salão.');
     } finally {
       setIsSaving(false);
     }
@@ -167,23 +210,11 @@ const TenantDetailAdmin = () => {
     if (!newPassword) return;
 
     try {
-      // Usamos a mesma RPC, mas precisamos garantir que o staff não perca suas outras infos
-      // Então apenas fazemos um update na tabela com crypt
-      const { error } = await supabase.rpc('cap_update_staff', {
-        p_staff_id: staffId,
-        p_tenant_id: id,
-        p_name: staff.find(s => s.id === staffId).name,
-        p_phone: staff.find(s => s.id === staffId).phone,
-        p_password: newPassword,
-        p_role: staff.find(s => s.id === staffId).role,
-        p_is_active: staff.find(s => s.id === staffId).is_active
-      });
-
-      if (error) throw error;
-      alert('Senha do profissional redefinida com sucesso!');
+      await api.superadmin.updateStaffPassword(staffId, newPassword);
+      showSuccess('Senha do profissional redefinida com sucesso!');
     } catch (err) {
       console.error('Erro ao resetar senha do staff', err);
-      alert('Falha ao resetar senha.');
+      showError('Falha ao resetar senha.');
     }
   };
 
@@ -192,17 +223,11 @@ const TenantDetailAdmin = () => {
     if (!newPassword) return;
 
     try {
-      const { error } = await supabase.rpc('cap_update_client_password', {
-        p_client_id: clientId,
-        p_tenant_id: id,
-        p_password: newPassword
-      });
-
-      if (error) throw error;
-      alert('Senha do cliente redefinida com sucesso!');
+      await api.clients.updatePassword(clientId, newPassword);
+      showSuccess('Senha do cliente redefinida com sucesso!');
     } catch (err) {
       console.error('Erro ao resetar senha do cliente', err);
-      alert('Falha ao resetar senha.');
+      showError('Falha ao resetar senha.');
     }
   };
 
@@ -215,7 +240,7 @@ const TenantDetailAdmin = () => {
       {/* Top App Bar */}
       <header className="flex justify-between items-center px-gutter py-3 bg-surface shadow-sm sticky top-0 z-30 pt-[max(env(safe-area-inset-top),_0.75rem)]">
         <div className="flex items-center gap-sm">
-          <button onClick={() => navigate('/superadmin')} className="material-symbols-outlined text-primary p-2 hover:bg-surface-container-low rounded-full transition-colors">arrow_back</button>
+          <button onClick={() => navigate('/superadmin/tenants')} className="material-symbols-outlined text-primary p-2 hover:bg-surface-container-low rounded-full transition-colors">arrow_back</button>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-primary overflow-hidden shrink-0" style={{ backgroundColor: tenant.primary_color ? `${tenant.primary_color}20` : undefined, color: tenant.primary_color }}>
               <span className="material-symbols-outlined text-sm">storefront</span>
@@ -317,6 +342,21 @@ const TenantDetailAdmin = () => {
                       <option value="suspended">Suspenso (Bloqueado)</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block font-label-sm text-secondary mb-1">Plano de Assinatura (SaaS)</label>
+                    <select 
+                      className="w-full bg-surface-container-lowest border border-surface-variant rounded-lg p-3 outline-none focus:border-primary"
+                      value={editForm.plan_id}
+                      onChange={e => handlePlanChange(e.target.value)}
+                    >
+                      <option value="">Nenhum Plano Associado</option>
+                      {plans.map(plan => (
+                        <option key={plan.id} value={plan.id}>
+                          {plan.name} - R$ {Number(plan.price).toFixed(2)}/{plan.interval === 'year' ? 'ano' : 'mês'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   
                   <button 
                     onClick={handleUpdateTenant}
@@ -354,6 +394,7 @@ const TenantDetailAdmin = () => {
                     <tr>
                       <th className="p-4 font-label-md text-secondary">Nome</th>
                       <th className="p-4 font-label-md text-secondary">Telefone</th>
+                      <th className="p-4 font-label-md text-secondary">E-mail</th>
                       <th className="p-4 font-label-md text-secondary">Cargo</th>
                       <th className="p-4 font-label-md text-secondary">Status</th>
                       <th className="p-4 font-label-md text-secondary text-right">Ação Mestre</th>
@@ -361,12 +402,13 @@ const TenantDetailAdmin = () => {
                   </thead>
                   <tbody>
                     {staff.length === 0 ? (
-                      <tr><td colSpan="5" className="p-8 text-center text-secondary">Nenhum profissional cadastrado.</td></tr>
+                      <tr><td colSpan="6" className="p-8 text-center text-secondary">Nenhum profissional cadastrado.</td></tr>
                     ) : (
                       staff.map(s => (
                         <tr key={s.id} className="border-b border-surface-variant hover:bg-surface-container-lowest">
                           <td className="p-4 font-label-md text-on-surface">{s.name}</td>
                           <td className="p-4 text-secondary">{s.phone}</td>
+                          <td className="p-4 text-secondary">{s.email}</td>
                           <td className="p-4"><span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full text-[12px]">{s.role === 'manager' ? 'Gestor' : 'Profissional'}</span></td>
                           <td className="p-4"><span className={`text-[12px] px-3 py-1 rounded-full ${s.is_active ? 'bg-[#10b981]/10 text-[#10b981]' : 'bg-error-container text-error'}`}>{s.is_active ? 'Ativo' : 'Desativado'}</span></td>
                           <td className="p-4 text-right">
@@ -458,7 +500,11 @@ const TenantDetailAdmin = () => {
                         appointments.map(app => (
                           <tr key={app.id} className="border-b border-surface-variant hover:bg-surface-container-lowest">
                             <td className="p-4 text-on-surface">{new Date(app.start_time).toLocaleString('pt-BR')}</td>
-                            <td className="p-4"><span className="bg-surface-container-high px-2 py-1 rounded text-[12px] uppercase">{app.status}</span></td>
+                            <td className="p-4">
+                              <span className={`px-3 py-1 rounded-full text-[12px] font-label-sm ${getStatusBadgeClass(app.status)}`}>
+                                {getStatusLabel(app.status)}
+                              </span>
+                            </td>
                             <td className="p-4 text-right font-label-md">R$ {Number(app.total_price).toFixed(2)}</td>
                           </tr>
                         ))

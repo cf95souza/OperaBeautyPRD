@@ -1,0 +1,58 @@
+name: OperaBeauty CI/CD
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  test:
+    name: Backend Lint & Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Backend Dependencies
+      run: npm install
+      working-directory: ./backend
+
+    - name: Run Backend Tests
+      run: npm test
+      working-directory: ./backend
+      env:
+        NODE_ENV: test
+        JWT_SECRET: dummy-test-secret
+        DATABASE_URL: postgres://dummy:dummy@localhost:5432/dummy
+
+  # DEPLOY AUTOMATIZADO (DESABILITADO - AGUARDANDO VPS)
+  # Para ativar, descomente o bloco abaixo e configure as secrets no GitHub (Settings > Secrets and variables > Actions):
+  # - SSH_HOST: IP da sua VPS
+  # - SSH_USERNAME: Seu usuário SSH (ex: root ou caio)
+  # - SSH_PRIVATE_KEY: A chave privada do SSH para acesso à VPS
+  
+  # deploy:
+  #   name: Deploy to Production VPS
+  #   needs: test
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   runs-on: ubuntu-latest
+  #
+  #   steps:
+  #   - name: Deploy via SSH
+  #     uses: appleboy/ssh-action@v1.0.3
+  #     with:
+  #       host: ${{ secrets.SSH_HOST }}
+  #       username: ${{ secrets.SSH_USERNAME }}
+  #       key: ${{ secrets.SSH_PRIVATE_KEY }}
+  #       script: |
+  #         cd /home/caio/OperaBeauty
+  #         git pull origin main
+  #         docker compose build
+  #         docker compose up -d

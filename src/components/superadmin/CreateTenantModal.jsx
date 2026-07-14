@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 
 const CreateTenantModal = ({ isOpen, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
@@ -9,10 +9,13 @@ const CreateTenantModal = ({ isOpen, onClose, onSuccess }) => {
   // Tenant State
   const [tenantName, setTenantName] = useState('');
   const [slug, setSlug] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#7c5357');
+  const [secondaryColor, setSecondaryColor] = useState('#eeb9bd');
 
   // Manager State
   const [managerName, setManagerName] = useState('');
   const [managerPhone, setManagerPhone] = useState('');
+  const [managerEmail, setManagerEmail] = useState('');
   const [managerPassword, setManagerPassword] = useState('');
 
   // Auto-generate slug from name
@@ -22,36 +25,61 @@ const CreateTenantModal = ({ isOpen, onClose, onSuccess }) => {
     setSlug(val.toLowerCase().replace(/[^a-z0-9]/g, ''));
   };
 
+  // Plan State
+  const [plans, setPlans] = useState([]);
+  const [selectedPlanPrice, setSelectedPlanPrice] = useState(59.90);
+
+  React.useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  const fetchPlans = async () => {
+    try {
+      const data = await api.plans.list();
+      if (data) {
+        const activePlans = data.filter(p => p.is_active);
+        setPlans(activePlans);
+        if (activePlans.length > 0) {
+          setSelectedPlanPrice(activePlans[0].price);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao buscar planos:', err);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      // 1. Criar o Tenant
-      const { data: tenantData, error: tenantError } = await supabase
-        .from('cap_tenants')
-        .insert([{ 
-          name: tenantName, 
-          slug, 
-          status: 'active',
-          plan_price: 59.90
-        }])
-        .select()
-        .single();
+      // Achar o plano correspondente para obter o plan_id se houver
+      const plan = plans.find(p => Number(p.price) === Number(selectedPlanPrice));
 
-      if (tenantError) throw new Error('Erro ao criar Salão. Talvez este slug já exista.');
-
-      // 2. Criar o Gestor usando a RPC Segura
-      const { data: staffData, error: staffError } = await supabase.rpc('cap_register_staff', {
-        p_tenant_id: tenantData.id,
-        p_name: managerName,
-        p_phone: managerPhone.replace(/\D/g, ''),
-        p_password: managerPassword,
-        p_role: 'manager'
+      // 1. Criar o Tenant via API Express
+      const tenantData = await api.superadmin.createTenant({ 
+        name: tenantName, 
+        slug, 
+        plan_price: Number(selectedPlanPrice),
+        plan_id: plan ? plan.id : null,
+        primary_color: primaryColor,
+        secondary_color: secondaryColor
       });
 
-      if (staffError) throw staffError;
+      if (!tenantData || !tenantData.id) {
+        throw new Error('Erro ao criar Salão. Verifique os dados ou o link único (slug).');
+      }
+
+      // 2. Criar o Gestor via API Express
+      await api.superadmin.createStaff({
+        tenant_id: tenantData.id,
+        name: managerName,
+        phone: managerPhone.replace(/\D/g, ''),
+        email: managerEmail,
+        password: managerPassword,
+        role: 'manager'
+      });
 
       onSuccess(tenantData);
       onClose();
@@ -115,6 +143,47 @@ const CreateTenantModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
             </div>
 
+            <div>
+              <label className="block text-sm text-secondary mb-1">Plano de Assinatura (SaaS)</label>
+              <select
+                required
+                className="w-full bg-surface-container-low border-none rounded-lg px-3 py-3 text-body-md focus:ring-2 focus:ring-primary outline-none"
+                value={selectedPlanPrice}
+                onChange={(e) => setSelectedPlanPrice(e.target.value)}
+              >
+                {plans.length === 0 ? (
+                  <option value={59.90}>Plano Padrão - R$ 59,90/mês</option>
+                ) : (
+                  plans.map(plan => (
+                    <option key={plan.id} value={plan.price}>
+                      {plan.name} - R$ {Number(plan.price).toFixed(2)}/{plan.interval === 'year' ? 'ano' : 'mês'}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-secondary mb-1">Cor Primária</label>
+                <input 
+                  type="color"
+                  className="w-full h-12 rounded-lg cursor-pointer bg-surface-container-low border-none p-1"
+                  value={primaryColor}
+                  onChange={(e) => setPrimaryColor(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-secondary mb-1">Cor Secundária</label>
+                <input 
+                  type="color"
+                  className="w-full h-12 rounded-lg cursor-pointer bg-surface-container-low border-none p-1"
+                  value={secondaryColor}
+                  onChange={(e) => setSecondaryColor(e.target.value)}
+                />
+              </div>
+            </div>
+
             <h3 className="font-label-md text-primary border-b border-surface-variant pb-2 mt-4">2. Conta do Gestor</h3>
 
             <div>
@@ -130,14 +199,24 @@ const CreateTenantModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             <div>
-              <label className="block text-sm text-secondary mb-1">Telefone (Login)</label>
+              <label className="block text-sm text-secondary mb-1">Telefone (Contato)</label>
               <input 
                 type="text" 
                 required
-                className="w-full bg-surface-container-low border-none rounded-lg px-3 py-3 text-body-md focus:ring-2 focus:ring-primary outline-none"
-                placeholder="11999999999"
+                className="w-full bg-surface-container-low border-none rounded-lg px-3 py-3 text-body-md focus:ring-2 focus:ring-primary outline-none mb-3"
+                placeholder="(11) 99999-9999"
                 value={managerPhone}
                 onChange={(e) => setManagerPhone(e.target.value)}
+              />
+
+              <label className="block text-sm text-secondary mb-1">E-mail de Acesso (Login)</label>
+              <input 
+                type="email" 
+                required
+                className="w-full bg-surface-container-low border-none rounded-lg px-3 py-3 text-body-md focus:ring-2 focus:ring-primary outline-none"
+                placeholder="gestor@salao.com.br"
+                value={managerEmail}
+                onChange={(e) => setManagerEmail(e.target.value)}
               />
             </div>
 

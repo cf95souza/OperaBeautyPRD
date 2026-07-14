@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import imageCompression from 'browser-image-compression';
+import { api } from '../../lib/api';
+
 import { 
   Send, 
   Image as ImageIcon, 
@@ -29,18 +31,15 @@ const Timeline = ({ clientId }) => {
 
   const fetchNotes = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('cap_timeline_notes')
-      .select(`
-        *,
-        cap_profiles (full_name)
-      `)
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false });
-
-    if (error) console.error('Error fetching notes:', error);
-    else setNotes(data || []);
-    setLoading(false);
+    try {
+      const data = await api.clients.getTimeline(clientId);
+      setNotes(data || []);
+    } catch (error) {
+      console.error('Error fetching notes:', error);
+      showError('Erro ao carregar timeline');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleFileChange = (e) => {
@@ -63,36 +62,22 @@ const Timeline = ({ clientId }) => {
     if (!content.trim() && !imageFile) return;
 
     setUploading(true);
-    let imagePath = null;
 
     try {
-      // 1. Upload image if exists
+      const formData = new FormData();
+      if (content.trim()) formData.append('content', content.trim());
+      
       if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `${clientId}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('client-media')
-          .upload(filePath, imageFile);
-
-        if (uploadError) throw uploadError;
-        imagePath = filePath;
+        const options = {
+          maxSizeMB: 0.2,
+          maxWidthOrHeight: 1024,
+          useWebWorker: true
+        };
+        const compressedFile = await imageCompression(imageFile, options);
+        formData.append('image', compressedFile, compressedFile.name);
       }
 
-      // 2. Insert note
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error: insertError } = await supabase
-        .from('cap_timeline_notes')
-        .insert([{
-          client_id: clientId,
-          professional_id: user.id,
-          content: content,
-          image_path: imagePath,
-          type: 'comment'
-        }]);
-
-      if (insertError) throw insertError;
+      await api.clients.addTimelineNote(clientId, formData);
 
       setContent('');
       clearImage();
@@ -105,29 +90,22 @@ const Timeline = ({ clientId }) => {
     }
   };
 
-  const deleteNote = async (id, imagePath) => {
+  const deleteNote = async (id) => {
     if (await confirm('Deseja excluir esta publicação definitivamente? Esta ação não pode ser desfeita.')) {
-      const { error } = await supabase
-        .from('cap_timeline_notes')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        showError('Erro ao excluir nota');
-      } else {
-        if (imagePath) {
-          await supabase.storage.from('client-media').remove([imagePath]);
-        }
+      try {
+        await api.clients.deleteTimelineNote(clientId, id);
         showSuccess('Publicação removida com sucesso!');
         fetchNotes();
+      } catch (error) {
+        showError('Erro ao excluir nota');
       }
     }
   };
 
   const getPublicUrl = (path) => {
     if (!path) return null;
-    const { data } = supabase.storage.from('client-media').getPublicUrl(path);
-    return data.publicUrl;
+    const backendUrl = import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') : 'http://localhost:5000';
+    return `${backendUrl}${path}`;
   };
 
   return (
@@ -198,14 +176,14 @@ const Timeline = ({ clientId }) => {
               <div className="card-base p-5 bg-white border-slate-100 hover:border-slate-200 transition-all">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-slate-900">{note.cap_profiles?.full_name || 'Profissional'}</span>
+                    <span className="text-sm font-bold text-slate-900">{note.cap_staff?.name || 'Profissional'}</span>
                     <span className="text-[10px] text-slate-400">•</span>
                     <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
                       <Clock size={10} /> {formatDistanceToNow(new Date(note.created_at), { addSuffix: true, locale: ptBR })}
                     </span>
                   </div>
                   <button 
-                    onClick={() => deleteNote(note.id, note.image_path)}
+                    onClick={() => deleteNote(note.id)}
                     className="text-slate-300 hover:text-rose-500 transition-colors"
                   >
                     <Trash2 size={14} />

@@ -1,0 +1,84 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: operabeauty-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: operabeauty
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      - operabeauty-pgdata:/var/lib/postgresql/data
+      # Script DDL auto-gerado para inicializar o banco de dados limpo na VPS
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - operabeauty-network
+
+  api:
+    build: ./backend
+    container_name: operabeauty-api
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # O backend vai conectar no DB usando o nome do container "db" em vez de localhost
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: operabeauty
+      PORT: 5000
+      JWT_SECRET: ${JWT_SECRET}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - operabeauty-network
+
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: operabeauty-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    networks:
+      - operabeauty-network
+
+volumes:
+  operabeauty-pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  operabeauty-network:
+    driver: bridge

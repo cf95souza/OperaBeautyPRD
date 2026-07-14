@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
+import { useNotification } from '../../context/NotificationProvider';
 
 const ControleEstoque = () => {
   const { tenant_slug } = useParams();
   const { tenant } = useTenant();
+  const { showSuccess, showError } = useNotification();
 
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,13 +29,11 @@ const ControleEstoque = () => {
 
   const fetchInventory = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('cap_inventory')
-      .select('*')
-      .eq('tenant_id', tenant.id)
-      .order('name');
-    if (!error && data) {
-      setInventory(data);
+    try {
+      const data = await api.inventory.list();
+      if (data) setInventory(data);
+    } catch (err) {
+      console.error(err);
     }
     setLoading(false);
   };
@@ -69,7 +69,6 @@ const ControleEstoque = () => {
     setSaving(true);
     try {
       const payload = {
-        tenant_id: tenant.id,
         name: formData.name,
         unit: formData.unit,
         type: formData.type,
@@ -79,15 +78,15 @@ const ControleEstoque = () => {
       };
 
       if (editingItem) {
-        await supabase.from('cap_inventory').update(payload).eq('id', editingItem.id);
+        await api.inventory.update(editingItem.id, payload);
       } else {
-        await supabase.from('cap_inventory').insert([payload]);
+        await api.inventory.create(payload);
       }
       setShowModal(false);
       fetchInventory();
     } catch (err) {
       console.error(err);
-      alert('Erro ao salvar item.');
+      showError('Erro ao salvar item.');
     } finally {
       setSaving(false);
     }
@@ -99,12 +98,20 @@ const ControleEstoque = () => {
     setSaving(true);
     try {
       const newQuantity = Number(editingItem.quantity) + Number(restockAmount);
-      await supabase.from('cap_inventory').update({ quantity: newQuantity }).eq('id', editingItem.id);
+      const payload = {
+        name: editingItem.name,
+        unit: editingItem.unit,
+        type: editingItem.type || 'professional',
+        min_quantity: editingItem.min_quantity,
+        price: editingItem.price || 0,
+        quantity: newQuantity
+      };
+      await api.inventory.update(editingItem.id, payload);
       setShowRestockModal(false);
       fetchInventory();
     } catch (err) {
       console.error(err);
-      alert('Erro ao reabastecer.');
+      showError('Erro ao reabastecer.');
     } finally {
       setSaving(false);
     }

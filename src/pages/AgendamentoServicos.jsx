@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useBooking } from '../context/BookingContext';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
+import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
 
 const AgendamentoServicos = () => {
   const { tenant_slug } = useParams();
@@ -17,17 +18,16 @@ const AgendamentoServicos = () => {
     if (!tenant) return;
     const fetchServices = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('cap_services')
-        .select('*')
-        .eq('tenant_id', tenant.id)
-        .eq('is_active', true)
-        .order('name');
-      
-      if (!error && data) {
-        setDbServices(data);
+      try {
+        const data = await api.services.list(tenant.id);
+        if (data) {
+          setDbServices(data.filter(s => s.is_active));
+        }
+      } catch (err) {
+        console.error("Erro ao carregar serviços:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchServices();
   }, [tenant]);
@@ -37,11 +37,18 @@ const AgendamentoServicos = () => {
 
   const filteredServices = dbServices;
 
+  useEffect(() => {
+    console.log("=== [AgendamentoServicos] Montado/Atualizado ===");
+    console.log("bookingData atual:", bookingData);
+  }, [bookingData]);
+
   const handleSelectService = (service) => {
+    console.log("=== [AgendamentoServicos] handleSelectService chamado ===", service);
     updateBooking('service', service);
   };
 
   const handleContinue = () => {
+    console.log("=== [AgendamentoServicos] handleContinue chamado ===", bookingData.service);
     if (bookingData.service) {
       navigate(`/${tenant_slug}/agendar/profissionais`);
     }
@@ -49,19 +56,13 @@ const AgendamentoServicos = () => {
 
   return (
     <div className="font-body-md text-on-background bg-[#f9f9f9] min-h-screen pb-[120px]">
-      <header className="w-full top-0 sticky z-40 bg-surface dark:bg-surface-dim shadow-sm flex justify-between items-center px-[16px] py-[8px] max-w-7xl mx-auto">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="text-primary hover:opacity-80 transition-opacity">
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
-          <h1 className="font-headline-md text-[24px] md:text-[28px] font-semibold text-primary tracking-tight">
-            {tenant?.name || 'Ethereal Grace'}
+      <header className="w-full top-0 sticky z-40 bg-surface shadow-sm transition-all duration-300 ease-in-out pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 md:pt-4">
+        <div className="flex justify-between items-center px-gutter py-sm w-full max-w-7xl mx-auto">
+          <div className="w-10"></div>{/* Spacer to keep title centered */}
+          <h1 className="font-headline-md text-headline-md-mobile md:text-headline-md text-primary tracking-tight text-center flex-1">
+            {tenant?.name || 'Carregando...'}
           </h1>
-        </div>
-        <div className="flex items-center">
-          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-container">
-            <span className="material-symbols-outlined mt-2 text-primary">person</span>
-          </div>
+          <div className="w-10"></div>{/* Spacer to keep title centered */}
         </div>
       </header>
 
@@ -129,11 +130,13 @@ const AgendamentoServicos = () => {
             })
           )}
         </div>
+        {/* Espaçador de segurança para a BottomNavBar móvel */}
+        <div className="h-24 md:hidden"></div>
       </main>
 
       {bookingData.service && (
-        <div className="fixed bottom-0 left-0 w-full z-50 animate-fade-in-up">
-          <div className="bg-white shadow-[0px_-4px_20px_rgba(0,0,0,0.1)] p-4 flex flex-col items-center gap-3 rounded-t-2xl">
+        <div className="fixed bottom-0 left-0 w-full z-40 animate-fade-in-up">
+          <div className="bg-white shadow-[0px_-4px_20px_rgba(0,0,0,0.1)] p-4 pb-[calc(env(safe-area-inset-bottom,0px)+72px)] md:pb-4 flex flex-col items-center gap-3 rounded-t-2xl">
             <button 
               onClick={handleContinue}
               className="w-full max-w-[448px] bg-primary text-on-primary font-semibold text-[14px] py-4 rounded-xl shadow-lg active:scale-95 transition-all"
@@ -143,6 +146,9 @@ const AgendamentoServicos = () => {
           </div>
         </div>
       )}
+
+      {/* BottomNavBar (Mobile Only) */}
+      <ClienteBottomNavBar activeTab="home" tenantSlug={tenant_slug} />
     </div>
   );
 };

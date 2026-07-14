@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
+import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
 
 const HomeCliente = () => {
   const { tenant_slug } = useParams();
@@ -10,22 +11,44 @@ const HomeCliente = () => {
   const [services, setServices] = useState([]);
   const [loadingServices, setLoadingServices] = useState(true);
 
+  const banners = Array.isArray(tenant?.banners) && tenant.banners.length > 0
+    ? tenant.banners
+    : (tenant?.banner_url || tenant?.banner_title || tenant?.banner_subtitle)
+      ? [
+          {
+            id: 'legacy',
+            url: tenant.banner_url,
+            title: tenant.banner_title,
+            subtitle: tenant.banner_subtitle
+          }
+        ]
+      : [];
+
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % banners.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [banners]);
+
   useEffect(() => {
     if (!tenant) return;
     const fetchServices = async () => {
       setLoadingServices(true);
-      const { data, error } = await supabase
-        .from('cap_services')
-        .select('*')
-        .eq('tenant_id', tenant.id)
-        .eq('is_active', true)
-        .limit(5)
-        .order('name');
-      
-      if (!error && data) {
-        setServices(data);
+      try {
+        const data = await api.services.list(tenant.id);
+        if (data) {
+          // Apenas os 5 primeiros que estão ativos
+          setServices(data.filter(s => s.is_active).slice(0, 5));
+        }
+      } catch (err) {
+        console.error("Erro ao carregar serviços:", err);
+      } finally {
+        setLoadingServices(false);
       }
-      setLoadingServices(false);
     };
     fetchServices();
   }, [tenant]);
@@ -33,13 +56,24 @@ const HomeCliente = () => {
   return (
     <div className="bg-background text-on-background min-h-screen pb-[80px] md:pb-0 font-body-md text-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
       {/* TopAppBar */}
-      {/* TopAppBar */}
-      <header className="w-full top-0 sticky z-40 bg-surface shadow-sm transition-all duration-300 ease-in-out pt-[env(safe-area-inset-top,0px)]">
+      <header className="w-full top-0 sticky z-40 bg-surface shadow-sm transition-all duration-300 ease-in-out pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 md:pt-4">
         <div className="flex justify-between items-center px-gutter py-sm w-full max-w-7xl mx-auto">
           <div className="w-10"></div>{/* Spacer to keep title centered */}
-          <h1 className="font-headline-md text-headline-md-mobile md:text-headline-md text-primary tracking-tight text-center flex-1">
-            {tenant?.name || 'Carregando...'}
-          </h1>
+          <div className="flex items-center justify-center gap-2 flex-1">
+            {tenant?.logo_url ? (
+              <img 
+                src={tenant.logo_url} 
+                alt={tenant.name} 
+                className="h-8 md:h-10 object-contain rounded-md" 
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <span className="material-symbols-outlined text-primary font-headline-md text-headline-md shrink-0">spa</span>
+            )}
+            <h1 className="font-headline-md text-headline-md-mobile md:text-headline-md text-primary tracking-tight">
+              {tenant?.name || 'Carregando...'}
+            </h1>
+          </div>
           <div className="w-10"></div>{/* Spacer to keep title centered */}
         </div>
       </header>
@@ -47,46 +81,26 @@ const HomeCliente = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-container-margin md:px-xl py-lg space-y-xl animate-fade-in-up">
         
-        {/* Hero Section & Banner */}
-        <section className="space-y-sm mb-lg">
+        {/* Hero Section */}
+        <section className="space-y-sm">
           <div className="mb-md">
             <h2 className="font-headline-lg-mobile md:text-headline-lg text-on-surface">
               Olá, {session?.name ? session.name.split(' ')[0] : 'Bem-vindo(a)'}
             </h2>
-            <p className="text-secondary">Encontre sua serenidade hoje.</p>
+            <p className="text-secondary">
+              {tenant?.welcome_message || 'Encontre sua serenidade hoje.'}
+            </p>
           </div>
-          
-          {tenant?.banner_url && (
-            <div className="w-full h-40 md:h-56 rounded-xl overflow-hidden relative shadow-[0px_4px_20px_rgba(0,0,0,0.04)] group">
-              <img 
-                src={tenant.banner_url} 
-                alt={tenant.banner_title || 'Banner promocional'} 
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent flex flex-col justify-end p-lg">
-                {tenant.banner_title && (
-                  <h3 className="text-white font-headline-md text-headline-md-mobile md:text-headline-md shadow-sm">
-                    {tenant.banner_title}
-                  </h3>
-                )}
-                {tenant.banner_subtitle && (
-                  <p className="text-white/90 text-sm md:text-base mt-1 shadow-sm">
-                    {tenant.banner_subtitle}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
         </section>
 
         {/* Primary Actions (Bento Grid Style) */}
         <section className="grid grid-cols-2 gap-md">
           <button 
             onClick={() => navigate(`/${tenant_slug}/agendar/servicos`)}
-            className="flex flex-col items-start p-lg bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0px_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 group border border-surface-variant/50 relative overflow-hidden text-left"
+            className="flex flex-col items-start p-lg bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0px_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 group border border-surface-variant/50 relative overflow-hidden text-left animate-fade-in"
           >
             <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="bg-primary-container text-on-primary-container p-3 rounded-full mb-lg relative z-10">
+            <div className="w-12 h-12 flex items-center justify-center bg-primary-container text-on-primary-container rounded-full mb-lg relative z-10 shrink-0 shadow-sm">
               <span className="material-symbols-outlined text-headline-md">calendar_add_on</span>
             </div>
             <span className="font-label-md text-label-md text-on-surface relative z-10 group-hover:text-primary transition-colors">Agendar Novo<br />Horário</span>
@@ -94,10 +108,10 @@ const HomeCliente = () => {
 
           <button 
             onClick={() => navigate(`/${tenant_slug}/historico`)}
-            className="flex flex-col items-start p-lg bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0px_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 group border border-surface-variant/50 relative overflow-hidden text-left"
+            className="flex flex-col items-start p-lg bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0px_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 group border border-surface-variant/50 relative overflow-hidden text-left animate-fade-in"
           >
             <div className="absolute inset-0 bg-surface-variant/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="bg-surface-variant text-on-surface-variant p-3 rounded-full mb-lg relative z-10">
+            <div className="w-12 h-12 flex items-center justify-center bg-surface-variant text-on-surface-variant rounded-full mb-lg relative z-10 shrink-0 shadow-sm">
               <span className="material-symbols-outlined text-headline-md">history</span>
             </div>
             <span className="font-label-md text-label-md text-on-surface relative z-10 group-hover:text-on-surface-variant transition-colors">Meus<br />Agendamentos</span>
@@ -121,6 +135,64 @@ const HomeCliente = () => {
             </button>
           </div>
         </section>
+
+        {/* Banners Promocionais (Carrossel Dinâmico) */}
+        {banners.length > 0 && (
+          <section className="w-full overflow-hidden relative rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] group">
+            {/* Wrapper deslizante */}
+            <div 
+              className="flex transition-transform duration-700 ease-in-out"
+              style={{ transform: `translateX(-${currentSlide * (100 / banners.length)}%)`, width: `${banners.length * 100}%` }}
+            >
+              {banners.map((slide, idx) => (
+                <div key={slide.id || idx} className="w-full h-40 md:h-56 relative shrink-0 overflow-hidden" style={{ width: `${100 / banners.length}%` }}>
+                  {slide.url ? (
+                    <img 
+                      src={slide.url} 
+                      alt={slide.title || 'Banner promocional'} 
+                      className="w-full h-full object-cover" 
+                    />
+                  ) : (
+                    <div 
+                      className="w-full h-full"
+                      style={{
+                        background: `linear-gradient(135deg, ${tenant?.primary_color || '#7c5357'}, ${tenant?.secondary_color || '#eeb9bd'})`
+                      }}
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent flex flex-col justify-end p-lg">
+                    {slide.title && (
+                      <h3 className="text-white font-headline-md text-headline-md-mobile md:text-headline-md shadow-sm">
+                        {slide.title}
+                      </h3>
+                    )}
+                    {slide.subtitle && (
+                      <p className="text-white/90 text-sm md:text-base mt-1 shadow-sm">
+                        {slide.subtitle}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Indicadores de Slide (Dots) */}
+            {banners.length > 1 && (
+              <div className="absolute bottom-sm left-1/2 -translate-x-1/2 flex items-center gap-xs z-10">
+                {banners.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentSlide(idx)}
+                    className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                      currentSlide === idx ? 'bg-white scale-125' : 'bg-white/50 hover:bg-white/80'
+                    }`}
+                    aria-label={`Ir para slide ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Serviços Especiais (Horizontal Scroll) */}
         <section className="space-y-md">
@@ -155,32 +227,12 @@ const HomeCliente = () => {
             )}
           </div>
         </section>
-
+        {/* Espaçador de segurança para a BottomNavBar móvel */}
+        <div className="h-24 md:hidden"></div>
       </main>
 
       {/* BottomNavBar (Mobile Only) */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-3 pb-[env(safe-area-inset-bottom,20px)] bg-surface-container-lowest shadow-[0px_-4px_20px_rgba(0,0,0,0.04)] rounded-t-xl transition-all duration-300 ease-in-out">
-        <button 
-          className="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 scale-95 transition-transform duration-200"
-        >
-          <span className="material-symbols-outlined filled mb-1" style={{ fontVariationSettings: "'FILL' 1" }}>spa</span>
-          <span className="font-label-sm text-label-sm">Início</span>
-        </button>
-        <button 
-          onClick={() => navigate(`/${tenant_slug}/historico`)}
-          className="flex flex-col items-center justify-center text-secondary opacity-70 hover:opacity-100 hover:bg-surface-variant rounded-full px-4 py-1 transition-all duration-200"
-        >
-          <span className="material-symbols-outlined mb-1">calendar_month</span>
-          <span className="font-label-sm text-label-sm">Agenda</span>
-        </button>
-        <button 
-          onClick={() => navigate(`/${tenant_slug}/perfil`)}
-          className="flex flex-col items-center justify-center text-secondary opacity-70 hover:opacity-100 hover:bg-surface-variant rounded-full px-4 py-1 transition-all duration-200"
-        >
-          <span className="material-symbols-outlined mb-1">person</span>
-          <span className="font-label-sm text-label-sm">Perfil</span>
-        </button>
-      </nav>
+      <ClienteBottomNavBar activeTab="home" tenantSlug={tenant_slug} />
     </div>
   );
 };

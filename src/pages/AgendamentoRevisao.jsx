@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useBooking } from '../context/BookingContext';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
+import { useNotification } from '../context/NotificationProvider';
+import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
 
 const AgendamentoRevisao = () => {
   const { tenant_slug } = useParams();
@@ -10,17 +12,24 @@ const AgendamentoRevisao = () => {
   const { tenant, session } = useTenant();
   const { bookingData } = useBooking();
   const [loading, setLoading] = useState(false);
+  const { showSuccess, showError } = useNotification();
   const [coupon, setCoupon] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
 
-  const servicePrice = bookingData.service?.price || 280;
+  const servicePrice = bookingData.service?.price ? Number(bookingData.service.price) : 280;
   const [discount, setDiscount] = useState(0);
   const tax = 0;
   const total = servicePrice - discount + tax;
 
+  React.useEffect(() => {
+    console.log("=== [AgendamentoRevisao] Montado ===");
+    console.log("bookingData lido do useBooking():", bookingData);
+    console.log("sessionStorage bruto:", sessionStorage.getItem('operabeauty_booking_data'));
+  }, [bookingData]);
+
   const handleConfirm = async () => {
     if (!session || session.role !== 'client') {
-      alert("Por favor, faça login ou cadastre-se para confirmar o agendamento.");
+      showError("Por favor, faça login ou cadastre-se para confirmar o agendamento.");
       navigate(`/${tenant_slug}/login`);
       return;
     }
@@ -37,11 +46,7 @@ const AgendamentoRevisao = () => {
       
       // Se for "Sem preferência", busca um profissional aleatório do salão para assumir o serviço
       if (!assignedStaffId) {
-        const { data: staffData } = await supabase
-          .from('cap_staff')
-          .select('id')
-          .eq('tenant_id', tenant.id)
-          .limit(1);
+        const staffData = await api.staff.list(tenant.id);
           
         if (staffData && staffData.length > 0) {
           assignedStaffId = staffData[0].id;
@@ -50,34 +55,22 @@ const AgendamentoRevisao = () => {
         }
       }
 
-      const { error } = await supabase.from('cap_appointments').insert([{
-        tenant_id: tenant.id,
-        client_id: session.id,
+      await api.appointments.create({
         staff_id: assignedStaffId,
         service_id: bookingData.service.id,
         start_time: startDateTime.toISOString(),
-        end_time: endDateTime.toISOString(),
-        status: 'scheduled',
         total_price: total
-      }]);
-
-      if (error) throw error;
+      });
       
-      // Se usou cupom e tem id (ou seja, veio do banco e não é um mock vazio), incrementa o uso
+      // Se usou cupom e tem id, incrementa o uso
       if (couponApplied && couponApplied.id) {
-         await supabase.rpc('increment_coupon_uses', { p_coupon_id: couponApplied.id });
-         // NOTA: Se a função RPC não existir, fazemos um update direto via query (assumindo que seja seguro sem concorrência extrema)
-         // Mas como a concorrência pode ser grande, seria ideal ter o RPC, mas vamos fazer via update simples por agora
-         const { data: c } = await supabase.from('cap_coupons').select('current_uses').eq('id', couponApplied.id).single();
-         if (c) {
-           await supabase.from('cap_coupons').update({ current_uses: c.current_uses + 1 }).eq('id', couponApplied.id);
-         }
+         await api.coupons.redeem(couponApplied.id, tenant.id);
       }
 
       navigate(`/${tenant_slug}/agendar/confirmado`);
     } catch (err) {
       console.error(err);
-      alert('Erro ao confirmar agendamento: ' + err.message);
+      showError('Erro ao confirmar agendamento: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -88,32 +81,28 @@ const AgendamentoRevisao = () => {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase
-        .from('cap_coupons')
-        .select('*')
-        .eq('tenant_id', tenant.id)
-        .eq('code', coupon.toUpperCase().trim())
-        .single();
+      const responseData = await api.coupons.getByCode(tenant.id, coupon.toUpperCase().trim());
+      const data = responseData && responseData.length > 0 ? responseData[0] : null;
         
-      if (error || !data) {
-        alert("Cupom inválido ou não encontrado.");
+      if (!data) {
+        showError("Cupom inválido ou não encontrado.");
         setCouponApplied(false);
         setDiscount(0);
         return;
       }
       
       if (data.max_uses && data.current_uses >= data.max_uses) {
-        alert("Este cupom já atingiu o limite de usos.");
+        showError("Este cupom já atingiu o limite de usos.");
         return;
       }
       
       if (data.expires_at && new Date(data.expires_at) < new Date()) {
-         alert("Este cupom já expirou.");
+         showError("Este cupom já expirou.");
          return;
       }
       
       if (data.service_id && bookingData?.service?.id && data.service_id !== bookingData.service.id) {
-        alert("Este cupom não é válido para o serviço selecionado.");
+        showError("Este cupom não é válido para o serviço selecionado.");
         return;
       }
       
@@ -131,7 +120,7 @@ const AgendamentoRevisao = () => {
       setCouponApplied(data);
     } catch (err) {
       console.error(err);
-      alert("Erro ao validar cupom.");
+      showError("Erro ao validar cupom.");
     } finally {
       setLoading(false);
     }
@@ -139,17 +128,13 @@ const AgendamentoRevisao = () => {
 
   return (
     <div className="font-body-md text-on-background bg-[#f9f9f9] min-h-screen pb-[120px]">
-      <header className="w-full top-0 sticky bg-[#f9f9f9] shadow-sm z-50">
-        <div className="flex justify-between items-center px-[16px] py-[8px] w-full max-w-7xl mx-auto">
-          <button onClick={() => navigate(-1)} className="text-primary hover:opacity-80 transition-opacity">
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
-          <h1 className="font-headline-md text-[24px] font-semibold text-primary tracking-tight">
-            {tenant?.name || 'Ethereal Grace'}
+      <header className="w-full top-0 sticky bg-[#f9f9f9] shadow-sm z-50 pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 md:pt-4">
+        <div className="flex justify-between items-center px-gutter py-sm w-full max-w-7xl mx-auto">
+          <div className="w-10"></div>{/* Spacer to keep title centered */}
+          <h1 className="font-headline-md text-headline-md-mobile md:text-headline-md text-primary tracking-tight text-center flex-1">
+            {tenant?.name || 'Carregando...'}
           </h1>
-          <div className="w-10 h-10 rounded-full overflow-hidden border border-primary-container bg-[#e4e2e1]">
-             <span className="material-symbols-outlined mt-2 ml-2 text-[#656464]">person</span>
-          </div>
+          <div className="w-10"></div>{/* Spacer to keep title centered */}
         </div>
       </header>
 
@@ -253,9 +238,11 @@ const AgendamentoRevisao = () => {
             O pagamento será realizado presencialmente após o serviço.
           </p>
         </div>
+        {/* Espaçador de segurança para a BottomNavBar móvel */}
+        <div className="h-24 md:hidden"></div>
       </main>
 
-      <div className="fixed bottom-0 left-0 w-full p-[16px] bg-white/80 backdrop-blur-md z-50">
+      <div className="fixed bottom-0 left-0 w-full p-[16px] pb-[calc(env(safe-area-inset-bottom,0px)+72px)] md:pb-[16px] bg-white/80 backdrop-blur-md z-40">
         <div className="max-w-[576px] mx-auto">
           <button 
             onClick={handleConfirm}
@@ -274,6 +261,9 @@ const AgendamentoRevisao = () => {
           </button>
         </div>
       </div>
+
+      {/* BottomNavBar (Mobile Only) */}
+      <ClienteBottomNavBar activeTab="home" tenantSlug={tenant_slug} />
     </div>
   );
 };

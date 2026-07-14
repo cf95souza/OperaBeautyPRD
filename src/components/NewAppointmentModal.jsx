@@ -1,35 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
 import { 
-  X, 
-  Search, 
-  Calendar, 
-  Clock, 
-  User, 
-  ChevronRight, 
-  CheckCircle2, 
-  Loader2,
-  UserCheck,
-  Check,
-  MessageCircle,
-  ChevronLeft,
-  ChevronRight as ChevronRightIcon
+  X, Search, Calendar, Clock, User, ChevronRight, CheckCircle2, Loader2,
+  UserCheck, Check, MessageCircle, ChevronLeft
 } from 'lucide-react';
 import { format, addMinutes, parse, isBefore, isAfter, startOfDay, endOfDay, addDays } from 'date-fns';
+import { useNotification } from '../context/NotificationProvider';
+import { api } from '../lib/api';
 
 const NewAppointmentModal = ({ isOpen, onClose, initialDate, editAppointment, onSuccess }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [successState, setSuccessState] = useState(null);
+  const { showSuccess, showError } = useNotification();
   
-  // Data State
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
   const [professionals, setProfessionals] = useState([]);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
-  const [selectedServices, setSelectedServices] = useState([]); // ARRAY PARA MULTI-SERVIÇOS
+  const [selectedService, setSelectedService] = useState(null);
   const [selectedProfessional, setSelectedProfessional] = useState(null);
   const [selectedDate, setSelectedDate] = useState(initialDate || new Date());
   const [availableSlots, setAvailableSlots] = useState([]);
@@ -39,50 +29,60 @@ const NewAppointmentModal = ({ isOpen, onClose, initialDate, editAppointment, on
     if (isOpen) {
       fetchInitialData();
       if (editAppointment) {
-        setSelectedClient(editAppointment.cap_clients);
-        // Carrega serviços múltiplos do agendamento
-        if (editAppointment.cap_appointment_services && editAppointment.cap_appointment_services.length > 0) {
-          setSelectedServices(editAppointment.cap_appointment_services.map(cas => cas.cap_services));
-        } else if (editAppointment.cap_services) {
-          setSelectedServices([editAppointment.cap_services]);
-        }
+        setSelectedClient(editAppointment.cap_clients || { id: editAppointment.client_id, name: 'Cliente' });
+        setSelectedService(editAppointment.cap_services || { id: editAppointment.service_id, name: 'Serviço', duration_minutes: 0, price: 0 });
         setSelectedProfessional(editAppointment.cap_profiles || { id: editAppointment.professional_id, full_name: 'Profissional' });
         setSelectedDate(new Date(editAppointment.start_time));
         setStep(1);
       } else {
-        setSelectedServices([]);
+        setSelectedService(null);
         setSelectedClient(null);
         setSelectedProfessional(null);
         setSelectedSlot(null);
         setSelectedDate(initialDate || new Date());
         setStep(1);
+        setSuccessState(null);
       }
     }
   }, [isOpen]);
 
   const fetchInitialData = async () => {
     setLoading(true);
-    const { data: cls } = await supabase.from('cap_clients').select('*').order('name');
-    const { data: srvs } = await supabase.from('cap_services').select('*').eq('is_active', true).order('name');
-    const { data: pros } = await supabase.from('cap_profiles').select('*').eq('role', 'professional').eq('is_active', true).order('full_name');
-    
-    setClients(cls || []);
-    setServices(srvs || []);
-    setProfessionals(pros || []);
+    const user = JSON.parse(localStorage.getItem('operabeauty_user') || '{}');
+    const tenantId = user.tenant_id;
+    try {
+      const cls = await api.clients.list(tenantId);
+      const srvs = await api.services.list(tenantId);
+      const pros = await api.staff.list(tenantId);
+      
+      setClients(cls || []);
+      setServices(srvs || []);
+      setProfessionals(pros.filter(p => p.role === 'professional') || []);
+    } catch (e) {
+      console.error(e);
+      showError('Erro ao carregar dados iniciais');
+    }
     setLoading(false);
   };
 
-  const calculateSlots = async (date, proId, servicesList) => {
-    if (!date || !proId || !servicesList || servicesList.length === 0) return;
+  const calculateSlots = async (date, proId, service) => {
+    if (!date || !proId || !service) return;
     setLoading(true);
-    
-    // Calcula duração total do combo
-    const totalDuration = servicesList.reduce((acc, s) => acc + (s.duration_minutes || 0), 0);
+    const user = JSON.parse(localStorage.getItem('operabeauty_user') || '{}');
+    const tenantId = user.tenant_id;
+    const totalDuration = service.duration_minutes || 0;
 
     try {
       const formattedDate = format(date, 'yyyy-MM-dd');
-      const { data: exception } = await supabase.from('cap_date_exceptions').select('*').eq('exception_date', formattedDate).maybeSingle();
-      const { data: defaultHours } = await supabase.from('cap_business_hours').select('*').eq('day_of_week', date.getDay()).maybeSingle();
+      
+      const [allExceptions, allHours, allApps] = await Promise.all([
+        api.settings.getExceptions(tenantId),
+        api.settings.getBusinessHours(tenantId),
+        api.appointments.list({ start_date: formattedDate, end_date: formattedDate, staff_id: proId, tenant_id: tenantId })
+      ]);
+
+      const exception = allExceptions.find(e => e.exception_date.startsWith(formattedDate));
+      const defaultHours = allHours.find(h => h.day_of_week === date.getDay());
 
       let hours = null;
       if (exception) {
@@ -100,19 +100,11 @@ const NewAppointmentModal = ({ isOpen, onClose, initialDate, editAppointment, on
         return;
       }
 
-      let query = supabase
-        .from('cap_appointments')
-        .select('id, start_time, end_time')
-        .eq('professional_id', proId)
-        .eq('status', 'scheduled')
-        .gte('start_time', startOfDay(date).toISOString())
-        .lte('start_time', endOfDay(date).toISOString());
-      
+      let apps = allApps.filter(app => app.status === 'scheduled');
       if (editAppointment) {
-        query = query.neq('id', editAppointment.id);
+        apps = apps.filter(app => app.id !== editAppointment.id);
       }
 
-      const { data: apps } = await query;
       const openTime = parse(hours.open_time, 'HH:mm:ss', date);
       const closeTime = parse(hours.close_time, 'HH:mm:ss', date);
       
@@ -148,88 +140,54 @@ const NewAppointmentModal = ({ isOpen, onClose, initialDate, editAppointment, on
     setLoading(false);
   };
 
-  const toggleService = (service) => {
-    setSelectedServices(prev => {
-      const exists = prev.find(s => s.id === service.id);
-      if (exists) return prev.filter(s => s.id !== service.id);
-      return [...prev, service];
-    });
-  };
-
   const handleNextStep = () => {
-    if (selectedClient && selectedServices.length > 0 && selectedProfessional) {
+    if (selectedClient && selectedService && selectedProfessional) {
       setSelectedSlot(null);
-      calculateSlots(selectedDate, selectedProfessional.id, selectedServices);
+      calculateSlots(selectedDate, selectedProfessional.id, selectedService);
       setStep(2);
     }
   };
 
   const handleSave = async () => {
-    if (!selectedSlot || selectedServices.length === 0) return;
+    if (!selectedSlot || !selectedService) return;
     setLoading(true);
 
-    const totalDuration = selectedServices.reduce((acc, s) => acc + s.duration_minutes, 0);
-    const totalPrice = selectedServices.reduce((acc, s) => acc + s.price, 0);
+    const user = JSON.parse(localStorage.getItem('operabeauty_user') || '{}');
+    const tenantId = user.tenant_id;
+
+    const totalPrice = selectedService.price;
     const startTime = selectedSlot;
-    const endTime = addMinutes(selectedSlot, totalDuration);
 
     try {
-      let appointmentId;
-
       if (editAppointment) {
-        const { error: appError } = await supabase
-          .from('cap_appointments')
-          .update({
-            professional_id: selectedProfessional.id,
+         await api.appointments.update(editAppointment.id, {
+            staff_id: selectedProfessional.id,
+            service_id: selectedService.id,
             start_time: startTime.toISOString(),
-            end_time: endTime.toISOString(),
             total_price: totalPrice,
             status: 'scheduled'
-          })
-          .eq('id', editAppointment.id);
-
-        if (appError) throw appError;
-        appointmentId = editAppointment.id;
-        await supabase.from('cap_appointment_services').delete().eq('appointment_id', appointmentId);
+         });
       } else {
-        const { data: newApp, error: appError } = await supabase
-          .from('cap_appointments')
-          .insert([{
+         await api.appointments.create({
             client_id: selectedClient.id,
-            professional_id: selectedProfessional.id,
+            staff_id: selectedProfessional.id,
+            service_id: selectedService.id,
             start_time: startTime.toISOString(),
-            end_time: endTime.toISOString(),
-            total_price: totalPrice,
-            status: 'scheduled'
-          }])
-          .select()
-          .single();
-
-        if (appError) throw appError;
-        appointmentId = newApp.id;
+            total_price: totalPrice
+         });
       }
 
-      const servicesToInsert = selectedServices.map(s => ({
-        appointment_id: appointmentId,
-        service_id: s.id,
-        price_at_time: s.price,
-        duration_at_time: s.duration_minutes
-      }));
-
-      await supabase.from('cap_appointment_services').insert(servicesToInsert);
-
-      setSuccessState({ client: selectedClient, services: selectedServices, professional: selectedProfessional, time: selectedSlot, totalPrice });
+      setSuccessState({ client: selectedClient, service: selectedService, professional: selectedProfessional, time: selectedSlot, totalPrice });
       onSuccess?.();
     } catch (err) {
-      alert('Erro: ' + err.message);
+      showError('Erro: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const sendWhatsApp = () => {
-    const list = successState.services.map(s => s.name).join(', ');
-    const msg = `Olá! 👑 Agendamento confirmado no OperaBeauty:\n\n📅 Data: ${format(successState.time, 'dd/MM/yyyy')}\n⏰ Hora: ${format(successState.time, 'HH:mm')}\n✨ Procedimentos: ${list}\n💰 Total: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(successState.totalPrice)}`;
+    const msg = `Olá! 👑 Agendamento confirmado no OperaBeauty:\n\n📅 Data: ${format(successState.time, 'dd/MM/yyyy')}\n⏰ Hora: ${format(successState.time, 'HH:mm')}\n✨ Procedimento: ${successState.service.name}\n💰 Total: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(successState.totalPrice)}`;
     window.open(`https://wa.me/55${successState.client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
@@ -253,7 +211,7 @@ const NewAppointmentModal = ({ isOpen, onClose, initialDate, editAppointment, on
                <h3 className="text-2xl font-bold text-slate-900">Agendamento Realizado!</h3>
                <div className="bg-slate-50 p-6 rounded-2xl w-full space-y-3">
                   <div className="flex justify-between text-xs"><span>Cliente</span><span className="font-bold uppercase">{successState.client.name}</span></div>
-                  <div className="flex justify-between text-xs"><span>Procedimentos</span><span className="font-bold">{successState.services.map(s => s.name).join(', ')}</span></div>
+                  <div className="flex justify-between text-xs"><span>Procedimento</span><span className="font-bold">{successState.service.name}</span></div>
                   <div className="flex justify-between text-xs"><span>Hora</span><span className="font-bold">{format(successState.time, 'HH:mm')}</span></div>
                   <div className="flex justify-between text-xs border-t pt-3"><span>Total</span><span className="text-accent font-bold text-lg">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(successState.totalPrice)}</span></div>
                </div>
@@ -279,12 +237,12 @@ const NewAppointmentModal = ({ isOpen, onClose, initialDate, editAppointment, on
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">2. Selecionar Procedimentos (Combos)</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">2. Selecionar Procedimento</label>
                 <div className="grid grid-cols-2 gap-3">
                   {services.map(s => {
-                    const isSelected = selectedServices.find(x => x.id === s.id);
+                    const isSelected = selectedService?.id === s.id;
                     return (
-                      <button key={s.id} onClick={() => toggleService(s)} className={`p-3 text-left rounded-lg border text-sm transition-all relative ${isSelected ? 'border-accent bg-accent/5 ring-1 ring-accent/20 font-bold' : 'border-slate-100'}`}>
+                      <button key={s.id} onClick={() => setSelectedService(s)} className={`p-3 text-left rounded-lg border text-sm transition-all relative ${isSelected ? 'border-accent bg-accent/5 ring-1 ring-accent/20 font-bold' : 'border-slate-100'}`}>
                         {isSelected && <div className="absolute top-1 right-1"><CheckCircle2 size={12} className="text-accent" /></div>}
                         <p className="text-slate-900">{s.name}</p>
                         <p className="text-[10px] text-slate-500">{s.duration_minutes} min</p>
@@ -299,8 +257,8 @@ const NewAppointmentModal = ({ isOpen, onClose, initialDate, editAppointment, on
                  <div className="flex gap-3 overflow-x-auto pb-2">
                     {professionals.map(pro => (
                       <button key={pro.id} onClick={() => setSelectedProfessional(pro)} className={`flex flex-col items-center p-3 min-w-[100px] rounded-xl border transition-all ${selectedProfessional?.id === pro.id ? 'border-accent bg-accent/5' : 'border-slate-100'}`}>
-                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${selectedProfessional?.id === pro.id ? 'bg-accent text-white' : 'bg-slate-100 text-slate-400'}`}>{pro.full_name[0]}</div>
-                         <span className="text-[10px] font-bold mt-1">{pro.full_name.split(' ')[0]}</span>
+                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${selectedProfessional?.id === pro.id ? 'bg-accent text-white' : 'bg-slate-100 text-slate-400'}`}>{pro.name ? pro.name[0] : 'P'}</div>
+                         <span className="text-[10px] font-bold mt-1">{pro.name ? pro.name.split(' ')[0] : 'Profissional'}</span>
                       </button>
                     ))}
                  </div>
@@ -309,15 +267,15 @@ const NewAppointmentModal = ({ isOpen, onClose, initialDate, editAppointment, on
           ) : (
             <div className="space-y-6 text-center">
                <div className="bg-slate-50 p-4 rounded-xl flex items-center justify-between">
-                  <button onClick={() => { const d = addDays(selectedDate, -1); setSelectedDate(d); calculateSlots(d, selectedProfessional.id, selectedServices); }} className="p-2 hover:bg-white rounded-lg"><ChevronLeft size={20}/></button>
+                  <button onClick={() => { const d = addDays(selectedDate, -1); setSelectedDate(d); calculateSlots(d, selectedProfessional.id, selectedService); }} className="p-2 hover:bg-white rounded-lg"><ChevronLeft size={20}/></button>
                   <p className="font-bold text-accent">{format(selectedDate, 'dd/MM')}</p>
-                  <button onClick={() => { const d = addDays(selectedDate, 1); setSelectedDate(d); calculateSlots(d, selectedProfessional.id, selectedServices); }} className="p-2 hover:bg-white rounded-lg"><ChevronRight size={20}/></button>
+                  <button onClick={() => { const d = addDays(selectedDate, 1); setSelectedDate(d); calculateSlots(d, selectedProfessional.id, selectedService); }} className="p-2 hover:bg-white rounded-lg"><ChevronRight size={20}/></button>
                </div>
                <div className="bg-accent/5 p-3 rounded-lg text-[10px] font-bold text-accent uppercase tracking-widest">
-                  {selectedServices.length} Procedimentos • {selectedServices.reduce((acc,s)=>acc+s.duration_minutes,0)} min total
+                  1 Procedimento • {selectedService.duration_minutes} min total
                </div>
                <div className="grid grid-cols-4 gap-2">
-                  {loading ? <div className="col-span-4 py-10"><Loader2 className="animate-spin mx-auto text-accent"/></div> : availableSlots.length === 0 ? <p className="col-span-4 py-10 text-xs text-slate-400 font-bold uppercase tracking-widest">Sem horários para este combo</p> : availableSlots.map(slot => (
+                  {loading ? <div className="col-span-4 py-10"><Loader2 className="animate-spin mx-auto text-accent"/></div> : availableSlots.length === 0 ? <p className="col-span-4 py-10 text-xs text-slate-400 font-bold uppercase tracking-widest">Sem horários para este procedimento</p> : availableSlots.map(slot => (
                     <button key={slot.toISOString()} onClick={() => setSelectedSlot(slot)} className={`py-2 px-1 rounded-lg border text-xs font-bold transition-all ${selectedSlot?.getTime() === slot.getTime() ? 'bg-accent text-white border-accent shadow-lg shadow-accent/20 scale-105' : 'bg-white text-slate-600 border-slate-100 hover:border-accent/30'}`}>{format(slot, 'HH:mm')}</button>
                   ))}
                </div>
@@ -329,7 +287,7 @@ const NewAppointmentModal = ({ isOpen, onClose, initialDate, editAppointment, on
           <div className="p-6 border-t border-slate-100 flex gap-4">
              <button onClick={onClose} className="flex-1 py-3 text-slate-400 text-sm font-bold uppercase tracking-widest border border-slate-100 rounded-xl">Cancelar</button>
              {step === 1 ? (
-               <button disabled={!selectedClient || selectedServices.length === 0 || !selectedProfessional} onClick={handleNextStep} className="flex-2 py-3 bg-slate-900 text-white rounded-xl font-bold px-8 flex items-center gap-2">Escolher Horário <ChevronRight size={16}/></button>
+               <button disabled={!selectedClient || !selectedService || !selectedProfessional} onClick={handleNextStep} className="flex-2 py-3 bg-slate-900 text-white rounded-xl font-bold px-8 flex items-center gap-2">Escolher Horário <ChevronRight size={16}/></button>
              ) : (
                <button disabled={!selectedSlot} onClick={handleSave} className="flex-2 py-3 bg-accent text-white rounded-xl font-bold px-8 shadow-lg shadow-accent/20">Finalizar Agendamento</button>
              )}
@@ -341,4 +299,3 @@ const NewAppointmentModal = ({ isOpen, onClose, initialDate, editAppointment, on
 };
 
 export default NewAppointmentModal;
-

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTenant } from '../../context/TenantContext';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 
 const AssinaturaSaaS = () => {
   const { tenant } = useTenant();
@@ -12,7 +12,7 @@ const AssinaturaSaaS = () => {
     // Busca a configuração global de pagamento para saber se o sistema aceita pagamento
     const fetchPlatformSettings = async () => {
       try {
-        const { data, error } = await supabase.from('cap_platform_settings').select('payment_gateway').limit(1).maybeSingle();
+        const data = await api.settings.getPaymentGateway();
         if (data) {
           setGatewayConfig(data);
         }
@@ -26,7 +26,7 @@ const AssinaturaSaaS = () => {
     const fetchInvoices = async () => {
       if (!tenant) return;
       try {
-        const { data, error } = await supabase.from('cap_invoices').select('*').eq('tenant_id', tenant.id).order('due_date', { ascending: false });
+        const data = await api.invoices.list(tenant.id);
         if (data) setInvoices(data);
       } catch (err) {
         console.error('Erro ao buscar faturas', err);

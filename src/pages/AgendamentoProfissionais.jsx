@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useBooking } from '../context/BookingContext';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
+import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
 
 const AgendamentoProfissionais = () => {
   const { tenant_slug } = useParams();
@@ -17,17 +18,16 @@ const AgendamentoProfissionais = () => {
     if (!tenant) return;
     const fetchStaff = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('cap_staff')
-        .select('*')
-        .eq('tenant_id', tenant.id)
-        .eq('is_active', true)
-        .order('name');
-      
-      if (!error && data) {
-        setDbStaff(data);
+      try {
+        const data = await api.staff.list(tenant.id);
+        if (data) {
+          setDbStaff(data.filter(s => s.is_active));
+        }
+      } catch (err) {
+        console.error("Erro ao carregar profissionais:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchStaff();
   }, [tenant]);
@@ -36,26 +36,32 @@ const AgendamentoProfissionais = () => {
   const categories = ['Todos'];
   const filteredStaff = dbStaff;
 
+  useEffect(() => {
+    console.log("=== [AgendamentoProfissionais] Montado/Atualizado ===");
+    console.log("bookingData atual:", bookingData);
+  }, [bookingData]);
+
   const handleSelectStaff = (staff) => {
+    console.log("=== [AgendamentoProfissionais] handleSelectStaff chamado ===", staff);
     updateBooking('professional', staff);
     navigate(`/${tenant_slug}/agendar/horarios`);
   };
 
   const handleAnyStaff = () => {
+    console.log("=== [AgendamentoProfissionais] handleAnyStaff chamado ===");
     updateBooking('professional', null);
     navigate(`/${tenant_slug}/agendar/horarios`);
   };
 
   return (
     <div className="font-body-md text-on-background bg-[#f9f9f9] min-h-screen pb-[120px]">
-      <header className="w-full top-0 sticky z-40 bg-surface dark:bg-surface-dim shadow-sm flex justify-between items-center px-[16px] py-[8px] max-w-7xl mx-auto">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="text-primary hover:opacity-80 transition-opacity">
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
-          <h1 className="font-headline-md text-[24px] md:text-[28px] font-semibold text-primary tracking-tight">
-            {tenant?.name || 'Ethereal Grace'}
+      <header className="w-full top-0 sticky z-40 bg-surface shadow-sm transition-all duration-300 ease-in-out pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 md:pt-4">
+        <div className="flex justify-between items-center px-gutter py-sm w-full max-w-7xl mx-auto">
+          <div className="w-10"></div>{/* Spacer to keep title centered */}
+          <h1 className="font-headline-md text-headline-md-mobile md:text-headline-md text-primary tracking-tight text-center flex-1">
+            {tenant?.name || 'Carregando...'}
           </h1>
+          <div className="w-10"></div>{/* Spacer to keep title centered */}
         </div>
       </header>
 
@@ -98,32 +104,53 @@ const AgendamentoProfissionais = () => {
           ) : filteredStaff.length === 0 ? (
              <div className="col-span-3 text-center py-10 text-secondary">Nenhum profissional cadastrado no momento.</div>
           ) : (
-            filteredStaff.map(staff => (
-              <div 
-                key={staff.id}
-                onClick={() => handleSelectStaff(staff)}
-                className="bg-white rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] overflow-hidden group cursor-pointer hover:-translate-y-1 transition-all duration-300"
-              >
-                <div className="relative h-48 bg-surface-variant overflow-hidden flex items-center justify-center">
-                  <span className="material-symbols-outlined text-[80px] text-on-surface-variant opacity-50 group-hover:scale-110 transition-transform duration-700">person</span>
-                </div>
-                <div className="p-[24px]">
-                  <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-serif text-[24px] font-semibold text-on-surface">{staff.name}</h3>
-                    <span className="text-primary material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+            filteredStaff.map(staff => {
+              // Pegar as iniciais do nome para o avatar
+              const initials = staff.name
+                .split(' ')
+                .filter(Boolean)
+                .map(n => n[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase();
+
+              return (
+                <div 
+                  key={staff.id}
+                  onClick={() => handleSelectStaff(staff)}
+                  className="bg-white rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant/40 p-[16px] flex items-center justify-between group cursor-pointer hover:border-primary hover:-translate-y-0.5 transition-all duration-300 gap-md"
+                >
+                  <div className="flex items-center gap-md min-w-0">
+                    {/* Avatar Redondo com iniciais do profissional */}
+                    <div className="w-12 h-12 rounded-full bg-primary-fixed text-on-primary-fixed font-semibold text-[16px] flex items-center justify-center shrink-0 shadow-inner group-hover:bg-primary group-hover:text-on-primary transition-all duration-300">
+                      {initials || <span className="material-symbols-outlined text-[20px]">person</span>}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-xs">
+                        <h3 className="font-serif text-[18px] md:text-[20px] font-semibold text-on-surface group-hover:text-primary transition-colors truncate">{staff.name}</h3>
+                        <span className="text-primary material-symbols-outlined text-[16px] shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                      </div>
+                      <p className="font-semibold text-[13px] text-secondary mt-0.5 truncate">{staff.role === 'manager' ? 'Especialista Sênior' : 'Profissional'}</p>
+                    </div>
                   </div>
-                  <p className="font-semibold text-[14px] text-secondary mb-[16px]">{staff.role === 'manager' ? 'Especialista Sênior' : 'Profissional'}</p>
-                  <div className="flex items-center justify-between mt-[16px] pt-[16px] border-t border-[#d4c2c3]/30">
-                    <button className="w-full bg-primary text-white px-[24px] py-[8px] rounded-full font-semibold text-[14px] hover:opacity-90 transition-colors">
-                      Selecionar
+                  
+                  {/* Botão compacto de selecionar */}
+                  <div className="flex items-center shrink-0">
+                    <button className="bg-primary-container text-on-primary-container group-hover:bg-primary group-hover:text-on-primary px-[16px] py-[8px] rounded-full font-semibold text-[13px] transition-all shadow-sm flex items-center gap-xs">
+                      Selecionar <span className="material-symbols-outlined text-[14px]">chevron_right</span>
                     </button>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
+        {/* Espaçador de segurança para a BottomNavBar móvel */}
+        <div className="h-24 md:hidden"></div>
       </main>
+
+      {/* BottomNavBar (Mobile Only) */}
+      <ClienteBottomNavBar activeTab="home" tenantSlug={tenant_slug} />
     </div>
   );
 };

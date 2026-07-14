@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
+import { useNotification } from '../../context/NotificationProvider';
 
 const PlanosAdmin = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const { showSuccess, showError } = useNotification();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,6 +18,7 @@ const PlanosAdmin = () => {
   const [formPrice, setFormPrice] = useState('');
   const [formInterval, setFormInterval] = useState('month');
   const [formMaxProf, setFormMaxProf] = useState('');
+  const [formMaxBanners, setFormMaxBanners] = useState('1');
   const [formFeatures, setFormFeatures] = useState([]);
   const [newFeature, setNewFeature] = useState('');
   const [formIsActive, setFormIsActive] = useState(true);
@@ -23,8 +26,8 @@ const PlanosAdmin = () => {
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    api.auth.logout();
     navigate('/superadmin/login');
   };
 
@@ -35,20 +38,12 @@ const PlanosAdmin = () => {
   const fetchPlans = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('cap_plans')
-        .select('*')
-        .order('price', { ascending: true });
-
-      if (error) {
-        // If table doesn't exist yet, this will fail gracefully
-        console.error('Error fetching plans. Table might not exist yet.', error);
-        setPlans([]);
-      } else {
-        setPlans(data || []);
-      }
+      const data = await api.plans.list();
+      const sortedPlans = (data || []).sort((a, b) => Number(a.price) - Number(b.price));
+      setPlans(sortedPlans);
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching plans:', err);
+      setPlans([]);
     } finally {
       setLoading(false);
     }
@@ -60,6 +55,7 @@ const PlanosAdmin = () => {
     setFormPrice('');
     setFormInterval('month');
     setFormMaxProf('');
+    setFormMaxBanners('1');
     setFormFeatures([]);
     setFormIsActive(true);
     setNewFeature('');
@@ -72,6 +68,7 @@ const PlanosAdmin = () => {
     setFormPrice(plan.price);
     setFormInterval(plan.interval || 'month');
     setFormMaxProf(plan.max_professionals || '');
+    setFormMaxBanners(plan.max_banners || '1');
     setFormFeatures(plan.features || []);
     setFormIsActive(plan.is_active);
     setNewFeature('');
@@ -91,7 +88,7 @@ const PlanosAdmin = () => {
 
   const handleSavePlan = async () => {
     if (!formName || !formPrice) {
-      alert('Nome e Preço são obrigatórios.');
+      showError('Nome e Preço são obrigatórios.');
       return;
     }
 
@@ -101,25 +98,24 @@ const PlanosAdmin = () => {
       price: parseFloat(formPrice),
       interval: formInterval,
       max_professionals: formMaxProf ? parseInt(formMaxProf, 10) : null,
+      max_banners: formMaxBanners ? parseInt(formMaxBanners, 10) : 1,
       features: formFeatures,
       is_active: formIsActive
     };
 
     try {
       if (editingPlan) {
-        const { error } = await supabase.from('cap_plans').update(planData).eq('id', editingPlan.id);
-        if (error) throw error;
-        alert('Plano atualizado com sucesso!');
+        await api.plans.update(editingPlan.id, planData);
+        showSuccess('Plano atualizado com sucesso!');
       } else {
-        const { error } = await supabase.from('cap_plans').insert([planData]);
-        if (error) throw error;
-        alert('Plano criado com sucesso!');
+        await api.plans.create(planData);
+        showSuccess('Plano criado com sucesso!');
       }
       setIsModalOpen(false);
       fetchPlans();
     } catch (error) {
       console.error('Error saving plan:', error);
-      alert('Erro ao salvar plano. Detalhes: ' + (error.message || JSON.stringify(error)));
+      showError('Erro ao salvar plano: ' + (error.message || 'Erro desconhecido'));
     } finally {
       setIsSaving(false);
     }
@@ -127,8 +123,7 @@ const PlanosAdmin = () => {
 
   const togglePlanStatus = async (plan) => {
     try {
-      const { error } = await supabase.from('cap_plans').update({ is_active: !plan.is_active }).eq('id', plan.id);
-      if (error) throw error;
+      await api.plans.update(plan.id, { is_active: !plan.is_active });
       fetchPlans();
     } catch (error) {
       console.error('Error toggling plan status:', error);
@@ -180,7 +175,7 @@ const PlanosAdmin = () => {
             </div>
             <div className="flex flex-col">
               <span className="font-label-md text-label-md text-on-surface">Super Admin</span>
-              <span className="font-label-sm text-label-sm text-secondary">cf95.souza@gmail.com</span>
+              <span className="font-label-sm text-label-sm text-secondary">Administrador do Sistema</span>
             </div>
           </div>
         </div>
@@ -251,6 +246,11 @@ const PlanosAdmin = () => {
                       <span className="font-label-md text-on-surface">{plan.max_professionals ? `${plan.max_professionals} profissionais` : 'Ilimitado'}</span>
                     </div>
 
+                    <div className="bg-surface-container-low px-4 py-3 rounded-lg flex items-center justify-between">
+                      <span className="font-label-sm text-secondary">Limite de Banners:</span>
+                      <span className="font-label-md text-on-surface">{plan.max_banners ? `${plan.max_banners} banner(s)` : '1 banner'}</span>
+                    </div>
+
                     <div className="flex flex-col gap-3 flex-1">
                       {plan.features && plan.features.map((feature, i) => (
                         <div key={i} className="flex items-start gap-2">
@@ -314,9 +314,9 @@ const PlanosAdmin = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block font-label-sm text-secondary mb-1">Faturamento Mensal ou Anual?</label>
+                  <label className="block font-label-sm text-secondary mb-1">Faturamento</label>
                   <select 
                     className="w-full bg-surface-container-lowest border border-surface-variant rounded-lg p-3 outline-none focus:border-primary"
                     value={formInterval}
@@ -327,13 +327,23 @@ const PlanosAdmin = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block font-label-sm text-secondary mb-1">Limite de Profissionais</label>
+                  <label className="block font-label-sm text-secondary mb-1">Limite de Equipe</label>
                   <input 
                     type="number" 
-                    placeholder="Deixe vazio para ilimitado"
+                    placeholder="Vazio p/ ilimitado"
                     className="w-full bg-surface-container-lowest border border-surface-variant rounded-lg p-3 outline-none focus:border-primary"
                     value={formMaxProf}
                     onChange={e => setFormMaxProf(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block font-label-sm text-secondary mb-1">Limite de Banners</label>
+                  <input 
+                    type="number" 
+                    placeholder="Mínimo 1"
+                    className="w-full bg-surface-container-lowest border border-surface-variant rounded-lg p-3 outline-none focus:border-primary"
+                    value={formMaxBanners}
+                    onChange={e => setFormMaxBanners(e.target.value)}
                   />
                 </div>
               </div>

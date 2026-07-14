@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { CheckCircle2, AlertCircle, X, Crown, AlertTriangle } from 'lucide-react';
+import { Button } from '../components/ui/Button.jsx';
 
 const NotificationContext = createContext(null);
 
@@ -47,21 +48,21 @@ export const NotificationProvider = ({ children }) => {
           <div 
             key={toast.id}
             className={`
-              pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border animate-in slide-in-from-right-10 duration-300
-              ${toast.type === 'success' ? 'bg-white border-emerald-100 text-emerald-900' : 'bg-white border-rose-100 text-rose-900'}
+              pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-2xl shadow-card border animate-in slide-in-from-right-10 duration-300
+              ${toast.type === 'success' ? 'bg-surface border-primary-fixed text-on-surface' : 'bg-error-container border-error text-on-error-container'}
             `}
           >
             {toast.type === 'success' ? (
-              <CheckCircle2 className="text-emerald-500 shrink-0" size={20} />
+              <CheckCircle2 className="text-primary shrink-0" size={20} />
             ) : (
-              <AlertCircle className="text-rose-500 shrink-0" size={20} />
+               <AlertCircle className="text-error shrink-0" size={20} />
             )}
-            <p className="text-xs font-black uppercase tracking-tight">{toast.message}</p>
+            <p className="text-label-md">{toast.message}</p>
             <button 
               onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-              className="ml-2 text-slate-300 hover:text-slate-500 transition-colors"
+              className="ml-2 text-outline hover:text-on-surface transition-colors"
             >
-              <X size={14} />
+              <X size={16} />
             </button>
           </div>
         ))}
@@ -70,35 +71,36 @@ export const NotificationProvider = ({ children }) => {
       {/* Confirmation Modal */}
       {confirmState && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={() => confirmState.resolve(false)} />
-          <div className="relative bg-white w-full max-w-[384px] rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="absolute inset-0 bg-on-surface/40 backdrop-blur-sm" onClick={() => confirmState.resolve(false)} />
+          <div className="relative bg-surface w-full max-w-[384px] rounded-3xl shadow-premium border border-outline-variant overflow-hidden animate-in zoom-in-95 duration-300">
             <div className="p-8 text-center space-y-4">
-              <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <Crown className="text-accent w-8 h-8 opacity-20 absolute" />
-                <AlertTriangle className="text-slate-900 w-8 h-8 relative z-10" />
+              <div className="w-16 h-16 bg-surface-container-low border border-outline-variant rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="text-primary w-8 h-8 relative z-10" />
               </div>
               
-              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-tight">
+              <h3 className="text-headline-md font-serif text-primary">
                 {confirmState.title}
               </h3>
-              <p className="text-sm font-medium text-slate-500 leading-relaxed px-4">
+              <p className="text-body-md text-on-surface-variant px-4">
                 {confirmState.message}
               </p>
             </div>
             
-            <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex gap-3">
-              <button 
+            <div className="p-6 bg-surface-container border-t border-outline-variant flex gap-3">
+              <Button 
+                variant="ghost" 
+                className="flex-1"
                 onClick={() => confirmState.resolve(false)}
-                className="flex-1 px-6 py-4 rounded-xl font-black text-[11px] uppercase tracking-widest text-slate-400 hover:bg-slate-100 transition-all active:scale-95"
               >
                 Cancelar
-              </button>
-              <button 
+              </Button>
+              <Button 
+                variant="primary" 
+                className="flex-1"
                 onClick={() => confirmState.resolve(true)}
-                className="flex-1 px-6 py-4 rounded-xl bg-slate-900 text-white font-black text-[11px] uppercase tracking-widest shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95"
               >
                 Confirmar
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -106,4 +108,3 @@ export const NotificationProvider = ({ children }) => {
     </NotificationContext.Provider>
   );
 };
-

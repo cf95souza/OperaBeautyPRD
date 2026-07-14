@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
+import { useNotification } from '../../context/NotificationProvider';
 
 const GestaoServicos = () => {
   const { tenant_slug } = useParams();
   const { tenant } = useTenant();
+  const { showSuccess, showError, confirm } = useNotification();
 
   const [services, setServices] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
@@ -20,8 +22,7 @@ const GestaoServicos = () => {
     price: '', 
     maintenance_days: 0,
     use_inventory: false,
-    inventory_id: '',
-    quantity_consumed: 1
+    inputs: []
   });
   const [saving, setSaving] = useState(false);
 
@@ -33,32 +34,11 @@ const GestaoServicos = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: srvData, error: srvError } = await supabase
-        .from('cap_services')
-        .select(`
-          *,
-          cap_service_inventory (
-             quantity_consumed,
-             cap_inventory ( id, name, unit )
-          )
-        `)
-        .eq('tenant_id', tenant.id)
-        .order('name');
-      
-      if (!srvError && srvData) {
-        setServices(srvData);
-      }
+      const srvData = await api.services.list(tenant.id);
+      if (srvData) setServices(srvData);
 
-      const { data: invData, error: invError } = await supabase
-        .from('cap_inventory')
-        .select('*')
-        .eq('tenant_id', tenant.id)
-        .eq('is_active', true)
-        .order('name');
-      
-      if (!invError && invData) {
-        setInventoryItems(invData);
-      }
+      const invData = await api.inventory.list();
+      if (invData) setInventoryItems(invData.filter(i => i.is_active));
     } catch (err) {
       console.error(err);
     }
@@ -66,61 +46,50 @@ const GestaoServicos = () => {
   };
 
   const handleEdit = (service) => {
-    const hasInv = service.cap_service_inventory && service.cap_service_inventory.length > 0;
-    const inv = hasInv ? service.cap_service_inventory[0] : null;
-
     setNewService({
       name: service.name,
       duration_minutes: service.duration_minutes,
       price: service.price,
       maintenance_days: service.maintenance_days || 0,
       use_inventory: service.reduces_stock || false,
-      inventory_id: inv ? inv.cap_inventory.id : '',
-      quantity_consumed: inv ? inv.quantity_consumed : 1
+      inputs: service.inputs && service.inputs.length > 0 ? [...service.inputs] : []
     });
     setEditingId(service.id);
     setShowModal(true);
   };
 
-  const handleToggleActive = async (id, currentStatus) => {
-    if (!window.confirm(`Deseja realmente ${currentStatus ? 'inativar' : 'ativar'} este serviço?`)) return;
+  const handleToggleActive = async (service) => {
+    const newStatus = !service.is_active;
+    if (!(await confirm(`Deseja realmente ${newStatus ? 'ativar' : 'inativar'} este serviço?`))) return;
     
     try {
-      const { error } = await supabase.from('cap_services').update({ is_active: !currentStatus }).eq('id', id);
-      if (error) throw error;
+      const payload = {
+        name: service.name,
+        duration_minutes: service.duration_minutes,
+        price: service.price,
+        maintenance_days: service.maintenance_days || 0,
+        reduces_stock: service.reduces_stock || false,
+        is_active: newStatus,
+        inputs: service.inputs || []
+      };
+      await api.services.update(service.id, payload);
       fetchData();
     } catch (err) {
       console.error(err);
-      alert('Erro ao alterar status do serviço.');
+      showError('Erro ao alterar status do serviço.');
     }
   };
 
   const handleDelete = async (id) => {
+    if (!(await confirm('Tem certeza que deseja inativar este serviço? Para manter o histórico de agendamentos, o serviço será marcado como inativo.'))) return;
+
     try {
-      // Verifica se já foi usado em algum agendamento
-      const { data: appts, error: apptError } = await supabase
-        .from('cap_appointments')
-        .select('id')
-        .eq('service_id', id)
-        .limit(1);
-      
-      if (apptError) throw apptError;
-
-      if (appts && appts.length > 0) {
-        alert('Este serviço não pode ser excluído pois já possui agendamentos atrelados a ele. Recomendamos Inativar o serviço.');
-        return;
-      }
-
-      if (!window.confirm('Tem certeza que deseja excluir este serviço? Esta ação não pode ser desfeita.')) return;
-
-      const { error } = await supabase.from('cap_services').delete().eq('id', id);
-      if (error) throw error;
-      
-      alert('Serviço excluído com sucesso.');
+      await api.services.delete(id);
+      showSuccess('Serviço inativado com sucesso.');
       fetchData();
     } catch (err) {
       console.error(err);
-      alert('Erro ao excluir serviço.');
+      showError('Erro ao excluir serviço.');
     }
   };
 
@@ -128,79 +97,72 @@ const GestaoServicos = () => {
     setEditingId(null);
     setNewService({ 
       name: '', duration_minutes: 60, price: '', maintenance_days: 0,
-      use_inventory: false, inventory_id: '', quantity_consumed: 1
+      use_inventory: false, inputs: []
     });
     setShowModal(true);
+  };
+
+  const handleAddInput = () => {
+    setNewService({
+      ...newService,
+      inputs: [...newService.inputs, { inventory_id: '', quantity_consumed: 1 }]
+    });
+  };
+
+  const handleRemoveInput = (index) => {
+    const newInputs = [...newService.inputs];
+    newInputs.splice(index, 1);
+    setNewService({ ...newService, inputs: newInputs });
+  };
+
+  const handleInputUpdate = (index, field, value) => {
+    const newInputs = [...newService.inputs];
+    newInputs[index][field] = value;
+    setNewService({ ...newService, inputs: newInputs });
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
     if (!tenant) return;
     
-    if (newService.use_inventory && !newService.inventory_id) {
-      alert("Selecione um item do estoque.");
+    if (newService.use_inventory && newService.inputs.length === 0) {
+      showError("Adicione pelo menos um item do estoque.");
+      return;
+    }
+    
+    const invalidInputs = newService.inputs.filter(i => !i.inventory_id || i.quantity_consumed <= 0);
+    if (newService.use_inventory && invalidInputs.length > 0) {
+      showError("Preencha corretamente os itens do estoque selecionados.");
       return;
     }
 
     setSaving(true);
     try {
-      let serviceId = editingId;
+      const payload = {
+        name: newService.name,
+        duration_minutes: parseInt(newService.duration_minutes),
+        price: parseFloat(newService.price),
+        maintenance_days: parseInt(newService.maintenance_days) || 0,
+        reduces_stock: newService.use_inventory,
+        is_active: true,
+        inputs: newService.use_inventory ? newService.inputs.map(i => ({
+          inventory_id: i.inventory_id,
+          quantity_consumed: parseFloat(i.quantity_consumed) || 1
+        })) : []
+      };
 
       if (editingId) {
-        const { error: srvErr } = await supabase
-          .from('cap_services')
-          .update({
-            name: newService.name,
-            duration_minutes: parseInt(newService.duration_minutes),
-            price: parseFloat(newService.price),
-            maintenance_days: parseInt(newService.maintenance_days) || 0,
-            reduces_stock: newService.use_inventory
-          })
-          .eq('id', editingId);
-        
-        if (srvErr) throw srvErr;
-
-        // Clean up old inventory links
-        await supabase.from('cap_service_inventory').delete().eq('service_id', editingId);
-
+        await api.services.update(editingId, payload);
       } else {
-        const { data: insertedService, error: srvErr } = await supabase
-          .from('cap_services')
-          .insert([{
-            tenant_id: tenant.id,
-            name: newService.name,
-            duration_minutes: parseInt(newService.duration_minutes),
-            price: parseFloat(newService.price),
-            maintenance_days: parseInt(newService.maintenance_days) || 0,
-            reduces_stock: newService.use_inventory,
-            is_active: true
-          }])
-          .select('id')
-          .single();
-
-        if (srvErr) throw srvErr;
-        serviceId = insertedService.id;
-      }
-
-      // Insert Inventory Link if applicable
-      if (newService.use_inventory && newService.inventory_id && serviceId) {
-         const { error: invErr } = await supabase
-           .from('cap_service_inventory')
-           .insert([{
-             tenant_id: tenant.id,
-             service_id: serviceId,
-             inventory_id: newService.inventory_id,
-             quantity_consumed: parseFloat(newService.quantity_consumed) || 1
-           }]);
-         if (invErr) throw invErr;
+        await api.services.create(payload);
       }
       
-      alert(`Serviço ${editingId ? 'atualizado' : 'cadastrado'} com sucesso!`);
+      showSuccess(`Serviço ${editingId ? 'atualizado' : 'cadastrado'} com sucesso!`);
       setShowModal(false);
       fetchData(); 
     } catch (err) {
       console.error(err);
-      alert('Erro ao salvar serviço.');
+      showError('Erro ao salvar serviço.');
     } finally {
       setSaving(false);
     }
@@ -286,31 +248,52 @@ const GestaoServicos = () => {
                   </div>
 
                   {newService.use_inventory && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-surface-bright p-4 rounded-lg border border-outline-variant animate-in slide-in-from-top-2 duration-200">
-                      <div>
-                        <label className="block font-label-sm text-secondary mb-1">Produto Base</label>
-                        <select 
-                           className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-white focus:border-primary outline-none text-sm"
-                           value={newService.inventory_id}
-                           onChange={e => setNewService({...newService, inventory_id: e.target.value})}
-                        >
-                          <option value="">Selecione um produto...</option>
-                          {inventoryItems.map(inv => (
-                            <option key={inv.id} value={inv.id}>{inv.name} ({inv.unit})</option>
-                          ))}
-                        </select>
+                    <div className="bg-surface-bright p-4 rounded-lg border border-outline-variant space-y-4 animate-in slide-in-from-top-2 duration-200">
+                      <div className="flex justify-between items-center">
+                        <h5 className="font-label-md text-on-surface">Itens Consumidos</h5>
+                        <button type="button" onClick={handleAddInput} className="text-primary text-sm flex items-center gap-1 hover:underline">
+                          <span className="material-symbols-outlined text-[16px]">add</span> Adicionar Item
+                        </button>
                       </div>
-                      <div>
-                        <label className="block font-label-sm text-secondary mb-1">Quantidade Gasta</label>
-                        <input 
-                           type="number" 
-                           step="0.01" 
-                           min="0.01" 
-                           className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-white focus:border-primary outline-none" 
-                           value={newService.quantity_consumed} 
-                           onChange={e => setNewService({...newService, quantity_consumed: e.target.value})} 
-                        />
-                      </div>
+                      
+                      {newService.inputs.length === 0 ? (
+                        <p className="text-sm text-secondary text-center py-2">Nenhum item adicionado.</p>
+                      ) : (
+                        newService.inputs.map((input, index) => (
+                          <div key={index} className="grid grid-cols-12 gap-2 items-end bg-white p-3 rounded border border-surface-variant">
+                            <div className="col-span-12 md:col-span-7">
+                              <label className="block font-label-sm text-secondary mb-1">Produto Base</label>
+                              <select 
+                                 className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-white focus:border-primary outline-none text-sm"
+                                 value={input.inventory_id}
+                                 onChange={e => handleInputUpdate(index, 'inventory_id', e.target.value)}
+                              >
+                                <option value="">Selecione um produto...</option>
+                                {inventoryItems.map(inv => (
+                                  <option key={inv.id} value={inv.id}>{inv.name} ({inv.unit})</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="col-span-10 md:col-span-4">
+                              <label className="block font-label-sm text-secondary mb-1">Qtd Gasta</label>
+                              <input 
+                                 type="number" 
+                                 step="0.01" 
+                                 min="0.01" 
+                                 className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-white focus:border-primary outline-none text-sm" 
+                                 value={input.quantity_consumed} 
+                                 onChange={e => handleInputUpdate(index, 'quantity_consumed', e.target.value)} 
+                                 placeholder="Ex: 10" 
+                              />
+                            </div>
+                            <div className="col-span-2 md:col-span-1 flex justify-end">
+                              <button type="button" onClick={() => handleRemoveInput(index)} className="w-10 h-10 flex items-center justify-center rounded-lg text-error hover:bg-error-container transition-colors mb-[2px]">
+                                <span className="material-symbols-outlined">delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   )}
                 </div>
@@ -347,8 +330,9 @@ const GestaoServicos = () => {
                 </thead>
                 <tbody className="divide-y divide-surface-variant">
                   {services.map((service) => {
-                    const hasInventory = service.cap_service_inventory && service.cap_service_inventory.length > 0;
-                    const inv = hasInventory ? service.cap_service_inventory[0] : null;
+                    const hasInventory = service.inputs && service.inputs.length > 0;
+                    const inv = hasInventory ? service.inputs[0] : null;
+                    const invDetail = inv ? inventoryItems.find(i => i.id === inv.inventory_id) : null;
 
                     return (
                       <tr key={service.id} className={`transition-colors group ${!service.is_active ? 'opacity-50 bg-surface-variant/20' : 'hover:bg-surface-bright'}`}>
@@ -364,10 +348,10 @@ const GestaoServicos = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          {hasInventory ? (
+                          {hasInventory && invDetail ? (
                             <span className="text-xs text-tertiary bg-tertiary/10 px-2 py-1 rounded-md border border-tertiary/20 flex items-center gap-1 w-max">
                               <span className="material-symbols-outlined text-[14px]">inventory_2</span>
-                              {inv.cap_inventory?.name} ({inv.quantity_consumed} {inv.cap_inventory?.unit})
+                              {invDetail.name} ({inv.quantity_consumed} {invDetail.unit})
                             </span>
                           ) : (
                             <span className="text-xs text-secondary opacity-50">-</span>
@@ -393,7 +377,7 @@ const GestaoServicos = () => {
                                 <span className="material-symbols-outlined text-[18px]">edit</span>
                              </button>
                              <button 
-                                onClick={() => handleToggleActive(service.id, service.is_active)}
+                                onClick={() => handleToggleActive(service)}
                                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${service.is_active ? 'bg-surface-variant text-secondary hover:text-error hover:bg-error/10' : 'bg-surface-variant text-secondary hover:text-primary hover:bg-primary/10'}`}
                                 title={service.is_active ? "Inativar Serviço" : "Ativar Serviço"}
                              >

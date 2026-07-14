@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Card } from '../components/ui/Card';
 
 const CadastroCliente = () => {
   const { tenant_slug } = useParams();
@@ -11,7 +14,9 @@ const CadastroCliente = () => {
   
   const [phone] = useState(location.state?.phone || '');
   const [name, setName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [password, setPassword] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -27,21 +32,8 @@ const CadastroCliente = () => {
     setError(null);
 
     try {
-      const { data: newClientId, error: registerError } = await supabase.rpc('cap_register_client', {
-        p_tenant_id: tenant.id,
-        p_name: name,
-        p_phone: phone,
-        p_password: password
-      });
-
-      if (registerError) throw registerError;
-
-      login({
-        id: newClientId,
-        name: name,
-        tenant_id: tenant.id,
-        role: 'client'
-      });
+      const { token, user } = await api.auth.registerClient(tenant.id, name, phone, password, birthDate || null);
+      login(user, token);
 
       navigate(`/${tenant_slug}/home`);
 
@@ -54,118 +46,166 @@ const CadastroCliente = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start overflow-x-hidden bg-[#f9f9f9]">
-      <header className="w-full top-0 sticky bg-[#f9f9f9] flex items-center justify-between px-[20px] py-[16px] z-40">
-        <div className="flex items-center gap-[16px]">
+    <div className="min-h-screen flex flex-col items-center justify-start overflow-x-hidden bg-background font-body-md text-on-surface">
+      <header className="w-full bg-transparent flex items-center justify-between px-container-margin pt-[calc(env(safe-area-inset-top,0px)+32px)] pb-md z-40 max-w-md mx-auto shrink-0">
+        <div className="w-6 flex items-center justify-start">
           <button 
             onClick={() => navigate(-1)}
-            className="active:scale-95 duration-150 hover:opacity-80 transition-opacity text-primary"
+            className="active:scale-95 duration-150 hover:opacity-80 transition-opacity text-primary flex items-center justify-center"
           >
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <span className="font-serif text-[24px] leading-[1.3] font-semibold text-primary tracking-tight">
+        </div>
+        <div className="flex items-center gap-2 flex-1 justify-center">
+          {tenant?.logo_url ? (
+            <img 
+              src={tenant.logo_url} 
+              alt={tenant.name} 
+              className="h-8 object-contain rounded bg-surface p-0.5 shadow-sm" 
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+          ) : (
+            <span className="material-symbols-outlined text-primary text-[24px] shrink-0">spa</span>
+          )}
+          <span className="font-serif text-headline-md font-semibold text-primary tracking-tight">
             {tenant?.name || 'Serene Beauty'}
           </span>
         </div>
         <div className="w-6"></div>
       </header>
 
-      <main className="w-full max-w-[448px] px-[20px] flex-grow flex flex-col">
-        <section className="mt-[16px] mb-[40px] animate-fade-in-up">
-          <div className="grid grid-cols-2 gap-4 h-48">
-            <div className="bg-[#e8b4b8] rounded-xl overflow-hidden relative group transition-transform duration-500 hover:scale-[1.02]">
+      <main className="w-full max-w-md px-container-margin flex-grow flex flex-col pb-xl">
+        <section className="mt-md mb-xl animate-fade-in-up">
+          <div className="grid grid-cols-2 gap-sm h-48">
+            <div className="bg-primary-container rounded-3xl overflow-hidden relative group transition-transform duration-500 hover:scale-[1.02]">
               <img 
                 alt="Beauty Atmosphere" 
                 className="w-full h-full object-cover opacity-80" 
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuBY2D0vDZtjzyiwfZHAfSdcsfMe2eBgerm3GkEy1h9CfY63fh8WGVTjZGNdRzcni39FE13M0kmtTmgPqayJxgNT3XHeGPgetAL38r4C8IK6Nn2ZCm8wezHp_5m4MgbSHZwXUlyP8maVtAYWvPKPYqqVKtibIHPbxpqI_S56CsryrV0_6TqIS3AA-9I1kgLP7h-GhOvTETGtP82vQ-f9gGPmpTSUMbefEituG_cNFoyf0YLT1kB3X6XqNOEdFjSdbF8wF25PNvaUYC1b"
               />
-              <div className="absolute inset-0 bg-[#7c5357]/20 mix-blend-multiply"></div>
+              <div className="absolute inset-0 bg-primary/20 mix-blend-multiply"></div>
             </div>
-            <div className="flex flex-col gap-4">
-              <div className="h-1/2 bg-[#e2e2e2] rounded-xl flex items-center justify-center p-4">
-                <span className="material-symbols-outlined text-primary scale-150">auto_awesome</span>
+            <div className="flex flex-col gap-sm">
+              <div className="h-1/2 bg-surface-variant rounded-3xl flex items-center justify-center p-md">
+                <span className="material-symbols-outlined text-primary text-[40px]">auto_awesome</span>
               </div>
-              <div className="h-1/2 bg-[#e4e2e1] rounded-xl flex items-center justify-center p-4">
-                <span className="material-symbols-outlined text-[#656464] scale-150">spa</span>
+              <div className="h-1/2 bg-surface-container rounded-3xl flex items-center justify-center p-md">
+                <span className="material-symbols-outlined text-secondary text-[40px]">spa</span>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="mb-[24px] animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-          <h1 className="font-serif text-[28px] leading-[1.2] font-semibold text-on-surface mb-2">
+        <section className="mb-lg animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+          <h1 className="font-serif text-headline-md font-semibold text-on-surface mb-xs">
             Parece que você é novo por aqui!
           </h1>
-          <p className="font-sans text-[16px] text-on-surface-variant">
+          <p className="font-sans text-body-md text-on-surface-variant">
             Vamos fazer seu cadastro para você aproveitar a melhor experiência de beleza.
           </p>
         </section>
 
-        <section className="bg-white rounded-xl p-[24px] shadow-[0px_4px_20px_rgba(0,0,0,0.04)] mb-[40px] animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-          <form onSubmit={handleSubmit} className="space-y-[24px]">
-            {error && <p className="text-error text-sm">{error}</p>}
-            
-            <div className="relative">
-              <label className="font-semibold text-[14px] tracking-widest text-on-surface-variant block mb-2" htmlFor="name">
-                Nome completo
-              </label>
-              <input 
-                id="name" 
+        <section className="animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+          <Card className="p-lg">
+            <form onSubmit={handleSubmit} className="space-y-lg">
+              {error && <p className="text-error text-label-sm">{error}</p>}
+              
+              <Input
+                id="name"
+                label="Nome completo"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
                 placeholder="Como quer ser chamado(a)?"
-                className="w-full border-0 border-b border-outline-variant bg-transparent px-0 py-2 focus:ring-0 focus:border-primary transition-colors text-[16px] text-on-surface placeholder:text-outline-variant outline-none"
+                startIcon="person"
               />
-            </div>
 
-            <div className="relative">
-              <label className="font-semibold text-[14px] tracking-widest text-on-surface-variant block mb-2" htmlFor="phone">
-                Telefone
-              </label>
-              <div className="flex items-center border-b border-outline-variant">
-                <span className="material-symbols-outlined text-outline text-[16px] mr-2">phone_android</span>
-                <input 
-                  id="phone" 
-                  type="tel" 
-                  value={phone}
-                  readOnly
-                  className="w-full border-0 bg-transparent px-0 py-2 focus:ring-0 text-[16px] text-secondary cursor-not-allowed outline-none"
-                />
-                <span className="material-symbols-outlined text-[#e8b4b8] text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+              <div className="relative">
+                <label className="text-label-md text-on-surface block mb-1">Telefone</label>
+                <div className="flex items-center h-12 w-full rounded-2xl border border-outline-variant bg-surface-container-low px-4 text-secondary opacity-70 cursor-not-allowed">
+                  <span className="material-symbols-outlined text-outline text-[20px] mr-2">phone_android</span>
+                  <input 
+                    type="tel" 
+                    value={phone}
+                    readOnly
+                    className="flex-1 bg-transparent focus:outline-none"
+                  />
+                  <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                </div>
               </div>
-            </div>
 
-            <div className="relative">
-              <label className="font-semibold text-[14px] tracking-widest text-on-surface-variant block mb-2" htmlFor="password">
-                Crie uma Senha
-              </label>
-              <input 
-                id="password" 
+              <Input
+                id="birthDate"
+                label="Data de Nascimento"
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                required
+                startIcon="cake"
+              />
+
+              <Input
+                id="password"
+                label="Crie uma Senha"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="Mínimo 6 caracteres"
-                className="w-full border-0 border-b border-outline-variant bg-transparent px-0 py-2 focus:ring-0 focus:border-primary transition-colors text-[16px] text-on-surface placeholder:text-outline-variant outline-none"
+                startIcon="lock"
               />
-            </div>
-            
-            <div className="mt-auto pt-[24px]">
-              <button 
-                type="submit" 
-                disabled={loading || password.length < 6 || name.length < 3}
-                className="w-full py-4 bg-primary text-on-primary font-semibold text-[14px] rounded-full shadow-lg active:scale-95 transition-transform duration-150 flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <span>{loading ? 'Processando...' : 'Finalizar Cadastro'}</span>
-                {!loading && <span className="material-symbols-outlined">check_circle</span>}
-              </button>
-              <p className="mt-4 text-center text-[12px] font-medium text-on-surface-variant px-[16px]">
-                  Ao finalizar, você concorda com nossos termos de privacidade e serviço de luxo.
-              </p>
-            </div>
-          </form>
+
+              <div className="flex flex-col gap-2 bg-surface-container-low p-3 rounded-xl border border-surface-variant transition-all">
+                <span className="text-label-sm font-label-sm text-secondary mb-1">Sua senha deve conter:</span>
+                <div className="flex items-center gap-2 transition-colors duration-300">
+                  <span className={`material-symbols-outlined text-[16px] ${password.length >= 6 ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: password.length >= 6 ? "'FILL' 1" : "'FILL' 0" }}>
+                    {password.length >= 6 ? 'check_circle' : 'radio_button_unchecked'}
+                  </span>
+                  <span className={`text-label-sm ${password.length >= 6 ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Mínimo de 6 caracteres</span>
+                </div>
+                <div className="flex items-center gap-2 transition-colors duration-300">
+                  <span className={`material-symbols-outlined text-[16px] ${/[a-zA-Z]/.test(password) ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: /[a-zA-Z]/.test(password) ? "'FILL' 1" : "'FILL' 0" }}>
+                    {/[a-zA-Z]/.test(password) ? 'check_circle' : 'radio_button_unchecked'}
+                  </span>
+                  <span className={`text-label-sm ${/[a-zA-Z]/.test(password) ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Pelo menos 1 letra</span>
+                </div>
+                <div className="flex items-center gap-2 transition-colors duration-300">
+                  <span className={`material-symbols-outlined text-[16px] ${/[0-9]/.test(password) ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: /[0-9]/.test(password) ? "'FILL' 1" : "'FILL' 0" }}>
+                    {/[0-9]/.test(password) ? 'check_circle' : 'radio_button_unchecked'}
+                  </span>
+                  <span className={`text-label-sm ${/[0-9]/.test(password) ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Pelo menos 1 número</span>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-2">
+                <input 
+                  type="checkbox" 
+                  id="terms" 
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-1 w-4 h-4 text-primary border-outline-variant rounded focus:ring-primary"
+                />
+                <label htmlFor="terms" className="text-label-sm text-on-surface-variant flex-1">
+                  Li e concordo com os <a href="#" className="text-primary hover:underline">Termos de Serviço</a> e a <a href="#" className="text-primary hover:underline">Política de Privacidade (LGPD)</a>, consentindo com o tratamento dos meus dados.
+                </label>
+              </div>
+
+              <div className="pt-md">
+                <Button 
+                  type="submit" 
+                  variant="primary"
+                  size="lg"
+                  className="w-full"
+                  disabled={loading || password.length < 6 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password) || name.length < 3 || !termsAccepted}
+                  isLoading={loading}
+                  endIcon={!loading ? "check_circle" : undefined}
+                >
+                  Finalizar Cadastro
+                </Button>
+              </div>
+            </form>
+          </Card>
         </section>
       </main>
     </div>
@@ -173,4 +213,3 @@ const CadastroCliente = () => {
 };
 
 export default CadastroCliente;
-

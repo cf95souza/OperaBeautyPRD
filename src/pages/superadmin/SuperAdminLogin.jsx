@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 
 const SuperAdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -15,20 +15,13 @@ const SuperAdminLogin = () => {
     setError('');
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
+      const res = await api.auth.loginSuperAdmin(email, password);
       
-      // Checa se o email confere com o do dono da plataforma
-      if (data.user?.email === 'cf95.souza@gmail.com') {
-        navigate('/superadmin');
-      } else {
-        setError('Acesso negado. Usuário não autorizado como Super Admin.');
-        await supabase.auth.signOut();
-      }
+      // Salva no localStorage para uso do SuperAdminProtectedRoute e me()
+      localStorage.setItem('operabeauty_token', res.token);
+      localStorage.setItem('operabeauty_user', JSON.stringify(res.user));
+      
+      navigate('/superadmin');
     } catch (err) {
       setError(err.message || 'Erro ao realizar login.');
     } finally {

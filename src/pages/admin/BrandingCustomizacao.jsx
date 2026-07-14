@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
+import { useNotification } from '../../context/NotificationProvider';
 
 const BrandingCustomizacao = () => {
   const { tenant_slug } = useParams();
   const { tenant } = useTenant();
+  const { showSuccess, showError } = useNotification();
   
   const [branding, setBranding] = useState({
     name: 'Salão',
@@ -14,12 +16,11 @@ const BrandingCustomizacao = () => {
     secondary_color: '#eeb9bd',
     tertiary_color: '#f9f9f9',
     logo_url: '',
-    banner_url: '',
-    banner_title: 'Pacote Rejuvenescimento',
-    banner_subtitle: '20% off em todas as massagens nesta estação.',
+    banners: [],
     welcome_message: 'Bem-vindo ao salão. Agende seu próximo momento de tranquilidade abaixo.'
   });
   const [saving, setSaving] = useState(false);
+  const [selectedBannerIndex, setSelectedBannerIndex] = useState(0);
 
   useEffect(() => {
     if (tenant) {
@@ -30,49 +31,85 @@ const BrandingCustomizacao = () => {
         secondary_color: tenant.secondary_color || '#eeb9bd',
         tertiary_color: tenant.tertiary_color || '#f9f9f9',
         logo_url: tenant.logo_url || '',
-        banner_url: tenant.banner_url || '',
-        banner_title: tenant.banner_title || 'Pacote Rejuvenescimento',
-        banner_subtitle: tenant.banner_subtitle || '20% off em todas as massagens nesta estação.',
+        banners: Array.isArray(tenant.banners) && tenant.banners.length > 0 
+          ? tenant.banners 
+          : [
+              {
+                id: 'default',
+                url: tenant.banner_url || '',
+                title: tenant.banner_title || 'Pacote Rejuvenescimento',
+                subtitle: tenant.banner_subtitle || '20% off em todas as massagens nesta estação.'
+              }
+            ],
         welcome_message: tenant.welcome_message || 'Bem-vindo ao salão. Agende seu próximo momento de tranquilidade abaixo.'
       });
     }
   }, [tenant]);
 
+  const handleCreateBanner = () => {
+    const maxBanners = tenant?.max_banners || 1;
+    if (branding.banners.length >= maxBanners) {
+      showError(`O seu plano atual permite cadastrar no máximo ${maxBanners} banner(s).`);
+      return;
+    }
+    const newBanner = {
+      id: Math.random().toString(36).substring(2, 9),
+      url: '',
+      title: 'Nova Promoção',
+      subtitle: 'Descrição da sua promoção especial.'
+    };
+    const updated = [...branding.banners, newBanner];
+    setBranding({ ...branding, banners: updated });
+    setSelectedBannerIndex(updated.length - 1);
+  };
+
+  const handleDeleteBanner = (idxToDelete) => {
+    if (branding.banners.length <= 1) {
+      showError("Você precisa manter pelo menos um banner configurado.");
+      return;
+    }
+    const updated = branding.banners.filter((_, idx) => idx !== idxToDelete);
+    setBranding({ ...branding, banners: updated });
+    if (selectedBannerIndex >= updated.length) {
+      setSelectedBannerIndex(updated.length - 1);
+    }
+  };
+
+  const handleUpdateActiveBanner = (field, value) => {
+    const updatedBanners = [...branding.banners];
+    if (updatedBanners[selectedBannerIndex]) {
+      updatedBanners[selectedBannerIndex] = {
+        ...updatedBanners[selectedBannerIndex],
+        [field]: value
+      };
+      setBranding({ ...branding, banners: updatedBanners });
+    }
+  };
+
   const handleSave = async () => {
     if (!tenant) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('cap_tenants')
-        .update({
-          name: branding.name,
-          slug: branding.slug,
-          primary_color: branding.primary_color,
-          secondary_color: branding.secondary_color,
-          tertiary_color: branding.tertiary_color,
-          logo_url: branding.logo_url,
-          banner_url: branding.banner_url,
-          banner_title: branding.banner_title,
-          banner_subtitle: branding.banner_subtitle,
-          welcome_message: branding.welcome_message
-        })
-        .eq('id', tenant.id);
-      
-      if (error) throw error;
+      const payload = {
+        name: branding.name,
+        primary_color: branding.primary_color,
+        secondary_color: branding.secondary_color,
+        tertiary_color: branding.tertiary_color,
+        logo_url: branding.logo_url,
+        banners: branding.banners,
+        welcome_message: branding.welcome_message
+      };
+
+      await api.tenants.updateBranding(payload);
       
       // Update local CSS vars for immediate feedback
       document.documentElement.style.setProperty('--color-primary', branding.primary_color);
       document.documentElement.style.setProperty('--color-primary-container', branding.secondary_color);
       document.documentElement.style.setProperty('--color-surface-container-lowest', branding.tertiary_color);
-      alert('Configurações salvas com sucesso!');
-      
-      // If slug changed, we must reload the app to the new URL
-      if (branding.slug && branding.slug !== tenant_slug) {
-        window.location.href = `/${branding.slug}/staff/admin/branding`;
-      }
+      showSuccess('Configurações salvas com sucesso!');
     } catch (err) {
       console.error(err);
-      alert('Erro ao salvar configurações.');
+      showError('Erro ao salvar configurações.');
     } finally {
       setSaving(false);
     }
@@ -123,24 +160,24 @@ const BrandingCustomizacao = () => {
             </div>
             <div className="mb-4">
                <label className="font-label-sm text-label-sm text-secondary block mb-1">Link do Salão (Slug)</label>
-               <div className="flex items-center border border-outline-variant rounded-lg overflow-hidden focus-within:border-primary transition-colors">
+               <div className="flex items-center border border-outline-variant rounded-lg overflow-hidden bg-surface-variant/20 transition-colors">
                  <span className="bg-surface-variant text-secondary px-3 py-2 font-body-md text-body-md border-r border-outline-variant select-none">
                    app.com/
                  </span>
                  <input 
-                    className="w-full p-2 font-body-md text-body-md outline-none bg-transparent" 
+                    disabled
+                    className="w-full p-2 font-body-md text-body-md outline-none bg-transparent text-secondary cursor-not-allowed" 
                     type="text" 
                     placeholder="meu-salao"
                     value={branding.slug}
-                    onChange={e => setBranding({...branding, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')})}
                  />
                </div>
             </div>
             
-            <div className="mt-auto bg-error/10 border border-error/20 p-3 rounded-lg flex items-start gap-2">
-              <span className="material-symbols-outlined text-error text-[18px] mt-0.5">warning</span>
-              <p className="font-body-sm text-[12px] text-error">
-                <strong>Cuidado:</strong> Alterar o "Link do Salão" quebrará todos os links antigos enviados aos clientes. Eles precisarão usar o novo link para acessar.
+            <div className="mt-auto bg-primary-container/10 border border-primary-container/20 p-3 rounded-lg flex items-start gap-2">
+              <span className="material-symbols-outlined text-primary text-[18px] mt-0.5">info</span>
+              <p className="font-body-sm text-[12px] text-primary">
+                A alteração do link único (slug) do seu salão é restrita para garantir a estabilidade das suas rotas. Caso precise alterá-lo, entre em contato com o suporte do sistema.
               </p>
             </div>
           </section>
@@ -248,51 +285,109 @@ const BrandingCustomizacao = () => {
             <p className="font-body-md text-body-md text-secondary mb-lg">Gerencie o banner promocional e a mensagem de boas-vindas exibida aos clientes na tela inicial.</p>
             
             <div className="space-y-lg">
-              {/* Banner Item */}
-              <div className="flex flex-col md:flex-row gap-lg p-md border border-surface-variant rounded-lg bg-surface-bright items-start relative group">
-                <div className="w-full md:w-48 h-32 bg-surface-variant rounded-lg overflow-hidden relative flex items-center justify-center">
-                  {branding.banner_url ? (
-                     <img src={branding.banner_url} alt="Banner" className="w-full h-full object-cover" onError={(e) => e.target.style.display='none'} />
-                  ) : (
-                     <span className="material-symbols-outlined text-4xl text-on-surface-variant">photo</span>
+              {/* Seletor de Banners */}
+              <div className="flex flex-wrap items-center gap-2 p-md border border-surface-variant rounded-lg bg-surface-bright">
+                <div className="flex flex-wrap items-center gap-2 flex-1">
+                  {(branding.banners || []).map((b, idx) => (
+                    <div key={b.id || idx} className="flex items-center bg-surface-container-high rounded-full overflow-hidden border border-outline-variant/30 pl-3 pr-1 py-1 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBannerIndex(idx)}
+                        className={`font-label-md text-label-md transition-colors pr-2 ${
+                          selectedBannerIndex === idx
+                            ? 'text-primary font-bold'
+                            : 'text-on-surface hover:text-primary'
+                        }`}
+                      >
+                        Banner {idx + 1}
+                      </button>
+                      {(branding.banners || []).length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBanner(idx)}
+                          className="text-error hover:bg-error-container hover:text-on-error-container p-1 rounded-full transition-colors flex items-center justify-center"
+                          title="Excluir este banner"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">close</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {(branding.banners || []).length < (tenant?.max_banners || 1) && (
+                    <button
+                      type="button"
+                      onClick={handleCreateBanner}
+                      className="flex items-center gap-1 px-4 py-1.5 border border-dashed border-primary text-primary hover:bg-primary/5 rounded-full font-label-md text-label-md transition-colors shadow-sm"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">add</span>
+                      Novo Banner
+                    </button>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-2 pointer-events-none">
-                    <span className="font-label-sm text-label-sm text-white">Banner Promoção</span>
-                  </div>
                 </div>
-                <div className="flex-1 w-full space-y-4">
-                  <div>
-                    <label className="font-label-sm text-label-sm text-secondary block mb-1">URL da Imagem do Banner</label>
-                    <input 
-                       className="w-full border-b border-outline-variant bg-transparent py-1 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors" 
-                       type="url" 
-                       placeholder="https://exemplo.com/banner.jpg"
-                       value={branding.banner_url}
-                       onChange={e => setBranding({...branding, banner_url: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="font-label-sm text-label-sm text-secondary block mb-1">Título da Promoção</label>
-                    <input 
-                       className="w-full border-b border-outline-variant bg-transparent py-1 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors" 
-                       type="text" 
-                       placeholder="Ex: Pacote Rejuvenescimento"
-                       value={branding.banner_title}
-                       onChange={e => setBranding({...branding, banner_title: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="font-label-sm text-label-sm text-secondary block mb-1">Subtítulo / Mensagem</label>
-                    <input 
-                       className="w-full border-b border-outline-variant bg-transparent py-1 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors" 
-                       type="text" 
-                       placeholder="Ex: 20% off em todas as massagens nesta estação."
-                       value={branding.banner_subtitle}
-                       onChange={e => setBranding({...branding, banner_subtitle: e.target.value})}
-                    />
-                  </div>
+                <div className="font-label-sm text-label-sm text-secondary shrink-0 pl-md">
+                  Plano: {(branding.banners || []).length}/{(tenant?.max_banners || 1)} banner(s)
                 </div>
               </div>
+
+              {/* Banner Item Editor */}
+              {branding.banners && branding.banners[selectedBannerIndex] && (
+                <div className="flex flex-col md:flex-row gap-lg p-md border border-surface-variant rounded-lg bg-surface-bright items-start relative group">
+                  <div 
+                    className="w-full md:w-48 h-32 rounded-lg overflow-hidden relative flex items-center justify-center shrink-0"
+                    style={{
+                      background: !branding.banners[selectedBannerIndex].url 
+                        ? `linear-gradient(135deg, ${branding.primary_color || '#7c5357'}, ${branding.secondary_color || '#eeb9bd'})`
+                        : 'var(--color-surface-variant, #e5e5e5)'
+                    }}
+                  >
+                    {branding.banners[selectedBannerIndex].url ? (
+                       <img src={branding.banners[selectedBannerIndex].url} alt="Banner" className="w-full h-full object-cover" onError={(e) => e.target.style.display='none'} />
+                    ) : (
+                       <div className="absolute inset-0 flex flex-col justify-end p-2 text-white bg-black/30">
+                         <span className="font-headline-sm text-[12px] font-bold truncate">{branding.banners[selectedBannerIndex].title || ''}</span>
+                         <span className="text-[10px] opacity-90 truncate">{branding.banners[selectedBannerIndex].subtitle || ''}</span>
+                       </div>
+                    )}
+                    {branding.banners[selectedBannerIndex].url && (
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-2 pointer-events-none">
+                        <span className="font-label-sm text-label-sm text-white">Banner {selectedBannerIndex + 1}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 w-full space-y-4">
+                    <div>
+                      <label className="font-label-sm text-label-sm text-secondary block mb-1">URL da Imagem do Banner</label>
+                      <input 
+                         className="w-full border-b border-outline-variant bg-transparent py-1 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors" 
+                         type="url" 
+                         placeholder="https://exemplo.com/banner.jpg"
+                         value={branding.banners[selectedBannerIndex].url || ''}
+                         onChange={e => handleUpdateActiveBanner('url', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-label-sm text-label-sm text-secondary block mb-1">Título da Promoção</label>
+                      <input 
+                         className="w-full border-b border-outline-variant bg-transparent py-1 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors" 
+                         type="text" 
+                         placeholder="Ex: Pacote Rejuvenescimento"
+                         value={branding.banners[selectedBannerIndex].title || ''}
+                         onChange={e => handleUpdateActiveBanner('title', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-label-sm text-label-sm text-secondary block mb-1">Subtítulo / Mensagem</label>
+                      <input 
+                         className="w-full border-b border-outline-variant bg-transparent py-1 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors" 
+                         type="text" 
+                         placeholder="Ex: 20% off em todas as massagens nesta estação."
+                         value={branding.banners[selectedBannerIndex].subtitle || ''}
+                         onChange={e => handleUpdateActiveBanner('subtitle', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Welcome Message */}
               <div className="p-md border border-surface-variant rounded-lg bg-surface-bright">

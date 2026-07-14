@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import CreateTenantModal from '../../components/superadmin/CreateTenantModal';
 
 const TenantListAdmin = () => {
@@ -16,6 +16,8 @@ const TenantListAdmin = () => {
   
   const navigate = useNavigate();
 
+  const [plans, setPlans] = useState([]);
+
   // Debounce search
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -26,29 +28,52 @@ const TenantListAdmin = () => {
   }, [searchQuery]);
 
   useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  const fetchPlans = async () => {
+    try {
+      const data = await api.plans.list();
+      if (data) setPlans(data);
+    } catch (err) {
+      console.error('Erro ao buscar planos', err);
+    }
+  };
+
+  useEffect(() => {
     fetchTenants();
   }, [debouncedSearch, currentPage]);
+
+  const getPlanName = (price) => {
+    if (!price) return 'Personalizado';
+    const plan = plans.find(p => Number(p.price) === Number(price));
+    return plan ? plan.name : `R$ ${Number(price).toFixed(2)}`;
+  };
 
   const fetchTenants = async () => {
     setLoading(true);
     try {
-      let query = supabase.from('cap_tenants').select('*', { count: 'exact' });
-
+      const data = await api.superadmin.listTenants();
+      
+      // Filtrar localmente por debouncedSearch
+      let filtered = data || [];
       if (debouncedSearch) {
-        query = query.ilike('name', `%${debouncedSearch}%`);
+        const query = debouncedSearch.toLowerCase();
+        filtered = filtered.filter(t => 
+          (t.name && t.name.toLowerCase().includes(query)) || 
+          (t.slug && t.slug.toLowerCase().includes(query))
+        );
       }
-
+      
+      // Ordenar alfabeticamente por name
+      filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      
+      setTotalCount(filtered.length);
+      
+      // Paginação
       const from = (currentPage - 1) * itemsPerPage;
-      const to = from + itemsPerPage - 1;
-
-      const { data, count, error } = await query
-        .order('name', { ascending: true })
-        .range(from, to);
-
-      if (error) throw error;
-
-      setTenants(data || []);
-      if (count !== null) setTotalCount(count);
+      const to = from + itemsPerPage;
+      setTenants(filtered.slice(from, to));
     } catch (err) {
       console.error('Erro ao buscar salões:', err);
     } finally {
@@ -60,8 +85,8 @@ const TenantListAdmin = () => {
     navigate(`/superadmin/tenants/${tenant.id}`);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    api.auth.logout();
     navigate('/superadmin/login');
   };
 
@@ -110,7 +135,7 @@ const TenantListAdmin = () => {
             </div>
             <div className="flex flex-col">
               <span className="font-label-md text-label-md text-on-surface">Super Admin</span>
-              <span className="font-label-sm text-label-sm text-secondary">cf95.souza@gmail.com</span>
+              <span className="font-label-sm text-label-sm text-secondary">Administrador do Sistema</span>
             </div>
           </div>
         </div>
@@ -196,7 +221,7 @@ const TenantListAdmin = () => {
                         </td>
                         <td className="py-md px-md">
                           <span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-sm text-label-sm">
-                            {t.plan_id ? 'Premium' : 'Padrão'}
+                            {getPlanName(t.plan_price)}
                           </span>
                         </td>
                         <td className="py-md px-md">
@@ -242,7 +267,7 @@ const TenantListAdmin = () => {
                     </div>
                     <div className="flex justify-between items-center mt-2 pt-2 border-t border-surface-variant">
                       <span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-sm text-label-sm">
-                        {t.plan_id ? 'Premium' : 'Padrão'}
+                        {getPlanName(t.plan_price)}
                       </span>
                       <div className="flex items-center gap-xs">
                         <div className={`w-2 h-2 rounded-full ${t.status === 'active' ? 'bg-[#10b981]' : 'bg-error'}`}></div>

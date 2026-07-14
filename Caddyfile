@@ -1,0 +1,20 @@
+# Caddyfile para o OperaBeauty
+
+{$DOMAIN:localhost} {
+    # Habilita HTTPS automático pelo Let's Encrypt para o domínio (ou gera certificado auto-assinado localmente)
+    
+    # Compressão gzip/zstd para otimizar tráfego
+    encode zstd gzip
+
+    # Serve o frontend estático
+    root * /srv/dist
+    file_server
+
+    # Fallback para o index.html (SPA routing do React)
+    try_files {path} /index.html
+
+    # Proxy reverso para o backend
+    handle /api/* {
+        reverse_proxy api:5000
+    }
+}

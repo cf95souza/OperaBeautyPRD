@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
+import { useNotification } from '../context/NotificationProvider';
+import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
 
 const PerfilCliente = () => {
   const { tenant_slug } = useParams();
   const navigate = useNavigate();
-  const { tenant, session, logout } = useTenant();
+  const { tenant, session, loading: loadingTenant, logout } = useTenant();
+  const { showSuccess, showError, confirm } = useNotification();
 
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -19,6 +22,7 @@ const PerfilCliente = () => {
 
   // Fetch client data
   useEffect(() => {
+    if (loadingTenant) return;
     if (!session || session.role !== 'client') {
       navigate(`/${tenant_slug}/login`);
       return;
@@ -26,17 +30,19 @@ const PerfilCliente = () => {
 
     const fetchProfile = async () => {
       try {
-        const { data, error } = await supabase
-          .from('cap_clients')
-          .select('name, phone, birth_date')
-          .eq('id', session.id)
-          .single();
-
-        if (error) throw error;
+        const data = await api.clients.get(session.id);
+        
         if (data) {
           setNome(data.name || '');
           setTelefone(data.phone || '');
-          setDataNascimento(data.birth_date || '');
+          
+          let birthDateStr = '';
+          if (data.birth_date) {
+            birthDateStr = String(data.birth_date).includes('T') 
+              ? data.birth_date.split('T')[0] 
+              : data.birth_date;
+          }
+          setDataNascimento(birthDateStr);
         }
       } catch (err) {
         console.error("Erro ao buscar perfil do cliente", err);
@@ -45,7 +51,7 @@ const PerfilCliente = () => {
       }
     };
     fetchProfile();
-  }, [session, navigate, tenant_slug]);
+  }, [session, loadingTenant, navigate, tenant_slug]);
 
   const handleLogout = () => {
     logout();
@@ -54,38 +60,28 @@ const PerfilCliente = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!nome.trim()) return alert("O nome é obrigatório.");
+    if (!nome.trim()) { showError("O nome é obrigatório."); return; }
     
     if (novaSenha || confirmarSenha) {
       if (novaSenha !== confirmarSenha) {
-        return alert("As senhas não coincidem.");
+        showError("As senhas não coincidem."); return;
       }
-      if (novaSenha.length < 6) {
-        return alert("A nova senha deve ter no mínimo 6 caracteres.");
+      if (novaSenha.length > 0 && (novaSenha.length < 6 || !/[a-zA-Z]/.test(novaSenha) || !/[0-9]/.test(novaSenha))) {
+        showError("A nova senha não atende aos requisitos mínimos."); return;
       }
     }
 
     setLoading(true);
     try {
       // Update name and birth_date
-      const { error: updateError } = await supabase
-        .from('cap_clients')
-        .update({
-          name: nome,
-          birth_date: dataNascimento || null
-        })
-        .eq('id', session.id);
+      await api.clients.updateMe({
+        name: nome,
+        birth_date: dataNascimento || null
+      });
 
-      if (updateError) throw updateError;
-
-      // Update password via RPC if provided
+      // Update password via API if provided
       if (novaSenha) {
-        const { error: rpcError } = await supabase.rpc('cap_update_client_password', {
-          p_client_id: session.id,
-          p_tenant_id: tenant.id,
-          p_password: novaSenha
-        });
-        if (rpcError) throw rpcError;
+        await api.clients.updateMyPassword(novaSenha);
         setNovaSenha('');
         setConfirmarSenha('');
       }
@@ -94,7 +90,7 @@ const PerfilCliente = () => {
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error(err);
-      alert("Erro ao salvar alterações: " + err.message);
+      showError("Erro ao salvar alterações: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -104,20 +100,25 @@ const PerfilCliente = () => {
     <div className="bg-background text-on-background min-h-screen pb-32 font-body-md text-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
       
       {/* Top App Bar */}
-      <header className="w-full top-0 sticky z-50 backdrop-blur-md bg-surface/80 pt-[env(safe-area-inset-top,0px)]">
-        <div className="flex items-center justify-between px-container-margin py-md max-w-7xl mx-auto">
-          <div className="flex items-center gap-4">
-            <span 
-              onClick={() => navigate(-1)}
-              className="material-symbols-outlined text-primary active:scale-95 duration-150 cursor-pointer"
-            >
-              arrow_back
-            </span>
-            <h1 className="font-headline-md text-headline-md-mobile text-primary tracking-tight">
-              {tenant?.name || 'Serene Beauty'}
+      <header className="w-full top-0 sticky z-50 bg-surface shadow-sm transition-all duration-300 ease-in-out pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 md:pt-4">
+        <div className="flex justify-between items-center px-gutter py-sm w-full max-w-7xl mx-auto">
+          <div className="w-10"></div>{/* Spacer to keep title centered */}
+          <div className="flex items-center justify-center gap-2 flex-1">
+            {tenant?.logo_url ? (
+              <img 
+                src={tenant.logo_url} 
+                alt={tenant.name} 
+                className="h-8 md:h-10 object-contain rounded-md" 
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <span className="material-symbols-outlined text-primary font-headline-md text-headline-md shrink-0">spa</span>
+            )}
+            <h1 className="font-headline-md text-headline-md-mobile md:text-headline-md text-primary tracking-tight">
+              {tenant?.name || 'Carregando...'}
             </h1>
           </div>
-          <div className="w-6"></div>{/* Spacer for symmetry */}
+          <div className="w-10"></div>{/* Spacer to keep title centered */}
         </div>
       </header>
 
@@ -201,7 +202,32 @@ const PerfilCliente = () => {
                   onChange={(e) => setNovaSenha(e.target.value)}
                 />
               </div>
-              <div className="relative focus-within:text-primary text-secondary transition-colors">
+
+              {novaSenha.length > 0 && (
+                <div className="flex flex-col gap-2 bg-surface-container-low p-3 rounded-xl border border-surface-variant transition-all mt-2">
+                  <span className="text-label-sm font-label-sm text-secondary mb-1">A nova senha deve conter:</span>
+                  <div className="flex items-center gap-2 transition-colors duration-300">
+                    <span className={`material-symbols-outlined text-[16px] ${novaSenha.length >= 6 ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: novaSenha.length >= 6 ? "'FILL' 1" : "'FILL' 0" }}>
+                      {novaSenha.length >= 6 ? 'check_circle' : 'radio_button_unchecked'}
+                    </span>
+                    <span className={`text-label-sm ${novaSenha.length >= 6 ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Mínimo de 6 caracteres</span>
+                  </div>
+                  <div className="flex items-center gap-2 transition-colors duration-300">
+                    <span className={`material-symbols-outlined text-[16px] ${/[a-zA-Z]/.test(novaSenha) ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: /[a-zA-Z]/.test(novaSenha) ? "'FILL' 1" : "'FILL' 0" }}>
+                      {/[a-zA-Z]/.test(novaSenha) ? 'check_circle' : 'radio_button_unchecked'}
+                    </span>
+                    <span className={`text-label-sm ${/[a-zA-Z]/.test(novaSenha) ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Pelo menos 1 letra</span>
+                  </div>
+                  <div className="flex items-center gap-2 transition-colors duration-300">
+                    <span className={`material-symbols-outlined text-[16px] ${/[0-9]/.test(novaSenha) ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: /[0-9]/.test(novaSenha) ? "'FILL' 1" : "'FILL' 0" }}>
+                      {/[0-9]/.test(novaSenha) ? 'check_circle' : 'radio_button_unchecked'}
+                    </span>
+                    <span className={`text-label-sm ${/[0-9]/.test(novaSenha) ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Pelo menos 1 número</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="relative focus-within:text-primary text-secondary transition-colors mt-md">
                 <label className="block font-label-sm text-label-sm mb-1 ml-1 inherit-color">Confirmar Senha</label>
                 <input 
                   className="w-full bg-transparent border-b border-outline-variant py-2 focus:border-primary focus:ring-0 transition-colors outline-none text-on-surface" 
@@ -211,6 +237,57 @@ const PerfilCliente = () => {
                   onChange={(e) => setConfirmarSenha(e.target.value)}
                 />
               </div>
+            </div>
+          </section>
+
+          {/* Privacidade / LGPD Section */}
+          <section>
+            <div className="flex items-center gap-2 mb-md">
+              <span className="material-symbols-outlined text-primary text-[20px]">policy</span>
+              <h3 className="font-label-md text-label-md text-primary uppercase tracking-widest">Privacidade (LGPD)</h3>
+            </div>
+            
+            <div className="bg-surface-container-lowest rounded-xl p-md shadow-[0px_4px_20px_rgba(0,0,0,0.04)] space-y-md">
+              <button 
+                type="button"
+                onClick={async () => {
+                  try {
+                    const data = await api.clients.exportData();
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Meus_Dados_OperaBeauty.json';
+                    a.click();
+                    showSuccess("Dados exportados com sucesso!");
+                  } catch (e) {
+                    showError("Erro ao exportar dados.");
+                  }
+                }}
+                className="w-full text-left flex items-center justify-between text-secondary hover:text-primary transition-colors py-2"
+              >
+                <span className="font-label-sm">Exportar meus dados (JSON)</span>
+                <span className="material-symbols-outlined text-[20px]">download</span>
+              </button>
+              
+              <button 
+                type="button"
+                onClick={async () => {
+                  if (await confirm("ATENÇÃO: Isso apagará permanentemente seu nome, telefone e email. Esta ação é IRREVERSÍVEL. Tem certeza?")) {
+                    try {
+                      await api.clients.anonymizeAccount();
+                      logout();
+                      navigate(`/${tenant_slug}/login`);
+                    } catch(e) {
+                      showError("Erro ao excluir conta.");
+                    }
+                  }
+                }}
+                className="w-full text-left flex items-center justify-between text-error hover:opacity-80 transition-opacity py-2 mt-2"
+              >
+                <span className="font-label-sm">Excluir minha conta</span>
+                <span className="material-symbols-outlined text-[20px]">delete_forever</span>
+              </button>
             </div>
           </section>
 
@@ -240,31 +317,12 @@ const PerfilCliente = () => {
 
         </form>
         )}
+        {/* Espaçador de segurança para a BottomNavBar móvel */}
+        <div className="h-24 md:hidden"></div>
       </main>
 
       {/* Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-3 pb-[env(safe-area-inset-bottom,20px)] bg-white shadow-[0px_-4px_20px_rgba(0,0,0,0.04)] rounded-t-xl transition-all duration-300 ease-in-out">
-        <button 
-          onClick={() => navigate(`/${tenant_slug}/home`)}
-          className="flex flex-col items-center justify-center text-secondary opacity-70 hover:opacity-100 hover:bg-surface-variant rounded-full px-4 py-1 transition-all duration-200"
-        >
-          <span className="material-symbols-outlined mb-1">spa</span>
-          <span className="font-label-sm text-label-sm">Início</span>
-        </button>
-        <button 
-          onClick={() => navigate(`/${tenant_slug}/historico`)}
-          className="flex flex-col items-center justify-center text-secondary opacity-70 hover:opacity-100 hover:bg-surface-variant rounded-full px-4 py-1 transition-all duration-200"
-        >
-          <span className="material-symbols-outlined mb-1">calendar_month</span>
-          <span className="font-label-sm text-label-sm">Agenda</span>
-        </button>
-        <button 
-          className="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 scale-95 transition-transform duration-200"
-        >
-          <span className="material-symbols-outlined filled mb-1" style={{ fontVariationSettings: "'FILL' 1" }}>person</span>
-          <span className="font-label-sm text-label-sm">Perfil</span>
-        </button>
-      </nav>
+      <ClienteBottomNavBar activeTab="perfil" tenantSlug={tenant_slug} />
       
     </div>
   );

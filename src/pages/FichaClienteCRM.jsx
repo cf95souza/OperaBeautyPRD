@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
+import { useNotification } from '../context/NotificationProvider';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const FichaClienteCRM = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { showError } = useNotification();
   const { tenant, session } = useTenant();
 
   const [client, setClient] = useState(null);
@@ -25,20 +27,15 @@ const FichaClienteCRM = () => {
   const fetchClientData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch Client info + appointments
-      const { data: cData, error: cErr } = await supabase
-        .from('cap_clients')
-        .select(`
-          id, name, phone, birth_date, created_at,
-          cap_appointments (
-             id, start_time, status, total_price,
-             cap_services ( name )
-          )
-        `)
-        .eq('id', id)
-        .single();
+      // 1. Fetch Client info + appointments via API
+      const clientData = await api.clients.get(id);
+      const apptsData = await api.appointments.list({ client_id: id });
       
-      if (cErr) throw cErr;
+      const cData = {
+        ...clientData,
+        cap_appointments: apptsData
+      };
+
       setClient(cData);
 
       // 2. Calculate Stats
@@ -50,7 +47,7 @@ const FichaClienteCRM = () => {
         // Favorite Service
         const srvCounts = {};
         completed.forEach(a => {
-          const srvName = a.cap_services?.name || 'Serviço';
+          const srvName = a.service_name || 'Serviço';
           srvCounts[srvName] = (srvCounts[srvName] || 0) + 1;
         });
         let fav = '-';
@@ -73,18 +70,14 @@ const FichaClienteCRM = () => {
         });
       }
 
-      // 3. Fetch Timeline Notes
-      const { data: nData, error: nErr } = await supabase
-        .from('cap_timeline_notes')
-        .select(`
-          id, content, created_at,
-          cap_staff ( name )
-        `)
-        .eq('client_id', id)
-        .order('created_at', { ascending: false });
-
-      if (!nErr && nData) {
-        setNotes(nData);
+      // 3. Fetch Timeline Notes via API
+      try {
+        const nData = await api.clients.getTimeline(id);
+        if (nData) {
+          setNotes(nData);
+        }
+      } catch (nErr) {
+        console.error("Erro ao carregar notas:", nErr);
       }
 
     } catch (err) {
@@ -97,21 +90,12 @@ const FichaClienteCRM = () => {
     if (!newNote.trim()) return;
     setSavingNote(true);
     try {
-       const { error } = await supabase
-         .from('cap_timeline_notes')
-         .insert([{
-           tenant_id: tenant.id,
-           client_id: client.id,
-           content: newNote,
-           staff_id: session?.id || null
-         }]);
-       
-       if (error) throw error;
+       await api.clients.addTimelineNote(client.id, newNote);
        setNewNote('');
        fetchClientData(); // reload notes
     } catch (err) {
        console.error(err);
-       alert("Erro ao salvar anotação.");
+       showError("Erro ao salvar anotação.");
     }
     setSavingNote(false);
   };
@@ -124,13 +108,17 @@ const FichaClienteCRM = () => {
   return (
     <div className="flex flex-col gap-lg animate-fade-in-up w-full">
       
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-primary hover:bg-surface-variant rounded-full transition-all duration-200">
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
-          <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">Ficha do Cliente</h1>
+      {/* Header com botão de voltar */}
+      <div className="flex items-center gap-4 mb-xl">
+        <button 
+          onClick={() => navigate(-1)}
+          className="p-2 rounded-full hover:bg-surface-variant text-on-surface transition-colors flex items-center justify-center"
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+        </button>
+        <div>
+          <h1 className="font-headline-md text-headline-md text-primary">Ficha do Cliente</h1>
+          <p className="font-body-md text-body-md text-secondary">Detalhes e histórico do cliente</p>
         </div>
       </div>
 

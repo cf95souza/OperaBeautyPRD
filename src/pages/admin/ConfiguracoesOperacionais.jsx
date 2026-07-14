@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import { format, parseISO } from 'date-fns';
+import { useNotification } from '../../context/NotificationProvider';
 
 const DAYS_OF_WEEK = [
   { value: 0, label: 'Domingo' },
@@ -17,11 +18,18 @@ const DAYS_OF_WEEK = [
 const ConfiguracoesOperacionais = () => {
   const { tenant_slug } = useParams();
   const { tenant } = useTenant();
+  const { showSuccess, showError, confirm } = useNotification();
 
   const [businessHours, setBusinessHours] = useState([]);
   const [exceptions, setExceptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Novos estados para localização e redes sociais
+  const [address, setAddress] = useState('');
+  const [socialInstagram, setSocialInstagram] = useState('');
+  const [socialFacebook, setSocialFacebook] = useState('');
+  const [socialWhatsapp, setSocialWhatsapp] = useState('');
 
   // Modal Exception State
   const [showExceptionModal, setShowExceptionModal] = useState(false);
@@ -36,61 +44,49 @@ const ConfiguracoesOperacionais = () => {
   useEffect(() => {
     if (tenant?.id) {
       fetchData();
+      setAddress(tenant.address || '');
+      setSocialInstagram(tenant.social_instagram || '');
+      setSocialFacebook(tenant.social_facebook || '');
+      setSocialWhatsapp(tenant.social_whatsapp || '');
     }
   }, [tenant]);
 
   const fetchData = async () => {
     setLoading(true);
-    // Fetch Business Hours
-    const { data: hoursData } = await supabase
-      .from('cap_business_hours')
-      .select('*')
-      .eq('tenant_id', tenant.id);
+    try {
+      // Fetch Business Hours
+      const hoursData = await api.settings.getBusinessHours(tenant.id);
       
-    // Initialize defaults if missing
-    let loadedHours = [...(hoursData || [])];
-    const missingDays = DAYS_OF_WEEK.filter(d => !loadedHours.some(h => h.day_of_week === d.value));
-    
-    missingDays.forEach(d => {
-      loadedHours.push({
-        day_of_week: d.value,
-        open_time: '09:00',
-        close_time: '18:00',
-        is_closed: d.value === 0 // default sunday closed
+      // Initialize defaults if missing
+      let loadedHours = [...(hoursData || [])];
+      const missingDays = DAYS_OF_WEEK.filter(d => !loadedHours.some(h => h.day_of_week === d.value));
+      
+      missingDays.forEach(d => {
+        loadedHours.push({
+          day_of_week: d.value,
+          open_time: '09:00',
+          close_time: '18:00',
+          is_closed: d.value === 0 // default sunday closed
+        });
       });
-    });
 
-    loadedHours.sort((a, b) => a.day_of_week - b.day_of_week);
-    setBusinessHours(loadedHours);
+      loadedHours.sort((a, b) => a.day_of_week - b.day_of_week);
+      setBusinessHours(loadedHours);
 
-    // Fetch Exceptions
-    const { data: exceptionsData } = await supabase
-      .from('cap_date_exceptions')
-      .select('*')
-      .eq('tenant_id', tenant.id)
-      .order('exception_date', { ascending: true });
+      // Fetch Exceptions
+      const exceptionsData = await api.settings.getExceptions(tenant.id);
+      setExceptions(exceptionsData || []);
       
-    setExceptions(exceptionsData || []);
-    
-    // Fetch Coupons
-    const { data: couponsData } = await supabase
-      .from('cap_coupons')
-      .select('*, cap_services(name)')
-      .eq('tenant_id', tenant.id)
-      .order('created_at', { ascending: false });
-      
-    setCoupons(couponsData || []);
+      // Fetch Coupons
+      const couponsData = await api.coupons.list(tenant.id);
+      setCoupons(couponsData || []);
 
-    // Fetch Services for Coupon binding
-    const { data: servicesData } = await supabase
-      .from('cap_services')
-      .select('id, name')
-      .eq('tenant_id', tenant.id)
-      .eq('is_active', true)
-      .order('name');
-      
-    setServices(servicesData || []);
-    
+      // Fetch Services for Coupon binding
+      const servicesData = await api.services.list(tenant.id);
+      setServices((servicesData || []).filter(s => s.is_active));
+    } catch (err) {
+      console.error("Erro ao carregar dados operacionais:", err);
+    }
     setLoading(false);
   };
 
@@ -106,27 +102,29 @@ const ConfiguracoesOperacionais = () => {
   const handleSaveAll = async () => {
     setSaving(true);
     try {
-      // Upsert Business Hours
-      const toUpsert = businessHours.map(h => {
-        const { id, ...rest } = h; // remove local ID se for insercao (embora supabase entenda se existir)
-        return {
-          ...rest,
-          tenant_id: tenant.id
-        };
+      // 1. Salvar dados de endereço e redes sociais do Tenant
+      await api.tenants.updateBranding({
+        address,
+        social_instagram: socialInstagram,
+        social_facebook: socialFacebook,
+        social_whatsapp: socialWhatsapp
       });
-      await supabase.from('cap_business_hours').upsert(toUpsert, { onConflict: 'tenant_id,day_of_week' });
-      alert('Configurações salvas com sucesso!');
+
+      // 2. Upsert Business Hours
+      const cleanBusinessHours = businessHours.map(({ id, ...rest }) => rest);
+      await api.settings.updateBusinessHours(cleanBusinessHours);
+      showSuccess('Configurações salvas com sucesso!');
       fetchData();
     } catch (e) {
       console.error(e);
-      alert('Erro ao salvar as configurações.');
+      showError('Erro ao salvar as configurações.');
     }
     setSaving(false);
   };
 
   const handleAddException = async () => {
     if (!newException.date) {
-      alert("Por favor selecione a data."); return;
+      showError("Por favor selecione a data."); return;
     }
     
     const toInsert = {
@@ -138,27 +136,32 @@ const ConfiguracoesOperacionais = () => {
       reason: newException.reason
     };
 
-    const { error } = await supabase.from('cap_date_exceptions').insert([toInsert]);
-    if (error) {
-      console.error(error);
-      alert('Erro ao adicionar exceção: ' + error.message);
-    } else {
+    try {
+      await api.settings.addException(toInsert);
       setShowExceptionModal(false);
       setNewException({ date: '', is_closed: true, open_time: '09:00', close_time: '18:00', reason: '' });
       fetchData(); // refresh
+    } catch (err) {
+      console.error(err);
+      showError('Erro ao adicionar exceção.');
     }
   };
 
   const handleDeleteException = async (id) => {
-    if(confirm('Deseja remover esta exceção?')) {
-      await supabase.from('cap_date_exceptions').delete().eq('id', id);
-      fetchData();
+    if (await confirm('Deseja remover esta exceção?')) {
+      try {
+        await api.settings.deleteException(id);
+        fetchData();
+      } catch (err) {
+        console.error(err);
+        showError('Erro ao remover exceção.');
+      }
     }
   };
 
   const handleAddCoupon = async () => {
     if (!newCoupon.code || !newCoupon.discount_value) {
-      alert("Preencha o código e o valor do desconto."); return;
+      showError("Preencha o código e o valor do desconto."); return;
     }
     
     const toInsert = {
@@ -171,21 +174,26 @@ const ConfiguracoesOperacionais = () => {
       service_id: newCoupon.service_id || null
     };
 
-    const { error } = await supabase.from('cap_coupons').insert([toInsert]);
-    if (error) {
-      console.error(error);
-      alert('Erro ao adicionar cupom: ' + error.message);
-    } else {
+    try {
+      await api.coupons.create(toInsert);
       setShowCouponModal(false);
       setNewCoupon({ code: '', discount_type: 'percentage', discount_value: 10, max_uses: '', expires_at: '', service_id: '' });
       fetchData(); // refresh
+    } catch (err) {
+      console.error(err);
+      showError('Erro ao adicionar cupom.');
     }
   };
 
   const handleDeleteCoupon = async (id) => {
-    if(confirm('Deseja inativar/remover este cupom?')) {
-      await supabase.from('cap_coupons').delete().eq('id', id);
-      fetchData();
+    if (await confirm('Deseja inativar/remover este cupom?')) {
+      try {
+        await api.coupons.delete(id);
+        fetchData();
+      } catch (err) {
+        console.error(err);
+        showError('Erro ao remover cupom.');
+      }
     }
   };
 
@@ -239,7 +247,9 @@ const ConfiguracoesOperacionais = () => {
                         onChange={(e) => handleHourChange(day.value, 'open_time', e.target.value)}
                         disabled={!isOpen}
                         className="bg-transparent border-b border-outline-variant focus:border-primary text-body-md font-body-md text-on-surface pb-1 outline-none w-24 text-center" 
-                        type="time" 
+                        type="text" 
+                        placeholder="09:00"
+                        maxLength={5}
                       />
                       <span className="text-secondary font-body-md text-body-md">às</span>
                       <input 
@@ -247,13 +257,75 @@ const ConfiguracoesOperacionais = () => {
                         onChange={(e) => handleHourChange(day.value, 'close_time', e.target.value)}
                         disabled={!isOpen}
                         className="bg-transparent border-b border-outline-variant focus:border-primary text-body-md font-body-md text-on-surface pb-1 outline-none w-24 text-center" 
-                        type="time" 
+                        type="text" 
+                        placeholder="18:00"
+                        maxLength={5}
                       />
                     </div>
                   </div>
                 )
               })}
               
+            </div>
+
+            {/* Seção Contato & Localização */}
+            <h2 className="font-headline-md text-headline-md text-on-surface mt-xl mb-md flex items-center gap-sm">
+              <span className="material-symbols-outlined text-primary">distance</span>
+              Contato & Localização
+            </h2>
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg flex flex-col gap-lg">
+              <p className="font-body-sm text-body-sm text-secondary -mt-sm">Essas informações alimentam os menus da tela de login do seu salão. Se deixadas em branco, os respectivos menus não aparecerão.</p>
+              
+              <div className="flex flex-col gap-sm">
+                <label className="font-label-md text-label-md text-on-surface">Endereço Comercial</label>
+                <textarea
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Ex: Av. Paulista, 1000 - Bela Vista, São Paulo - SP, 01310-100"
+                  className="w-full min-h-[80px] p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all resize-y"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-md text-label-md text-on-surface flex items-center gap-xs">
+                    <span className="material-symbols-outlined text-[18px] text-primary">link</span> Instagram
+                  </label>
+                  <input
+                    value={socialInstagram}
+                    onChange={(e) => setSocialInstagram(e.target.value)}
+                    placeholder="https://instagram.com/seu_perfil"
+                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                    type="url"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-md text-label-md text-on-surface flex items-center gap-xs">
+                    <span className="material-symbols-outlined text-[18px] text-primary">link</span> Facebook
+                  </label>
+                  <input
+                    value={socialFacebook}
+                    onChange={(e) => setSocialFacebook(e.target.value)}
+                    placeholder="https://facebook.com/sua_pagina"
+                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                    type="url"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-md text-label-md text-on-surface flex items-center gap-xs">
+                    <span className="material-symbols-outlined text-[18px] text-primary">link</span> WhatsApp
+                  </label>
+                  <input
+                    value={socialWhatsapp}
+                    onChange={(e) => setSocialWhatsapp(e.target.value)}
+                    placeholder="https://wa.me/5511999999999"
+                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                    type="url"
+                  />
+                </div>
+              </div>
             </div>
           </section>
           
@@ -306,7 +378,7 @@ const ConfiguracoesOperacionais = () => {
                         <p className="font-label-md text-label-md text-on-surface font-mono">{coupon.code}</p>
                         {coupon.service_id ? (
                           <span className="bg-tertiary-container text-on-tertiary-container text-[10px] px-2 py-0.5 rounded-full font-semibold truncate max-w-[120px]">
-                            {coupon.cap_services?.name || 'Serviço Específico'}
+                            {coupon.service_name || 'Serviço Específico'}
                           </span>
                         ) : (
                           <span className="bg-primary-container text-on-primary-container text-[10px] px-2 py-0.5 rounded-full font-semibold">Global</span>
@@ -390,19 +462,23 @@ const ConfiguracoesOperacionais = () => {
                   <div className="flex-1">
                     <label className="block text-sm font-bold text-slate-700 mb-1">Abertura</label>
                     <input 
-                      type="time" 
+                      type="text" 
                       value={newException.open_time}
                       onChange={(e) => setNewException({...newException, open_time: e.target.value})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all"
+                      placeholder="09:00"
+                      maxLength={5}
                     />
                   </div>
                   <div className="flex-1">
                     <label className="block text-sm font-bold text-slate-700 mb-1">Fechamento</label>
                     <input 
-                      type="time" 
+                      type="text" 
                       value={newException.close_time}
                       onChange={(e) => setNewException({...newException, close_time: e.target.value})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all"
+                      placeholder="18:00"
+                      maxLength={5}
                     />
                   </div>
                 </div>

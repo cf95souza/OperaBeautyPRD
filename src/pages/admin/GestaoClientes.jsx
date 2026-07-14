@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
+import { useNotification } from '../../context/NotificationProvider';
 
 const GestaoClientes = () => {
   const { tenant_slug } = useParams();
   const { tenant } = useTenant();
+  const { showSuccess, showError } = useNotification();
 
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,38 +29,11 @@ const GestaoClientes = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const { data, error } = await supabase
-        .from('cap_clients')
-        .select(`
-          id,
-          name,
-          phone,
-          birth_date,
-          created_at,
-          cap_appointments ( id, status, total_price )
-        `)
-        .eq('tenant_id', tenant.id)
-        .order('name');
-      
-      if (error) {
-        console.error("Supabase Error:", error);
-        setErrorMsg(error.message);
-      } else if (data) {
-        // Calculate visits and LTV (Lifetime Value) locally for the listing
-        const mappedData = data.map(client => {
-          const completedAppts = client.cap_appointments?.filter(a => a.status === 'completed') || [];
-          const ltv = completedAppts.reduce((sum, appt) => sum + Number(appt.total_price), 0);
-          return {
-             ...client,
-             visits: completedAppts.length,
-             ltv
-          };
-        });
-        setClients(mappedData);
-      }
+      const data = await api.clients.list(tenant.id);
+      setClients(data);
     } catch (err) {
       console.error(err);
-      setErrorMsg(err.message);
+      setErrorMsg(err.message || "Erro ao buscar clientes.");
     }
     setLoading(false);
   };
@@ -72,24 +47,18 @@ const GestaoClientes = () => {
   const handleResetPassword = async (e) => {
     e.preventDefault();
     if (!newPassword || newPassword.length < 4) {
-      alert("A senha precisa ter pelo menos 4 caracteres.");
+      showError("A senha precisa ter pelo menos 4 caracteres.");
       return;
     }
 
     setIsResetting(true);
     try {
-      const { error } = await supabase.rpc('cap_update_client_password', {
-        p_client_id: selectedClient.id,
-        p_tenant_id: tenant.id,
-        p_password: newPassword
-      });
-
-      if (error) throw error;
-      alert(`Senha de ${selectedClient.name} alterada com sucesso! Informe-a a nova senha.`);
+      await api.clients.updatePassword(selectedClient.id, newPassword);
+      showSuccess(`Senha de ${selectedClient.name} alterada com sucesso! Informe a nova senha.`);
       setShowPwdModal(false);
     } catch (err) {
       console.error(err);
-      alert("Erro ao redefinir a senha do cliente.");
+      showError("Erro ao redefinir a senha do cliente.");
     }
     setIsResetting(false);
   };
@@ -211,7 +180,7 @@ const GestaoClientes = () => {
                    <div className="grid grid-cols-2 gap-2 mb-4 bg-surface-container-low p-3 rounded-xl border border-outline-variant/50">
                       <div className="flex flex-col">
                          <span className="font-label-sm text-[10px] uppercase tracking-widest text-secondary mb-0.5">LTV (Gasto)</span>
-                         <span className="font-label-md text-primary font-bold">R$ {client.ltv.toFixed(2).replace('.', ',')}</span>
+                         <span className="font-label-md text-primary font-bold">R$ {Number(client.ltv || 0).toFixed(2).replace('.', ',')}</span>
                       </div>
                       <div className="flex flex-col">
                          <span className="font-label-sm text-[10px] uppercase tracking-widest text-secondary mb-0.5">Visitas</span>
