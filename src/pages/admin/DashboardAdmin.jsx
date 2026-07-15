@@ -69,10 +69,16 @@ const DashboardAdmin = () => {
         const todayDate = new Date();
         const limitDate = addDays(todayDate, 30);
         
+        const parseLocalBirthDate = (dateStr) => {
+          if (!dateStr) return null;
+          const [year, month, day] = String(dateStr).split('T')[0].split('-');
+          return new Date(year, month - 1, day);
+        };
+        
         const aniversariantesFiltrados = clientes.filter(cliente => {
           if (!cliente.birth_date) return false;
           // Ignora o ano de nascimento e ajusta para o ano atual para comparar
-          const dataNascimento = parseISO(cliente.birth_date);
+          const dataNascimento = parseLocalBirthDate(cliente.birth_date);
           let niverEsteAno = setYear(dataNascimento, todayDate.getFullYear());
           
           // Se o aniversário deste ano já passou, joga pro ano que vem
@@ -82,8 +88,8 @@ const DashboardAdmin = () => {
 
           return isWithinInterval(niverEsteAno, { start: todayDate, end: limitDate });
         }).sort((a, b) => {
-           const dA = setYear(parseISO(a.birth_date), todayDate.getFullYear());
-           const dB = setYear(parseISO(b.birth_date), todayDate.getFullYear());
+           const dA = setYear(parseLocalBirthDate(a.birth_date), todayDate.getFullYear());
+           const dB = setYear(parseLocalBirthDate(b.birth_date), todayDate.getFullYear());
            return dA - dB;
         });
 
@@ -290,7 +296,7 @@ const DashboardAdmin = () => {
                         </div>
                         <div className="text-right">
                           <span className="bg-white border border-outline-variant px-2 py-1 rounded-md text-xs font-bold text-primary">
-                            {format(parseISO(cli.birth_date), "dd/MMM", { locale: ptBR })}
+                            {format(new Date(String(cli.birth_date).split('T')[0].split('-')[0], String(cli.birth_date).split('T')[0].split('-')[1] - 1, String(cli.birth_date).split('T')[0].split('-')[2]), "dd/MMM", { locale: ptBR })}
                           </span>
                         </div>
                       </li>

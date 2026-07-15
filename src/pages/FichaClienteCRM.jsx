@@ -103,7 +103,13 @@ const FichaClienteCRM = () => {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span></div>;
   if (!client) return <div className="p-10 text-center">Cliente não encontrado.</div>;
 
-  const age = client.birth_date ? differenceInYears(new Date(), new Date(client.birth_date)) : null;
+  const parseLocalBirthDate = (dateStr) => {
+    if (!dateStr) return null;
+    const [year, month, day] = String(dateStr).split('T')[0].split('-');
+    return new Date(year, month - 1, day);
+  };
+  const localBirthDate = parseLocalBirthDate(client.birth_date);
+  const age = localBirthDate ? differenceInYears(new Date(), localBirthDate) : null;
 
   return (
     <div className="flex flex-col gap-lg animate-fade-in-up w-full">
@@ -151,7 +157,7 @@ const FichaClienteCRM = () => {
             
             <p className="font-body-sm text-body-sm text-secondary flex items-center gap-1 mb-4">
               <span className="material-symbols-outlined text-[16px]">cake</span> 
-              {client.birth_date ? `${format(new Date(client.birth_date), "dd 'de' MMM, yyyy", { locale: ptBR })} (${age} anos)` : 'Data de nasc. não informada'}
+              {localBirthDate ? `${format(localBirthDate, "dd 'de' MMM, yyyy", { locale: ptBR })} (${age} anos)` : 'Data de nasc. não informada'}
             </p>
             
             <div className="w-full grid grid-cols-2 gap-3 mt-2">

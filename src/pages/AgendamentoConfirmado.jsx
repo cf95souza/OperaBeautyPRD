@@ -176,7 +176,7 @@ const AgendamentoConfirmado = () => {
                     )}
                   </div>
                   <p className="font-sans text-[16px] font-semibold text-on-surface">
-                    {bookingData.professional?.name || 'Equipe Grace'}
+                    {bookingData.professional?.name || 'Equipe'}
                   </p>
                 </div>
               </div>

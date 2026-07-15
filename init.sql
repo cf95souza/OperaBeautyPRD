@@ -195,6 +195,8 @@ CREATE TABLE public.cap_appointments (
     status TEXT NOT NULL DEFAULT 'scheduled', -- scheduled, in-progress, completed, cancelled
     total_price NUMERIC NOT NULL,
     staff_commission_value NUMERIC DEFAULT 0, -- Calculado automaticamente ao concluir
+    commission_status TEXT DEFAULT 'pending', -- pending, paid
+    commission_paid_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -204,7 +206,9 @@ CREATE TABLE public.cap_timeline_notes (
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
     client_id UUID NOT NULL REFERENCES public.cap_clients(id),
     appointment_id UUID REFERENCES public.cap_appointments(id),
+    staff_id UUID REFERENCES public.cap_staff(id),
     content TEXT NOT NULL,
+    image_path TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

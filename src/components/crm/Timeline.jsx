@@ -74,7 +74,7 @@ const Timeline = ({ clientId }) => {
           useWebWorker: true
         };
         const compressedFile = await imageCompression(imageFile, options);
-        formData.append('image', compressedFile, compressedFile.name);
+        formData.append('image', compressedFile, imageFile.name);
       }
 
       await api.clients.addTimelineNote(clientId, formData);

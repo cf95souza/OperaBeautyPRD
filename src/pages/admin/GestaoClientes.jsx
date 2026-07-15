@@ -139,7 +139,7 @@ const GestaoClientes = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
             {filteredClients.map((client) => {
-              const age = client.birth_date ? new Date().getFullYear() - new Date(client.birth_date).getFullYear() : '?';
+              const age = client.birth_date ? new Date().getFullYear() - parseInt(String(client.birth_date).split('-')[0]) : '?';
               
               return (
                 <div key={client.id} className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-lg shadow-sm hover:shadow-md transition-shadow group relative">

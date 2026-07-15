@@ -49,7 +49,8 @@ const AgendamentoRevisao = () => {
         const staffData = await api.staff.list(tenant.id);
           
         if (staffData && staffData.length > 0) {
-          assignedStaffId = staffData[0].id;
+          const manager = staffData.find(s => s.role === 'manager');
+          assignedStaffId = manager ? manager.id : staffData[0].id;
         } else {
           throw new Error("Nenhum profissional cadastrado encontrado para este serviço.");
         }
