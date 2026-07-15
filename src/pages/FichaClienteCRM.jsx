@@ -90,7 +90,9 @@ const FichaClienteCRM = () => {
     if (!newNote.trim()) return;
     setSavingNote(true);
     try {
-       await api.clients.addTimelineNote(client.id, newNote);
+       const fd = new FormData();
+       fd.append('content', newNote);
+       await api.clients.addTimelineNote(client.id, fd);
        setNewNote('');
        fetchClientData(); // reload notes
     } catch (err) {
