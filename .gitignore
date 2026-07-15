@@ -3,7 +3,8 @@ dist
 dist-ssr
 *.local
 .env
-
+backend/.env
+REPO_URL.txt
 # Auditoria e Docs
 *.md
 !README.md

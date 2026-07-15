@@ -150,6 +150,7 @@ function App() {
             <Route path="login" element={<AcessoTelefone />} />
             <Route path="acesso-senha" element={<AcessoSenha />} />
             <Route path="cadastro" element={<CadastroCliente />} />
+            <Route path="staff" element={<Navigate to="staff/login" replace />} />
             <Route path="staff/login" element={<AcessoProfissional />} />
             <Route element={<StaffProtectedRoute />}>
               <Route element={<AdminLayout />}>
