@@ -278,8 +278,11 @@ export const api = {
         },
         body: formData,
         credentials: 'include'
-      }).then(res => {
-        if (!res.ok) throw new Error('Erro ao salvar nota com imagem');
+      }).then(async res => {
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Erro ao salvar nota na timeline.');
+        }
         return res.json();
       });
     },
