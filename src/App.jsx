@@ -85,6 +85,12 @@ const StaffProtectedRoute = ({ children }) => {
   return children || <Outlet />;
 };
 
+// --- Rota de Redirecionamento da Raiz Staff ---
+const StaffRootRedirect = () => {
+  const { tenant_slug } = useParams();
+  return <Navigate to={`/${tenant_slug}/staff/login`} replace />;
+};
+
 // --- Componente Principal ---
 import DashboardAdmin from './pages/admin/DashboardAdmin';
 import GestaoFinanceira from './pages/admin/GestaoFinanceira';
@@ -150,7 +156,7 @@ function App() {
             <Route path="login" element={<AcessoTelefone />} />
             <Route path="acesso-senha" element={<AcessoSenha />} />
             <Route path="cadastro" element={<CadastroCliente />} />
-            <Route path="staff" element={<Navigate to="staff/login" replace />} />
+            <Route path="staff" element={<StaffRootRedirect />} />
             <Route path="staff/login" element={<AcessoProfissional />} />
             <Route element={<StaffProtectedRoute />}>
               <Route element={<AdminLayout />}>

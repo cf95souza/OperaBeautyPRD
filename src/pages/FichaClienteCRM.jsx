@@ -17,6 +17,7 @@ const FichaClienteCRM = () => {
   const [stats, setStats] = useState({ visits: 0, ltv: 0, favoriteService: '-', nextAppt: null });
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
+  const [newImage, setNewImage] = useState(null);
   const [savingNote, setSavingNote] = useState(false);
 
   useEffect(() => {
@@ -87,13 +88,15 @@ const FichaClienteCRM = () => {
   };
 
   const handleAddNote = async () => {
-    if (!newNote.trim()) return;
+    if (!newNote.trim() && !newImage) return;
     setSavingNote(true);
     try {
        const fd = new FormData();
-       fd.append('content', newNote);
+       if (newNote.trim()) fd.append('content', newNote);
+       if (newImage) fd.append('image', newImage);
        await api.clients.addTimelineNote(client.id, fd);
        setNewNote('');
+       setNewImage(null);
        fetchClientData(); // reload notes
     } catch (err) {
        console.error(err);
@@ -219,10 +222,27 @@ const FichaClienteCRM = () => {
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
                   ></textarea>
-                  <div className="flex justify-end items-center mt-3">
+                  <div className="flex justify-between items-center mt-3">
+                    <div className="flex items-center gap-2">
+                      <label className="cursor-pointer bg-surface-container-high hover:bg-surface-variant text-on-surface p-2 rounded-lg flex items-center gap-2 transition-colors border border-outline-variant/50">
+                        <span className="material-symbols-outlined text-[20px]">image</span>
+                        <span className="text-sm">{newImage ? newImage.name : 'Anexar Imagem'}</span>
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          className="hidden" 
+                          onChange={(e) => setNewImage(e.target.files[0])}
+                        />
+                      </label>
+                      {newImage && (
+                        <button onClick={() => setNewImage(null)} className="text-error hover:text-error-container p-1 flex items-center justify-center">
+                           <span className="material-symbols-outlined text-[18px]">close</span>
+                        </button>
+                      )}
+                    </div>
                     <button 
                       onClick={handleAddNote}
-                      disabled={savingNote || !newNote.trim()}
+                      disabled={savingNote || (!newNote.trim() && !newImage)}
                       className="bg-primary text-on-primary font-label-md text-label-md px-5 py-2 rounded-xl hover:bg-on-primary-container transition-colors disabled:opacity-50 shadow-sm"
                     >
                       {savingNote ? 'Salvando...' : 'Salvar Observação'}
@@ -257,6 +277,11 @@ const FichaClienteCRM = () => {
                       <p className="font-body-md text-body-md text-on-surface-variant whitespace-pre-wrap">
                         {note.content}
                       </p>
+                      {note.image_path && (
+                        <div className="mt-3 rounded-lg overflow-hidden border border-outline-variant/30">
+                          <img src={`http://localhost:5000${note.image_path}`} alt="Anexo da nota" className="max-w-full h-auto max-h-64 object-contain" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
