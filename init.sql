@@ -435,8 +435,13 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 INSERT INTO public.cap_platform_admins (email, password_hash, name)
 VALUES (
     'cf95.souza@gmail.com',
-    crypt('mudar_senha_mestre_123', gen_salt('bf')),
+    crypt('Mudar_senha_mestre_123', gen_salt('bf')),
     'Super Admin'
+),
+(
+    'thais98sn@gmail.com',
+    crypt('Thais_Mestre@2026', gen_salt('bf')),
+    'Thais Admin'
 )
 ON CONFLICT (email) DO NOTHING;
 
