@@ -1,8 +1,12 @@
-# Caddy Web Server
+# Stage 1: Build the React frontend
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# Stage 2: Serve with Caddy
 FROM caddy:2-alpine
-
-# Copia os arquivos pré-compilados localmente para a pasta que o Caddy serve
-COPY dist /srv/dist
-
-# Copia o arquivo de configuração do Caddy
+COPY --from=builder /app/dist /srv/dist
 COPY Caddyfile /etc/caddy/Caddyfile
