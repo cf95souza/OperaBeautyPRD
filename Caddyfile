@@ -1,6 +1,12 @@
 # Caddyfile para o OperaBeauty
 
 {$DOMAIN:localhost} {
+    tls cf95.souza@gmail.com {
+        issuer acme {
+            dir https://api.buypass.com/acme/directory
+        }
+    }
+
     # Compressão gzip/zstd para otimizar tráfego
     encode zstd gzip
 
