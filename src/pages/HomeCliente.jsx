@@ -96,7 +96,7 @@ const HomeCliente = () => {
     const fetchLookbooks = async () => {
       setLoadingLookbooks(true);
       try {
-        const data = await api.request('/lookbook', { params: { tenant_id: tenant.id } });
+        const data = await api.lookbook.list(tenant.id);
         setLookbooks(data || []);
       } catch (err) {
         console.error("Erro ao carregar lookbooks:", err);

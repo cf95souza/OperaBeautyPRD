@@ -85,6 +85,9 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  // Base HTTP Request (Exposto para chamadas flexíveis)
+  request,
+
   // Autenticação
   auth: {
     async loginStaff(tenantSlug, email, password) {
@@ -621,6 +624,24 @@ export const api = {
       return request('/superadmin/feature-flags/tenants', {
         method: 'POST',
         body: JSON.stringify(payload),
+      });
+    }
+  },
+
+  // Lookbook
+  lookbook: {
+    async list(tenantId) {
+      return request(`/lookbook?tenant_id=${tenantId}`);
+    },
+    async create(payload) {
+      return request('/lookbook', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+    async delete(id) {
+      return request(`/lookbook/${id}`, {
+        method: 'DELETE'
       });
     }
   },

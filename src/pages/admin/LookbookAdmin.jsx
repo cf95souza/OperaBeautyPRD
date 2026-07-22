@@ -30,7 +30,7 @@ const LookbookAdmin = () => {
     setLoading(true);
     try {
       const [lookData, servData, staffData] = await Promise.all([
-        api.request('/lookbook', { params: { tenant_id: tenant.id } }),
+        api.lookbook.list(tenant.id),
         api.services.list(tenant.id),
         api.staff.list(tenant.id)
       ]);
@@ -48,7 +48,7 @@ const LookbookAdmin = () => {
   const handleDelete = async (id) => {
     if (await confirm("Tem certeza que deseja remover esta foto do lookbook?")) {
       try {
-        await api.request(`/lookbook/${id}`, { method: 'DELETE' });
+        await api.lookbook.delete(id);
         showSuccess("Removido com sucesso!");
         fetchData();
       } catch (err) {
@@ -64,15 +64,13 @@ const LookbookAdmin = () => {
     }
 
     try {
-      await api.request('/lookbook', {
-        method: 'POST',
-        body: JSON.stringify({
-          image_url: formData.image_url,
-          title: formData.title,
-          description: formData.description,
-          service_id: formData.service_id || null,
-          staff_id: formData.staff_id || null
-        })
+      await api.lookbook.create({
+        tenant_id: tenant.id,
+        image_url: formData.image_url,
+        title: formData.title,
+        description: formData.description,
+        service_id: formData.service_id || null,
+        staff_id: formData.staff_id || null
       });
       showSuccess("Adicionado com sucesso!");
       setShowModal(false);
