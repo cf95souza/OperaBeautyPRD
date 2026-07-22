@@ -64,6 +64,7 @@ const registerClientSchema = z.object({
     phone: z.string().min(10, 'Telefone inválido.'),
     password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres.').regex(/[a-zA-Z]/, 'Precisa ter 1 letra.').regex(/[0-9]/, 'Precisa ter 1 número.'),
     birth_date: z.string().optional().nullable(),
+    ref: z.string().optional().nullable(),
   }),
   query: z.any(), params: z.any()
 });
@@ -129,7 +130,7 @@ router.post('/check-client', loginLimiter, validate(checkClientSchema), async (r
   const { tenant_id, phone } = req.body;
   try {
     const result = await checkClientExists(tenant_id, phone);
-    return res.json(result);
+    return res.json({ action: result.exists ? 'login' : 'register' });
   } catch (error) {
     req.log.error(error, 'Erro ao checar cliente');
     return res.status(500).json({ error: 'Erro interno.' });
@@ -137,9 +138,9 @@ router.post('/check-client', loginLimiter, validate(checkClientSchema), async (r
 });
 
 router.post('/register-client', validate(registerClientSchema), async (req, res) => {
-  const { tenant_id, name, phone, password, birth_date } = req.body;
+  const { tenant_id, name, phone, password, birth_date, ref } = req.body;
   try {
-    const clientId = await registerClient(tenant_id, name, phone, password, birth_date);
+    const clientId = await registerClient(tenant_id, name, phone, password, birth_date, ref);
     const payload = { id: clientId, name: name, tenant_id: tenant_id, role: 'client', phone: phone };
     const authData = await generateAuthData(payload, req.ip, req.headers['user-agent']);
     

@@ -1,10 +1,22 @@
 import pool from '../config/db.js';
+import redisClient from '../config/redis.js';
 
 export const getBusinessHours = async (tenantId) => {
+  const cacheKey = `tenant:${tenantId}:business_hours`;
+  const cachedData = await redisClient.get(cacheKey);
+
+  if (cachedData) {
+    return JSON.parse(cachedData);
+  }
+
   const result = await pool.query(
     'SELECT id, day_of_week, open_time, close_time, is_closed FROM public.cap_business_hours WHERE tenant_id = $1 ORDER BY day_of_week',
     [tenantId]
   );
+  
+  // TTL de 30 minutos (1800 segundos) para dados do horário comercial
+  await redisClient.setex(cacheKey, 1800, JSON.stringify(result.rows));
+  
   return result.rows;
 };
 
@@ -29,6 +41,9 @@ export const updateBusinessHours = async (tenantId, hours) => {
     }
 
     await client.query('COMMIT');
+    
+    // Invalidar cache
+    await redisClient.del(`tenant:${tenantId}:business_hours`);
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

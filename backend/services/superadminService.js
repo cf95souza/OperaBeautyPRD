@@ -10,6 +10,7 @@ export const getDashboardMetrics = async () => {
   
   const invoicesPaid = await pool.query("SELECT SUM(amount) as paid FROM public.cap_invoices WHERE status = 'paid'");
   const invoicesPending = await pool.query("SELECT SUM(amount) as pending FROM public.cap_invoices WHERE status = 'pending'");
+  const mrrQuery = await pool.query("SELECT SUM(plan_price) as mrr FROM public.cap_tenants WHERE status = 'active'");
 
   return {
     total_tenants: parseInt(tenantsCount.rows[0].count),
@@ -18,8 +19,23 @@ export const getDashboardMetrics = async () => {
     total_clients: parseInt(totalClientsCount.rows[0].count),
     unique_clients: parseInt(uniqueClientsCount.rows[0].count),
     earnings_paid: parseFloat(invoicesPaid.rows[0].paid || '0'),
-    earnings_pending: parseFloat(invoicesPending.rows[0].pending || '0')
+    earnings_pending: parseFloat(invoicesPending.rows[0].pending || '0'),
+    mrr: parseFloat(mrrQuery.rows[0].mrr || '0')
   };
+};
+
+export const getOverdueTenants = async () => {
+  const result = await pool.query(`
+    SELECT t.id, t.name, t.slug, t.status, t.primary_color, 
+           SUM(i.amount) as overdue_amount, 
+           COUNT(i.id) as overdue_invoices
+    FROM public.cap_tenants t
+    JOIN public.cap_invoices i ON t.id = i.tenant_id
+    WHERE i.status = 'overdue' OR (i.status = 'pending' AND i.due_date < CURRENT_DATE)
+    GROUP BY t.id, t.name, t.slug, t.status, t.primary_color
+    ORDER BY overdue_amount DESC
+  `);
+  return result.rows;
 };
 
 export const listTenantsWithStats = async () => {
@@ -170,4 +186,125 @@ export const savePlatformSettings = async (payment_gateway, gateway_api_key, gat
     settings.gateway_api_key = '****' + settings.gateway_api_key.slice(-4);
   }
   return settings;
+};
+
+export const listPlatformAdmins = async () => {
+  const result = await pool.query('SELECT id, name, email, created_at FROM public.cap_platform_admins ORDER BY created_at DESC');
+  return result.rows;
+};
+
+export const createPlatformAdmin = async (name, email, password) => {
+  const existCheck = await pool.query('SELECT id FROM public.cap_platform_admins WHERE email = $1', [email]);
+  if (existCheck.rows.length > 0) {
+    const error = new Error('Já existe um administrador com este e-mail.');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const result = await pool.query(
+    `INSERT INTO public.cap_platform_admins (name, email, password_hash) 
+     VALUES ($1, $2, crypt($3, gen_salt('bf'))) 
+     RETURNING id, name, email, created_at`,
+    [name, email, password]
+  );
+  return result.rows[0];
+};
+
+export const updatePlatformAdmin = async (id, name, email, password) => {
+  let result;
+  if (password) {
+    result = await pool.query(
+      `UPDATE public.cap_platform_admins 
+       SET name = $1, email = $2, password_hash = crypt($3, gen_salt('bf'))
+       WHERE id = $4 RETURNING id, name, email, created_at`,
+      [name, email, password, id]
+    );
+  } else {
+    result = await pool.query(
+      `UPDATE public.cap_platform_admins 
+       SET name = $1, email = $2
+       WHERE id = $3 RETURNING id, name, email, created_at`,
+      [name, email, id]
+    );
+  }
+
+  if (result.rows.length === 0) {
+    const error = new Error('Administrador não encontrado.');
+    error.statusCode = 404;
+    throw error;
+  }
+  return result.rows[0];
+};
+
+export const deletePlatformAdmin = async (id) => {
+  const countCheck = await pool.query('SELECT COUNT(*) FROM public.cap_platform_admins');
+  if (parseInt(countCheck.rows[0].count) <= 1) {
+    const error = new Error('Não é possível excluir o único administrador da plataforma.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const result = await pool.query('DELETE FROM public.cap_platform_admins WHERE id = $1 RETURNING id', [id]);
+  
+  if (result.rows.length === 0) {
+    const error = new Error('Administrador não encontrado.');
+    error.statusCode = 404;
+    throw error;
+  }
+  
+  return { success: true };
+};
+
+// ==========================================
+// AVISOS DA PLATAFORMA (BROADCAST SYSTEM)
+// ==========================================
+
+export const listAnnouncements = async () => {
+  const result = await pool.query('SELECT id, title, content, type, is_active, expires_at, created_at FROM public.cap_platform_announcements ORDER BY created_at DESC');
+  return result.rows;
+};
+
+export const createAnnouncement = async (title, content, type, is_active, expires_at) => {
+  const result = await pool.query(
+    `INSERT INTO public.cap_platform_announcements (title, content, type, is_active, expires_at)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id, title, content, type, is_active, expires_at, created_at`,
+    [title, content, type, is_active, expires_at || null]
+  );
+  return result.rows[0];
+};
+
+export const updateAnnouncement = async (id, title, content, type, is_active, expires_at) => {
+  const result = await pool.query(
+    `UPDATE public.cap_platform_announcements 
+     SET title = $1, content = $2, type = $3, is_active = $4, expires_at = $5
+     WHERE id = $6 RETURNING id, title, content, type, is_active, expires_at, created_at`,
+    [title, content, type, is_active, expires_at || null, id]
+  );
+  
+  if (result.rows.length === 0) {
+    const error = new Error('Aviso não encontrado.');
+    error.statusCode = 404;
+    throw error;
+  }
+  return result.rows[0];
+};
+
+export const deleteAnnouncement = async (id) => {
+  const result = await pool.query('DELETE FROM public.cap_platform_announcements WHERE id = $1 RETURNING id', [id]);
+  if (result.rows.length === 0) {
+    const error = new Error('Aviso não encontrado.');
+    error.statusCode = 404;
+    throw error;
+  }
+  return { success: true };
+};
+
+export const getActiveAnnouncements = async () => {
+  const result = await pool.query(
+    `SELECT id, title, content, type, is_active, expires_at, created_at FROM public.cap_platform_announcements 
+     WHERE is_active = true 
+       AND (expires_at IS NULL OR expires_at > NOW())
+     ORDER BY created_at DESC`
+  );
+  return result.rows;
 };

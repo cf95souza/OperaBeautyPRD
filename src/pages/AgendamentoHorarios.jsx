@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useBooking } from '../context/BookingContext';
 import { api } from '../lib/api';
+import WaitlistModal from '../components/WaitlistModal';
 import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
 
 const AgendamentoHorarios = () => {
@@ -20,6 +21,7 @@ const AgendamentoHorarios = () => {
   const [isClosed, setIsClosed] = useState(false);
   const [bookedTimes, setBookedTimes] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(true);
+  const [showWaitlist, setShowWaitlist] = useState(false);
 
   useEffect(() => {
     if (!tenant) return;
@@ -194,7 +196,7 @@ const AgendamentoHorarios = () => {
               onChange={(e) => {
                 setSelectedDate(e.target.value);
                 setSelectedTime(null);
-                updateBooking('time', null);
+                updateBooking({ date: e.target.value, time: null });
               }}
               min={today}
               className="w-full text-center font-headline-md text-primary bg-transparent outline-none cursor-pointer"
@@ -253,6 +255,24 @@ const AgendamentoHorarios = () => {
                   </div>
                 </div>
               )}
+
+              {morningSlots.length === 0 && afternoonSlots.length === 0 && eveningSlots.length === 0 && (
+                <div className="py-[40px] flex flex-col items-center justify-center text-center gap-[16px] bg-surface-container-low rounded-2xl border border-outline-variant/30">
+                  <span className="material-symbols-outlined text-[48px] text-secondary/50">event_busy</span>
+                  <div>
+                    <h3 className="font-serif text-[20px] font-semibold text-on-surface mb-[4px]">Poxa, tudo lotado!</h3>
+                    <p className="font-sans text-[14px] text-secondary mb-4">Não temos mais horários disponíveis para este dia.</p>
+                    {tenant?.features?.waitlist && (
+                      <button 
+                        onClick={() => setShowWaitlist(true)}
+                        className="bg-primary-container text-on-primary-container px-6 py-2 rounded-xl font-bold hover:shadow-md transition-all active:scale-95 text-sm"
+                      >
+                        Entrar na Lista de Espera
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </section>
@@ -274,6 +294,16 @@ const AgendamentoHorarios = () => {
             <span className="material-symbols-outlined">arrow_forward</span>
           </button>
         </div>
+      )}
+
+      {showWaitlist && (
+        <WaitlistModal
+          tenantSlug={tenant_slug}
+          desiredDate={selectedDate}
+          serviceId={bookingData.service?.id}
+          professionalId={bookingData.professional?.id}
+          onClose={() => setShowWaitlist(false)}
+        />
       )}
 
       {/* BottomNavBar (Mobile Only) */}

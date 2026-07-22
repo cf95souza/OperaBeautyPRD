@@ -17,6 +17,7 @@ const DashboardAdmin = () => {
   const [estoqueBaixo, setEstoqueBaixo] = useState([]);
   const [aniversariantes, setAniversariantes] = useState([]);
   const [retornos, setRetornos] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
 
   useEffect(() => {
     if (tenant?.id) {
@@ -32,6 +33,14 @@ const DashboardAdmin = () => {
       const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999).toISOString();
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
       const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+
+      // Avisos da Plataforma
+      try {
+        const platformAnnouncements = await api.platform.getActiveAnnouncements();
+        setAnnouncements(platformAnnouncements || []);
+      } catch (err) {
+        console.error('Erro ao buscar avisos da plataforma:', err);
+      }
 
       // 1. Agenda e Faturamento de Hoje
       const apptHoje = await api.appointments.list({
@@ -165,6 +174,41 @@ const DashboardAdmin = () => {
               </button>
             </div>
           </div>
+
+          {/* Avisos da Plataforma (Broadcast) */}
+          {announcements.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {announcements.map(aviso => {
+                let bgClass = "bg-blue-100 text-blue-900 border-blue-200";
+                let iconClass = "text-blue-600";
+                let iconName = "info";
+                
+                if (aviso.type === 'warning') {
+                  bgClass = "bg-yellow-100 text-yellow-900 border-yellow-300";
+                  iconClass = "text-yellow-700";
+                  iconName = "warning";
+                } else if (aviso.type === 'success') {
+                  bgClass = "bg-green-100 text-green-900 border-green-300";
+                  iconClass = "text-green-700";
+                  iconName = "check_circle";
+                } else if (aviso.type === 'error') {
+                  bgClass = "bg-red-100 text-red-900 border-red-300";
+                  iconClass = "text-red-700";
+                  iconName = "error";
+                }
+
+                return (
+                  <div key={aviso.id} className={`flex items-start gap-4 p-4 rounded-xl border shadow-sm ${bgClass}`}>
+                    <span className={`material-symbols-outlined mt-0.5 ${iconClass}`}>{iconName}</span>
+                    <div className="flex-1">
+                      <h4 className="font-title-md font-semibold">{aviso.title}</h4>
+                      <p className="font-body-sm mt-1 whitespace-pre-wrap opacity-90">{aviso.content}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Bento Grid Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-md">

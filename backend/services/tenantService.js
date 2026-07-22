@@ -1,11 +1,22 @@
 import pool from '../config/db.js';
+import { getActiveFlagsForTenant } from './featureFlagService.js';
+import redisClient from '../config/redis.js';
 
 export const getTenantBySlug = async (slug) => {
+  const cacheKey = `tenant_slug:${slug}`;
+  const cachedData = await redisClient.get(cacheKey);
+
+  if (cachedData) {
+    return JSON.parse(cachedData);
+  }
+
   const result = await pool.query(
     `SELECT t.id, t.slug, t.name, t.status, t.plan_price, t.logo_url, t.primary_color, t.secondary_color, t.tertiary_color, 
             t.banner_url, t.banner_title, t.banner_subtitle, t.banners, t.welcome_message, t.created_at, t.plan_id,
             t.address, t.social_instagram, t.social_facebook, t.social_whatsapp,
-            p.max_banners, p.max_professionals
+            t.cashback_percentage, t.cashback_expiration_days,
+            t.waiting_menu_enabled, t.waiting_menu_items,
+            p.max_banners, p.max_professionals, p.features as plan_features
      FROM public.cap_tenants t
      LEFT JOIN public.cap_plans p ON p.id = t.plan_id
      WHERE t.slug = $1`,
@@ -26,6 +37,26 @@ export const getTenantBySlug = async (slug) => {
     throw error;
   }
 
+  // Obter as flags ativas para este Tenant
+  const dbFlags = await getActiveFlagsForTenant(tenant.id);
+  const planFeatures = tenant.plan_features || [];
+  
+  tenant.features = { ...dbFlags };
+  planFeatures.forEach(feat => {
+    tenant.features[feat] = true;
+  });
+
+  // Obter média de avaliações do Tenant
+  const ratingResult = await pool.query(
+    `SELECT ROUND(AVG(rating), 1) as average, COUNT(id) as total_reviews FROM public.cap_reviews WHERE tenant_id = $1`,
+    [tenant.id]
+  );
+  tenant.rating = parseFloat(ratingResult.rows[0].average || 0);
+  tenant.total_reviews = parseInt(ratingResult.rows[0].total_reviews || 0, 10);
+
+  // TTL de 30 minutos (1800 segundos) para os dados públicos do salão
+  await redisClient.setex(cacheKey, 1800, JSON.stringify(tenant));
+
   return tenant;
 };
 
@@ -41,7 +72,11 @@ export const updateBranding = async (
   address,
   social_instagram,
   social_facebook,
-  social_whatsapp
+  social_whatsapp,
+  cashback_percentage,
+  cashback_expiration_days,
+  waiting_menu_enabled,
+  waiting_menu_items
 ) => {
   const planCheck = await pool.query(
     `SELECT p.max_banners 
@@ -80,9 +115,13 @@ export const updateBranding = async (
          address = $11,
          social_instagram = $12,
          social_facebook = $13,
-         social_whatsapp = $14
-     WHERE id = $15
-     RETURNING id, slug, name, status, plan_price, plan_id, logo_url, primary_color, secondary_color, tertiary_color, banners, banner_url, banner_title, banner_subtitle, welcome_message, address, social_instagram, social_facebook, social_whatsapp, created_at`,
+         social_whatsapp = $14,
+         cashback_percentage = COALESCE($15, cashback_percentage),
+         cashback_expiration_days = COALESCE($16, cashback_expiration_days),
+         waiting_menu_enabled = COALESCE($17, waiting_menu_enabled),
+         waiting_menu_items = COALESCE($18, waiting_menu_items)
+     WHERE id = $19
+     RETURNING id, slug, name, status, plan_price, plan_id, logo_url, primary_color, secondary_color, tertiary_color, banners, banner_url, banner_title, banner_subtitle, welcome_message, address, social_instagram, social_facebook, social_whatsapp, cashback_percentage, cashback_expiration_days, waiting_menu_enabled, waiting_menu_items, created_at`,
     [
       name, 
       primary_color, 
@@ -98,6 +137,10 @@ export const updateBranding = async (
       social_instagram,
       social_facebook,
       social_whatsapp,
+      cashback_percentage !== undefined ? parseFloat(cashback_percentage) : null,
+      cashback_expiration_days !== undefined ? parseInt(cashback_expiration_days) : null,
+      waiting_menu_enabled !== undefined ? waiting_menu_enabled : null,
+      waiting_menu_items ? JSON.stringify(waiting_menu_items) : null,
       tenant_id
     ]
   );
@@ -107,6 +150,9 @@ export const updateBranding = async (
     error.statusCode = 404;
     throw error;
   }
+  
+  // Invalidar cache
+  await redisClient.del(`tenant_slug:${result.rows[0].slug}`);
 
   return result.rows[0];
 };

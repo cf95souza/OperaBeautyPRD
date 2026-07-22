@@ -12,9 +12,8 @@ dotenv.config();
 
 const router = express.Router();
 
-// Apenas profissionais e gerentes recebem notificações do salão atualmente
+// Autenticação necessária, mas sem restrição de role (tanto cliente quanto staff podem ter push)
 router.use(authMiddleware);
-router.use(requireRole(['professional', 'manager']));
 
 // Obter a chave pública para o frontend
 router.get('/vapid-public-key', (req, res) => {
@@ -25,14 +24,20 @@ router.get('/vapid-public-key', (req, res) => {
 router.post('/subscribe', async (req, res) => {
   const { subscription } = req.body;
   const tenantId = req.user.tenant_id;
-  const staffId = req.user.id;
+  const userId = req.user.id;
+  const isClient = req.user.role === 'client';
 
   if (!subscription) {
     return res.status(400).json({ error: 'Assinatura inválida.' });
   }
 
   try {
-    await subscribeToPush(tenantId, staffId, subscription);
+    if (isClient) {
+      const { subscribeClientToPush } = await import('../services/notificationService.js');
+      await subscribeClientToPush(tenantId, userId, subscription);
+    } else {
+      await subscribeToPush(tenantId, userId, subscription);
+    }
     return res.status(201).json({ message: 'Inscrito com sucesso.' });
   } catch (err) {
     req.log.error(err, 'Erro ao salvar assinatura push');
@@ -43,7 +48,8 @@ router.post('/subscribe', async (req, res) => {
 // Listar histórico de notificações in-app
 router.get('/', async (req, res) => {
   try {
-    const notifications = await getMyNotifications(req.user.tenant_id, req.user.id);
+    const isClient = req.user.role === 'client';
+    const notifications = await getMyNotifications(req.user.tenant_id, req.user.id, isClient);
     return res.json(notifications);
   } catch (err) {
     req.log.error(err, 'Erro ao buscar notificações');
@@ -54,7 +60,8 @@ router.get('/', async (req, res) => {
 // Marcar notificação como lida
 router.put('/:id/read', async (req, res) => {
   try {
-    await markNotificationAsRead(req.user.tenant_id, req.user.id, req.params.id);
+    const isClient = req.user.role === 'client';
+    await markNotificationAsRead(req.user.tenant_id, req.user.id, isClient, req.params.id);
     return res.json({ message: 'Marcada como lida.' });
   } catch (err) {
     req.log.error(err, 'Erro ao marcar notificação como lida');
@@ -65,7 +72,8 @@ router.put('/:id/read', async (req, res) => {
 // Limpar todas as notificações lidas
 router.delete('/read', async (req, res) => {
   try {
-    await clearReadNotifications(req.user.tenant_id, req.user.id);
+    const isClient = req.user.role === 'client';
+    await clearReadNotifications(req.user.tenant_id, req.user.id, isClient);
     return res.json({ message: 'Notificações lidas removidas com sucesso.' });
   } catch (err) {
     req.log.error(err, 'Erro ao limpar notificações lidas');

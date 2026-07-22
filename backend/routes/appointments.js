@@ -34,7 +34,9 @@ const createAppointmentSchema = z.object({
     staff_id: z.string().uuid('ID do funcionário inválido.'),
     service_id: z.string().uuid('ID do serviço inválido.'),
     start_time: z.string().datetime({ message: 'Data/hora de início inválida.' }),
-    total_price: z.number().min(0, 'Preço total inválido.')
+    total_price: z.number().min(0, 'Preço total inválido.'),
+    client_membership_id: z.string().uuid('ID do plano inválido.').nullable().optional(),
+    cashback_redeemed: z.coerce.number().min(0, 'Valor de cashback inválido.').optional()
   }),
   params: z.any(), query: z.any()
 });
@@ -44,8 +46,11 @@ const updateAppointmentSchema = z.object({
     staff_id: z.string().uuid('ID do funcionário inválido.').optional(),
     service_id: z.string().uuid('ID do serviço inválido.').optional(),
     start_time: z.string().datetime({ message: 'Data/hora de início inválida.' }).optional(),
-    status: z.enum(['scheduled', 'in-progress', 'completed', 'cancelled', 'no_show']).optional(),
-    total_price: z.number().min(0, 'Preço total inválido.').optional()
+    total_price: z.number().min(0, 'Preço total inválido.').optional(),
+    client_membership_id: z.string().uuid('ID do plano inválido.').nullable().optional(),
+    cashback_redeemed: z.coerce.number().min(0, 'Valor de cashback inválido.').optional(),
+    checkin_status: z.enum(['pending', 'checked_in']).optional(),
+    checkin_request: z.string().optional()
   }),
   params: z.object({
     id: z.string().uuid('ID de agendamento inválido.')
@@ -113,7 +118,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
 // Criar Agendamento
 router.post('/', authMiddleware, validate(createAppointmentSchema), async (req, res) => {
-  const { client_id, staff_id, service_id, start_time, total_price } = req.body;
+  const { client_id, staff_id, service_id, start_time, total_price, client_membership_id, cashback_redeemed } = req.body;
   const tenantId = req.user.tenant_id;
   const userId = req.user.id;
   const userRole = req.user.role;
@@ -134,7 +139,7 @@ router.post('/', authMiddleware, validate(createAppointmentSchema), async (req, 
 
   try {
     const appointment = await createAppointment({
-      finalClientId, staff_id, service_id, start_time, total_price, tenantId
+      finalClientId, staff_id, service_id, start_time, total_price, tenantId, client_membership_id, cashback_redeemed
     });
     return res.status(201).json(appointment);
   } catch (error) {
@@ -149,14 +154,14 @@ router.post('/', authMiddleware, validate(createAppointmentSchema), async (req, 
 // Atualizar Agendamento
 router.put('/:id', authMiddleware, validate(updateAppointmentSchema), async (req, res) => {
   const { id } = req.params;
-  const { staff_id, service_id, start_time, status, total_price } = req.body;
+  const { staff_id, service_id, start_time, status, total_price, client_membership_id, cashback_redeemed, checkin_status, checkin_request } = req.body;
   const tenantId = req.user.tenant_id;
   const userRole = req.user.role;
   const userId = req.user.id;
 
   try {
     const updatedAppointment = await updateAppointment({
-      id, tenantId, userRole, userId, staff_id, service_id, start_time, status, total_price
+      id, tenantId, userRole, userId, staff_id, service_id, start_time, status, total_price, client_membership_id, cashback_redeemed, checkin_status, checkin_request
     });
     return res.json(updatedAppointment);
   } catch (error) {

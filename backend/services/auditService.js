@@ -50,3 +50,18 @@ export const logAudit = async ({
     if (req?.log) req.log.error(error, 'Erro não tratado no auditService');
   }
 };
+
+/**
+ * Retorna os logs de auditoria do Super Admin
+ */
+export const getSuperAdminLogs = async (limit = 100) => {
+  const result = await pool.query(
+    `SELECT id, action, entity_name, ip_address, created_at 
+     FROM public.cap_audit_logs 
+     WHERE user_role = 'superadmin' 
+     ORDER BY created_at DESC 
+     LIMIT $1`,
+    [limit]
+  );
+  return result.rows;
+};

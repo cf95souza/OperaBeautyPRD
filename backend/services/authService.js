@@ -69,7 +69,7 @@ export const checkClientExists = async (tenant_id, phone) => {
   return { exists: result.rows.length > 0 };
 };
 
-export const registerClient = async (tenant_id, name, phone, password, birth_date) => {
+export const registerClient = async (tenant_id, name, phone, password, birth_date, refCode) => {
   const existCheck = await pool.query('SELECT id FROM public.cap_clients WHERE tenant_id = $1 AND phone = $2', [tenant_id, phone]);
   if (existCheck.rows.length > 0) {
     const error = new Error('Já existe um cadastro com este telefone.');
@@ -82,6 +82,47 @@ export const registerClient = async (tenant_id, name, phone, password, birth_dat
 
   if (birth_date) {
     await pool.query('UPDATE public.cap_clients SET birth_date = $1 WHERE id = $2 AND tenant_id = $3', [birth_date, clientId, tenant_id]);
+  }
+  
+  // Lógica do Referral
+  if (refCode) {
+    try {
+      // Procura o cliente dono desse código
+      const refCheck = await pool.query('SELECT id FROM public.cap_clients WHERE tenant_id = $1 AND referral_code = $2', [tenant_id, refCode.toUpperCase()]);
+      if (refCheck.rows.length > 0) {
+        const referrerId = refCheck.rows[0].id;
+        
+        // 1. Atualiza referred_by
+        await pool.query('UPDATE public.cap_clients SET referred_by = $1 WHERE id = $2', [referrerId, clientId]);
+        
+        // 2. Bônus de R$ 20 para quem indicou e para quem foi indicado
+        const bonusAmount = 20.00;
+        
+        // Para quem indicou
+        await pool.query(`
+          INSERT INTO public.cap_wallet_transactions (tenant_id, client_id, type, amount, description) 
+          VALUES ($1, $2, 'credit', $3, 'Bônus por indicação de novo amigo!')
+        `, [tenant_id, referrerId, bonusAmount]);
+        
+        // Para o novo usuário
+        await pool.query(`
+          INSERT INTO public.cap_wallet_transactions (tenant_id, client_id, type, amount, description) 
+          VALUES ($1, $2, 'credit', $3, 'Bônus de boas vindas (Indicação)!')
+        `, [tenant_id, clientId, bonusAmount]);
+        
+        console.log(`Referral aplicado com sucesso: ${referrerId} indicou ${clientId}`);
+      }
+    } catch (e) {
+      console.error('Erro não crítico ao aplicar referral:', e);
+    }
+  }
+
+  // Gera um referral_code único para esse novo cliente
+  try {
+    const rawRef = (name.replace(/\s+/g, '').substring(0, 4) + clientId.replace(/-/g, '').substring(0, 4)).toUpperCase();
+    await pool.query('UPDATE public.cap_clients SET referral_code = $1 WHERE id = $2', [rawRef, clientId]);
+  } catch(e) {
+    console.error('Erro não crítico ao gerar referral_code:', e);
   }
   
   return clientId;
@@ -163,7 +204,7 @@ export const logoutService = async (oldRefreshToken) => {
 export const getMe = async (id, role, tenant_id) => {
   let queryText = '';
   if (role === 'client') {
-    queryText = 'SELECT id, name, phone, birth_date, tenant_id FROM public.cap_clients WHERE id = $1 AND tenant_id = $2';
+    queryText = 'SELECT id, name, phone, birth_date, tenant_id, vip_tier FROM public.cap_clients WHERE id = $1 AND tenant_id = $2';
   } else if (role === 'superadmin') {
     queryText = 'SELECT id, name, email FROM public.cap_platform_admins WHERE id = $1';
   } else {

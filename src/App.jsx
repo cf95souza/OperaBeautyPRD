@@ -29,6 +29,9 @@ import LandingPage from './pages/LandingPage';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import PerfilProfissional from './pages/PerfilProfissional';
+import ComprarGiftCard from './pages/ComprarGiftCard';
+import IndiqueGanhe from './pages/IndiqueGanhe';
+import NotificacoesCliente from './pages/NotificacoesCliente';
 
 // --- Contexto Multi-Tenant ---
 import { TenantProvider, useTenant } from './context/TenantContext';
@@ -85,6 +88,20 @@ const StaffProtectedRoute = ({ children }) => {
   return children || <Outlet />;
 };
 
+// --- Rota Protegida de Feature Premium ---
+const FeatureProtectedRoute = ({ feature, children }) => {
+  const { tenant, loading } = useTenant();
+  const { tenant_slug } = useParams();
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-surface text-on-surface font-body-md">Validando recursos...</div>;
+  
+  if (!tenant?.features?.[feature]) {
+    return <Navigate to={`/${tenant_slug}/staff/admin/upgrade-plan`} replace />;
+  }
+
+  return children || <Outlet />;
+};
+
 // --- Rota de Redirecionamento da Raiz Staff ---
 const StaffRootRedirect = () => {
   const { tenant_slug } = useParams();
@@ -99,14 +116,27 @@ import GestaoServicos from './pages/admin/GestaoServicos';
 import GestaoClientes from './pages/admin/GestaoClientes';
 import ConfiguracoesOperacionais from './pages/admin/ConfiguracoesOperacionais';
 import BrandingCustomizacao from './pages/admin/BrandingCustomizacao';
+import LookbookAdmin from './pages/admin/LookbookAdmin';
+import GestaoGiftCards from './pages/admin/GestaoGiftCards';
 import ControleEstoque from './pages/admin/ControleEstoque';
+import RelatoriosBI from './pages/admin/RelatoriosBI';
+import GestaoLGPD from './pages/admin/GestaoLGPD';
 import AssinaturaSaaS from './pages/admin/AssinaturaSaaS';
+import GestaoAssinaturas from './pages/admin/GestaoAssinaturas';
+import ClubeFidelidade from './pages/ClubeFidelidade';
+import FidelidadeCarteira from './pages/FidelidadeCarteira';
+import PDV from './pages/admin/PDV';
+import UpgradePlanRequired from './pages/admin/UpgradePlanRequired';
 import SuperAdmin from './pages/superadmin/SuperAdmin';
 import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
 import TenantDetailAdmin from './pages/superadmin/TenantDetailAdmin';
 import TenantListAdmin from './pages/superadmin/TenantListAdmin';
 import PlanosAdmin from './pages/superadmin/PlanosAdmin';
 import SettingsAdmin from './pages/superadmin/SettingsAdmin';
+import EquipeAdmin from './pages/superadmin/EquipeAdmin';
+import AvisosAdmin from './pages/superadmin/AvisosAdmin';
+import AuditoriaAdmin from './pages/superadmin/AuditoriaAdmin';
+import FeatureFlagsAdmin from './pages/superadmin/FeatureFlagsAdmin';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -133,6 +163,10 @@ function App() {
             <Route path="/superadmin/tenants" element={<TenantListAdmin />} />
             <Route path="/superadmin/tenants/:id" element={<TenantDetailAdmin />} />
             <Route path="/superadmin/planos" element={<PlanosAdmin />} />
+            <Route path="/superadmin/equipe" element={<EquipeAdmin />} />
+            <Route path="/superadmin/features" element={<FeatureFlagsAdmin />} />
+            <Route path="/superadmin/avisos" element={<AvisosAdmin />} />
+            <Route path="/superadmin/auditoria" element={<AuditoriaAdmin />} />
             <Route path="/superadmin/configuracoes" element={<SettingsAdmin />} />
           </Route>
 
@@ -152,6 +186,11 @@ function App() {
             <Route path="agendar/confirmado" element={<AgendamentoConfirmado />} />
             <Route path="historico" element={<HistoricoAgendamentos />} />
             <Route path="perfil" element={<PerfilCliente />} />
+            <Route path="clube" element={<ClubeFidelidade />} />
+            <Route path="carteira" element={<FidelidadeCarteira />} />
+            <Route path="presentear" element={<ComprarGiftCard />} />
+            <Route path="indique-e-ganhe" element={<IndiqueGanhe />} />
+            <Route path="notificacoes" element={<NotificacoesCliente />} />
             {/* Jornada de Login (Cliente e Staff) */}
             <Route path="login" element={<AcessoTelefone />} />
             <Route path="acesso-senha" element={<AcessoSenha />} />
@@ -170,9 +209,27 @@ function App() {
                 <Route path="staff/admin/clientes" element={<GestaoClientes />} />
                 <Route path="staff/admin/servicos" element={<GestaoServicos />} />
                 <Route path="staff/admin/configuracoes" element={<ConfiguracoesOperacionais />} />
+                <Route path="staff/admin/lgpd" element={<GestaoLGPD />} />
+                <Route path="staff/admin/assinaturas" element={<GestaoAssinaturas />} />
                 <Route path="staff/admin/branding" element={<BrandingCustomizacao />} />
+                <Route path="staff/admin/lookbook" element={<LookbookAdmin />} />
                 <Route path="staff/admin/estoque" element={<ControleEstoque />} />
                 <Route path="staff/admin/assinatura" element={<AssinaturaSaaS />} />
+                <Route path="staff/admin/upgrade-plan" element={<UpgradePlanRequired />} />
+                
+                {/* Rotas Protegidas por Feature Premium */}
+                <Route element={<FeatureProtectedRoute feature="clube" />}>
+                  <Route path="staff/admin/assinaturas" element={<GestaoAssinaturas />} />
+                </Route>
+                <Route element={<FeatureProtectedRoute feature="pdv" />}>
+                  <Route path="staff/admin/pdv" element={<PDV />} />
+                </Route>
+                <Route element={<FeatureProtectedRoute feature="giftcards" />}>
+                  <Route path="staff/admin/giftcards" element={<GestaoGiftCards />} />
+                </Route>
+                <Route element={<FeatureProtectedRoute feature="bi_reports" />}>
+                  <Route path="staff/admin/relatorios-bi" element={<RelatoriosBI />} />
+                </Route>
               </Route>
             </Route>
 

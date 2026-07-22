@@ -18,14 +18,29 @@ const AgendamentoRevisao = () => {
 
   const servicePrice = bookingData.service?.price ? Number(bookingData.service.price) : 280;
   const [discount, setDiscount] = useState(0);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [useCashback, setUseCashback] = useState(false);
   const tax = 0;
-  const total = servicePrice - discount + tax;
+  const cashbackRedeemed = useCashback ? Math.min(walletBalance, servicePrice - discount) : 0;
+  const total = servicePrice - discount - cashbackRedeemed + tax;
 
   React.useEffect(() => {
     console.log("=== [AgendamentoRevisao] Montado ===");
     console.log("bookingData lido do useBooking():", bookingData);
     console.log("sessionStorage bruto:", sessionStorage.getItem('operabeauty_booking_data'));
-  }, [bookingData]);
+    
+    const fetchWallet = async () => {
+      try {
+        const wallet = await api.wallets.getMyWallet();
+        if (wallet) setWalletBalance(parseFloat(wallet.balance || 0));
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    if (session && session.role === 'client') {
+      fetchWallet();
+    }
+  }, [bookingData, session]);
 
   const handleConfirm = async () => {
     if (!session || session.role !== 'client') {
@@ -60,7 +75,8 @@ const AgendamentoRevisao = () => {
         staff_id: assignedStaffId,
         service_id: bookingData.service.id,
         start_time: startDateTime.toISOString(),
-        total_price: total
+        total_price: total,
+        cashback_redeemed: cashbackRedeemed
       });
       
       // Se usou cupom e tem id, incrementa o uso
@@ -213,6 +229,29 @@ const AgendamentoRevisao = () => {
           </div>
         </section>
 
+        {/* Usar Cashback */}
+        {session && session.role === 'client' && walletBalance > 0 && (
+          <section className="animate-fade-in-up bg-surface border border-outline-variant/30 rounded-xl p-[16px] flex items-center justify-between shadow-sm" style={{ animationDelay: '0.25s' }}>
+            <div className="flex items-center gap-md">
+              <span className="material-symbols-outlined text-primary text-[28px]">stars</span>
+              <div className="text-left">
+                <span className="font-label-md text-sm text-on-surface block">Usar Saldo de Cashback</span>
+                <span className="text-xs text-secondary">R$ {walletBalance.toFixed(2).replace('.', ',')} disponíveis</span>
+              </div>
+            </div>
+            <div className="relative inline-block w-10 align-middle select-none transition duration-200 ease-in">
+              <input 
+                checked={useCashback}
+                onChange={(e) => setUseCashback(e.target.checked)}
+                className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer" 
+                id="toggle-cashback" 
+                type="checkbox"
+              />
+              <label htmlFor="toggle-cashback" className="toggle-label block overflow-hidden h-5 rounded-full bg-outline-variant cursor-pointer"></label>
+            </div>
+          </section>
+        )}
+
         <section className="animate-fade-in-up bg-[#f3f3f4] rounded-xl p-[16px] space-y-[8px]" style={{ animationDelay: '0.3s' }}>
           <div className="flex justify-between items-center">
             <span className="font-sans text-[16px] text-secondary">Subtotal</span>
@@ -222,6 +261,12 @@ const AgendamentoRevisao = () => {
             <span className="font-sans text-[16px]">Desconto (Cupom)</span>
             <span className="font-sans text-[16px]">- R$ {discount.toFixed(2)}</span>
           </div>
+          {useCashback && cashbackRedeemed > 0 && (
+            <div className="flex justify-between items-center text-primary">
+              <span className="font-sans text-[16px]">Desconto (Cashback)</span>
+              <span className="font-sans text-[16px]">- R$ {cashbackRedeemed.toFixed(2)}</span>
+            </div>
+          )}
           <div className="flex justify-between items-center hidden">
             <span className="font-sans text-[16px] text-secondary">Taxa de Serviço</span>
             <span className="font-sans text-[16px] text-on-surface">R$ {tax.toFixed(2)}</span>

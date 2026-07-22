@@ -54,7 +54,8 @@ const updateClientSchema = z.object({
   body: z.object({
     name: z.string().min(1, 'Nome é obrigatório.').optional(),
     phone: z.string().min(1, 'Telefone é obrigatório.').optional(),
-    birth_date: z.string().nullable().optional()
+    birth_date: z.string().nullable().optional(),
+    vip_tier: z.enum(['Prata', 'Ouro', 'VIP', 'Black']).optional()
   }),
   query: z.any(), params: z.any()
 });
@@ -144,13 +145,13 @@ router.get('/:id', authMiddleware, requireRole(['manager', 'professional', 'clie
 // Atualizar dados do Cliente
 router.put('/:id', authMiddleware, validate(updateClientSchema), async (req, res) => {
   const { id } = req.params;
-  const { name, phone, birth_date } = req.body;
+  const { name, phone, birth_date, vip_tier } = req.body;
   const tenantId = req.user.tenant_id;
   const userId = req.user.id;
   const userRole = req.user.role;
 
   try {
-    const client = await updateClient(id, tenantId, userId, userRole, name, phone, birth_date);
+    const client = await updateClient(id, tenantId, userId, userRole, name, phone, birth_date, vip_tier);
     return res.json(client);
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });

@@ -1,6 +1,14 @@
 import pool from '../config/db.js';
+import redisClient from '../config/redis.js';
 
 export const listServices = async (tenantId) => {
+  const cacheKey = `tenant:${tenantId}:services`;
+  const cachedData = await redisClient.get(cacheKey);
+  
+  if (cachedData) {
+    return JSON.parse(cachedData);
+  }
+
   const result = await pool.query(
     `SELECT 
       s.id, s.name, s.duration_minutes, s.price, s.reduces_stock, s.maintenance_days, s.is_active,
@@ -16,6 +24,10 @@ export const listServices = async (tenantId) => {
      ORDER BY s.name`,
     [tenantId]
   );
+  
+  // TTL de 5 minutos (300 segundos) para dados do catálogo
+  await redisClient.setex(cacheKey, 300, JSON.stringify(result.rows));
+  
   return result.rows;
 };
 
@@ -55,6 +67,8 @@ export const createService = async (tenantId, name, duration_minutes, price, red
     }
 
     await client.query('COMMIT');
+    
+    await redisClient.del(`tenant:${tenantId}:services`);
     
     return { newService, inputs };
   } catch (error) {
@@ -117,6 +131,8 @@ export const updateService = async (id, tenantId, name, duration_minutes, price,
 
     await client.query('COMMIT');
 
+    await redisClient.del(`tenant:${tenantId}:services`);
+
     return { oldService, updatedService, inputs };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -137,6 +153,8 @@ export const deleteService = async (id, tenantId) => {
     error.statusCode = 404;
     throw error;
   }
+
+  await redisClient.del(`tenant:${tenantId}:services`);
 
   return result.rows[0];
 };

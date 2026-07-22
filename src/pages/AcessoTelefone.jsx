@@ -60,10 +60,10 @@ const AcessoTelefone = () => {
     
     setLoading(true);
     try {
-      const { exists } = await api.auth.checkClientExists(tenant.id, phone);
-      if (exists) {
+      const { action } = await api.auth.checkClientExists(tenant.id, phone);
+      if (action === 'login') {
         navigate(`/${tenant_slug}/acesso-senha`, { state: { phone } });
-      } else {
+      } else if (action === 'register') {
         navigate(`/${tenant_slug}/cadastro`, { state: { phone } });
       }
     } catch (err) {

@@ -6,6 +6,7 @@ import CreateTenantModal from '../../components/superadmin/CreateTenantModal';
 const SuperAdmin = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [tenants, setTenants] = useState([]);
+  const [overdueTenants, setOverdueTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -17,7 +18,8 @@ const SuperAdmin = () => {
     active_tenants: 0,
     earnings_paid: 0,
     earnings_pending: 0,
-    unique_clients: 0
+    unique_clients: 0,
+    mrr: 0
   });
 
   const [selectedTenant, setSelectedTenant] = useState(null);
@@ -41,7 +43,17 @@ const SuperAdmin = () => {
     fetchTenants();
     fetchMetrics();
     fetchPlans();
+    fetchOverdueTenants();
   }, [debouncedSearch, currentPage]);
+
+  const fetchOverdueTenants = async () => {
+    try {
+      const data = await api.superadmin.getOverdueTenants();
+      if (data) setOverdueTenants(data);
+    } catch (err) {
+      console.error('Erro ao buscar inadimplentes', err);
+    }
+  };
 
   const fetchPlans = async () => {
     try {
@@ -128,6 +140,19 @@ const SuperAdmin = () => {
     navigate('/superadmin/login');
   };
 
+  const handleSuspendTenant = async (tenantId) => {
+    if (!window.confirm('Tem certeza que deseja suspender o acesso deste salão?')) return;
+    try {
+      await api.superadmin.updateTenant(tenantId, { status: 'suspended' });
+      fetchTenants();
+      fetchOverdueTenants();
+      fetchMetrics();
+    } catch (err) {
+      console.error('Erro ao suspender salão', err);
+      alert('Erro ao suspender salão.');
+    }
+  };
+
   return (
     <div className="font-body-md text-body-md antialiased overflow-x-hidden min-h-screen flex bg-surface text-on-surface animate-fade-in-up">
       
@@ -140,11 +165,20 @@ const SuperAdmin = () => {
       )}
 
       {/* Navigation Drawer (Responsive) */}
-      <aside className={`flex flex-col h-screen w-72 fixed top-0 bg-surface shadow-md py-lg gap-sm z-50 transition-all duration-300 ${isDrawerOpen ? 'left-0' : '-left-72'} md:left-0`}>
-        <div className="px-md mb-lg">
-          <h2 className="font-headline-md text-headline-md text-primary tracking-tight">OperaBeauty</h2>
+      <aside className={`flex flex-col h-screen w-80 fixed top-0 bg-surface-container-lowest border-r border-outline-variant/30 z-50 transition-all duration-300 ${isDrawerOpen ? 'left-0' : '-left-80'} md:left-0`}>
+        <div className="p-xl border-b border-outline-variant/30 bg-surface-container-lowest flex flex-col gap-4">
+          <h1 className="font-serif text-[28px] text-primary font-bold">OperaBeauty</h1>
+          <div className="flex items-center gap-md">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-sm">
+              <span className="material-symbols-outlined text-on-primary" style={{ fontVariationSettings: "'FILL' 1" }}>admin_panel_settings</span>
+            </div>
+            <div>
+              <h2 className="font-title-md text-title-md font-semibold text-on-surface tracking-tight">Super Admin</h2>
+              <p className="font-body-sm text-body-sm text-on-surface-variant">Gestão da Plataforma</p>
+            </div>
+          </div>
         </div>
-        <nav className="flex flex-col gap-xs flex-1">
+        <nav className="flex-1 overflow-y-auto py-md space-y-xs">
           <Link to="/superadmin" className="flex items-center gap-md py-3 px-4 bg-primary-container text-on-primary-container rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
             <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>dashboard</span>
             Painel Geral
@@ -156,6 +190,22 @@ const SuperAdmin = () => {
           <Link to="/superadmin/planos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
             <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>subscriptions</span>
             Gestão de Planos
+          </Link>
+          <Link to="/superadmin/equipe" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>admin_panel_settings</span>
+            Equipe SaaS
+          </Link>
+          <Link to="/superadmin/features" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>toggle_on</span>
+            Feature Flags
+          </Link>
+          <Link to="/superadmin/avisos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>campaign</span>
+            Mural de Avisos
+          </Link>
+          <Link to="/superadmin/auditoria" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>security</span>
+            Auditoria e Saúde
           </Link>
           <Link to="/superadmin/configuracoes" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
             <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>settings</span>
@@ -249,18 +299,20 @@ const SuperAdmin = () => {
               </div>
             </div>
 
-            {/* Pending Approvals */}
-            <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px]">
-              <div className="flex justify-between items-start">
-                <span className="font-label-md text-label-md text-secondary">Aprovações Pendentes</span>
-                <div className="bg-error-container p-2 rounded-full text-on-error-container">
-                  <span className="material-symbols-outlined">hourglass_empty</span>
+            {/* Total MRR (Receita Mensal Recorrente) */}
+            <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px] relative overflow-hidden">
+              <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 100% 0%, var(--color-primary) 0%, transparent 50%)" }}></div>
+              <div className="flex justify-between items-start relative z-10">
+                <span className="font-label-md text-label-md text-secondary">Receita Mensal Recorrente</span>
+                <div className="bg-surface-container-low p-2 rounded-full text-primary">
+                  <span className="material-symbols-outlined">analytics</span>
                 </div>
               </div>
-              <div>
-                <div className="font-display-lg text-display-lg text-on-surface">0</div>
-                <div className="flex items-center gap-xs mt-1 text-secondary font-label-sm text-label-sm">
-                  <span>Requerem análise</span>
+              <div className="relative z-10">
+                <div className="font-display-lg text-display-lg text-on-surface">R$ {Number(metrics.mrr || 0).toFixed(2).replace('.', ',')}</div>
+                <div className="flex items-center gap-xs mt-1 text-on-primary-container font-label-sm text-label-sm">
+                  <span className="material-symbols-outlined text-[16px]">verified</span>
+                  <span>MRR (Ativos)</span>
                 </div>
               </div>
             </div>
@@ -314,6 +366,59 @@ const SuperAdmin = () => {
             </div>
 
           </section>
+
+          {/* Overdue Tenants Section */}
+          {overdueTenants.length > 0 && (
+            <section className="bg-error-container/20 border border-error/20 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-md gap-md">
+                <div>
+                  <h2 className="font-headline-md text-headline-md text-error flex items-center gap-2">
+                    <span className="material-symbols-outlined">warning</span>
+                    Salões Inadimplentes
+                  </h2>
+                  <p className="font-body-md text-secondary mt-1">Salões com faturas atrasadas e que exigem atenção.</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-error/20">
+                      <th className="py-sm px-md font-label-md text-secondary">Salão</th>
+                      <th className="py-sm px-md font-label-md text-secondary">Faturas Atrasadas</th>
+                      <th className="py-sm px-md font-label-md text-secondary">Valor em Atraso</th>
+                      <th className="py-sm px-md font-label-md text-secondary">Status</th>
+                      <th className="py-sm px-md font-label-md text-secondary text-right">Ação Mestre</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overdueTenants.map(t => (
+                      <tr key={t.id} className="border-b border-error/10 hover:bg-error/5 transition-colors">
+                        <td className="py-md px-md font-label-md text-on-surface">{t.name}</td>
+                        <td className="py-md px-md text-error font-label-md">{t.overdue_invoices} pendência(s)</td>
+                        <td className="py-md px-md text-error font-label-md">R$ {Number(t.overdue_amount).toFixed(2).replace('.', ',')}</td>
+                        <td className="py-md px-md">
+                          <span className={`px-3 py-1 rounded-full text-[12px] font-label-sm ${t.status === 'suspended' ? 'bg-error-container text-error' : 'bg-surface-container-high text-on-surface'}`}>
+                            {t.status === 'suspended' ? 'Suspenso' : 'Ativo'}
+                          </span>
+                        </td>
+                        <td className="py-md px-md text-right">
+                          {t.status !== 'suspended' && (
+                            <button 
+                              onClick={() => handleSuspendTenant(t.id)}
+                              className="px-4 py-2 bg-error text-on-error rounded-full font-label-sm hover:opacity-90 flex items-center gap-2 ml-auto"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">gavel</span>
+                              Suspender Conta
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {/* Salon Directory (Tenants) */}
           <section className="bg-surface-container-lowest rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg">

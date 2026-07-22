@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useBooking } from '../context/BookingContext';
 import { api } from '../lib/api';
@@ -8,11 +8,13 @@ import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
 const AgendamentoServicos = () => {
   const { tenant_slug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { tenant } = useTenant();
   const { bookingData, updateBooking } = useBooking();
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [dbServices, setDbServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [autoProcessed, setAutoProcessed] = useState(false);
 
   useEffect(() => {
     if (!tenant) return;
@@ -41,6 +43,28 @@ const AgendamentoServicos = () => {
     console.log("=== [AgendamentoServicos] Montado/Atualizado ===");
     console.log("bookingData atual:", bookingData);
   }, [bookingData]);
+
+  useEffect(() => {
+    if (!autoProcessed && dbServices.length > 0 && location.state?.preselectedServiceId) {
+      const service = dbServices.find(s => s.id === location.state.preselectedServiceId);
+      if (service) {
+        updateBooking('service', {
+          id: service.id,
+          name: service.name,
+          price: service.price,
+          duration: service.duration_minutes
+        });
+        
+        setAutoProcessed(true);
+
+        if (location.state.preselectedStaffId) {
+           navigate(`/${tenant_slug}/agendar/profissionais`, { 
+             state: { preselectedStaffId: location.state.preselectedStaffId } 
+           });
+        }
+      }
+    }
+  }, [dbServices, location.state, autoProcessed, navigate, tenant_slug, updateBooking]);
 
   const handleSelectService = (service) => {
     console.log("=== [AgendamentoServicos] handleSelectService chamado ===", service);

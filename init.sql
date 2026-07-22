@@ -119,6 +119,7 @@ CREATE TABLE public.cap_clients (
     birth_date DATE,
     password_hash TEXT NOT NULL,
     anamnese_data JSONB DEFAULT '{}'::jsonb, -- 100% Dinâmico e Aberto para o Gestor customizar
+    vip_tier TEXT DEFAULT 'Prata' CHECK (vip_tier IN ('Prata', 'Ouro', 'VIP', 'Black')),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(tenant_id, phone)
 );
@@ -464,5 +465,131 @@ CREATE TABLE IF NOT EXISTS public.cap_refresh_tokens (
     ip_address TEXT, -- IP associado ao token original
     user_agent TEXT -- Dispositivo associado
 );
+
+
+-- ==========================================
+-- 2.15 Tabelas de Feature Flags (Gestão de Módulos Beta)
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.cap_feature_flags (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    is_active_global BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.cap_tenant_feature_flags (
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    feature_flag_id UUID NOT NULL REFERENCES public.cap_feature_flags(id) ON DELETE CASCADE,
+    is_enabled BOOLEAN DEFAULT TRUE,
+    PRIMARY KEY (tenant_id, feature_flag_id)
+);
+
+
+-- ==========================================
+-- 2.16 Tabelas de Assinaturas e Fidelidade (Clube do Salão)
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.cap_salon_memberships (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    price DECIMAL(10, 2) NOT NULL,
+    billing_cycle TEXT NOT NULL CHECK (billing_cycle IN ('monthly', 'yearly')),
+    service_id UUID NOT NULL REFERENCES public.cap_services(id) ON DELETE CASCADE,
+    usage_limit INTEGER NOT NULL DEFAULT 4 CHECK (usage_limit >= 0),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_salon_memberships_tenant ON public.cap_salon_memberships(tenant_id);
+
+CREATE TABLE IF NOT EXISTS public.cap_client_memberships (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    client_id UUID NOT NULL REFERENCES public.cap_clients(id) ON DELETE CASCADE,
+    membership_id UUID NOT NULL REFERENCES public.cap_salon_memberships(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('active', 'paused', 'cancelled', 'past_due')),
+    current_period_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    current_period_end TIMESTAMPTZ NOT NULL,
+    remaining_sessions INTEGER NOT NULL CHECK (remaining_sessions >= 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT unique_client_active_membership UNIQUE (client_id, membership_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_memberships_client ON public.cap_client_memberships(client_id);
+CREATE INDEX IF NOT EXISTS idx_client_memberships_tenant ON public.cap_client_memberships(tenant_id);
+
+
+-- ==========================================
+-- 2.17 Tabelas do Caixa Rápido / PDV (Venda de Produtos)
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.cap_product_sales (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    client_id UUID REFERENCES public.cap_clients(id) ON DELETE SET NULL,
+    total_price DECIMAL(10, 2) NOT NULL,
+    payment_method TEXT NOT NULL CHECK (payment_method IN ('credit_card', 'debit_card', 'cash', 'pix')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_sales_tenant ON public.cap_product_sales(tenant_id);
+
+CREATE TABLE IF NOT EXISTS public.cap_product_sale_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sale_id UUID NOT NULL REFERENCES public.cap_product_sales(id) ON DELETE CASCADE,
+    inventory_id UUID NOT NULL REFERENCES public.cap_inventory(id) ON DELETE CASCADE,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price DECIMAL(10, 2) NOT NULL,
+    total_price DECIMAL(10, 2) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_sale_items_sale ON public.cap_product_sale_items(sale_id);
+
+
+-- ==========================================
+-- 2.18 Tabelas de Carteira Digital e Cashback
+-- ==========================================
+
+-- Adicionar colunas de configuração à tabela de Tenants
+ALTER TABLE public.cap_tenants
+ADD COLUMN IF NOT EXISTS cashback_percentage DECIMAL(5, 2) DEFAULT 0.00,
+ADD COLUMN IF NOT EXISTS cashback_expiration_days INTEGER DEFAULT 30;
+
+-- Adicionar coluna de controle de resgate ao agendamento
+ALTER TABLE public.cap_appointments
+ADD COLUMN IF NOT EXISTS cashback_redeemed DECIMAL(10, 2) DEFAULT 0.00;
+
+-- Criar tabela de Carteiras
+CREATE TABLE IF NOT EXISTS public.cap_client_wallets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    client_id UUID NOT NULL REFERENCES public.cap_clients(id) ON DELETE CASCADE,
+    balance DECIMAL(10, 2) NOT NULL DEFAULT 0.00 CHECK (balance >= 0.00),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT unique_tenant_client_wallet UNIQUE (tenant_id, client_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_wallets_tenant_client ON public.cap_client_wallets(tenant_id, client_id);
+
+-- Criar tabela de Transações de Carteira
+CREATE TABLE IF NOT EXISTS public.cap_wallet_transactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    client_id UUID NOT NULL REFERENCES public.cap_clients(id) ON DELETE CASCADE,
+    amount DECIMAL(10, 2) NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('credit', 'debit')),
+    description TEXT NOT NULL,
+    expires_at TIMESTAMPTZ,
+    is_expired BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wallet_transactions_client ON public.cap_wallet_transactions(client_id);
+CREATE INDEX IF NOT EXISTS idx_wallet_transactions_tenant_client ON public.cap_wallet_transactions(tenant_id, client_id);
+
 
 

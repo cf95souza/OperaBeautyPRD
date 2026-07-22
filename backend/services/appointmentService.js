@@ -1,4 +1,6 @@
 import pool from '../config/db.js';
+import { consumeMembershipSession } from './membershipService.js';
+import { processCashbackEarnings, processCashbackRedemption } from './walletService.js';
 
 export const listAppointments = async ({ role, id, userTenantId, targetTenantId, start_date, end_date, staff_id, client_id, limit, offset }) => {
   let queryText = '';
@@ -119,7 +121,7 @@ export const getAppointmentById = async ({ id, tenant_id, role, userId }) => {
 
 import { notifyStaff } from './notificationService.js';
 
-export const createAppointment = async ({ finalClientId, staff_id, service_id, start_time, total_price, tenantId }) => {
+export const createAppointment = async ({ finalClientId, staff_id, service_id, start_time, total_price, tenantId, client_membership_id, cashback_redeemed }) => {
   const serviceRes = await pool.query('SELECT name, duration_minutes FROM public.cap_services WHERE id = $1 AND tenant_id = $2', [service_id, tenantId]);
   if (serviceRes.rows.length === 0) {
     const error = new Error('Serviço não encontrado.');
@@ -133,10 +135,10 @@ export const createAppointment = async ({ finalClientId, staff_id, service_id, s
   const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
 
   const result = await pool.query(
-    `INSERT INTO public.cap_appointments (tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7, NOW())
-     RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, staff_commission_value, created_at`,
-    [tenantId, finalClientId, staff_id, service_id, startTime, endTime, total_price]
+    `INSERT INTO public.cap_appointments (tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7, $8, $9, NOW())
+     RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, staff_commission_value, created_at`,
+    [tenantId, finalClientId, staff_id, service_id, startTime, endTime, total_price, client_membership_id || null, cashback_redeemed || 0]
   );
 
   const clientRes = await pool.query('SELECT name FROM public.cap_clients WHERE id = $1 AND tenant_id = $2', [finalClientId, tenantId]);
@@ -156,14 +158,14 @@ export const createAppointment = async ({ finalClientId, staff_id, service_id, s
   return result.rows[0];
 };
 
-export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_id, service_id, start_time, status, total_price }) => {
+export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_id, service_id, start_time, status, total_price, client_membership_id, cashback_redeemed, checkin_status, checkin_request }) => {
   const clientConnection = await pool.connect();
 
   try {
     await clientConnection.query('BEGIN');
 
     const appQuery = await clientConnection.query(
-      'SELECT id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, staff_commission_value, created_at FROM public.cap_appointments WHERE id = $1 AND tenant_id = $2',
+      'SELECT id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, staff_commission_value, checkin_status, created_at FROM public.cap_appointments WHERE id = $1 AND tenant_id = $2',
       [id, tenantId]
     );
 
@@ -195,6 +197,10 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
     let finalStatus = status || currentApp.status;
     let finalTotalPrice = total_price !== undefined ? total_price : currentApp.total_price;
     let finalCommissionVal = currentApp.staff_commission_value;
+    let finalMembershipId = client_membership_id !== undefined ? client_membership_id : currentApp.client_membership_id;
+    let finalCashbackRedeemed = cashback_redeemed !== undefined ? cashback_redeemed : currentApp.cashback_redeemed;
+    let finalCheckinStatus = checkin_status !== undefined ? checkin_status : currentApp.checkin_status;
+    let finalCheckinRequest = checkin_request !== undefined ? checkin_request : currentApp.checkin_request;
 
     if (service_id || start_time) {
       const serviceRes = await clientConnection.query('SELECT duration_minutes FROM public.cap_services WHERE id = $1 AND tenant_id = $2', [finalServiceId, tenantId]);
@@ -206,6 +212,19 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
       const staffRes = await clientConnection.query('SELECT commission_rate FROM public.cap_staff WHERE id = $1 AND tenant_id = $2', [finalStaffId, tenantId]);
       const commissionRate = parseFloat(staffRes.rows[0]?.commission_rate || '0');
       finalCommissionVal = (finalTotalPrice * commissionRate) / 100;
+
+      // Consome sessão se houver associação com assinatura
+      if (finalMembershipId) {
+        await consumeMembershipSession(finalMembershipId, tenantId);
+      }
+
+      // Processar resgate de cashback (débito) se aplicável
+      if (parseFloat(finalCashbackRedeemed) > 0) {
+        await processCashbackRedemption(clientConnection, tenantId, currentApp.client_id, id, parseFloat(finalCashbackRedeemed));
+      }
+
+      // Processar ganho de cashback (crédito)
+      await processCashbackEarnings(clientConnection, tenantId, currentApp.client_id, id, finalTotalPrice);
 
       const serviceDetail = await clientConnection.query('SELECT reduces_stock FROM public.cap_services WHERE id = $1 AND tenant_id = $2', [finalServiceId, tenantId]);
       
@@ -234,11 +253,33 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
            end_time = $4,
            status = $5,
            total_price = $6,
-           staff_commission_value = $7
-       WHERE id = $8 AND tenant_id = $9
-       RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, staff_commission_value, commission_status, commission_paid_at, created_at`,
-      [finalStaffId, finalServiceId, finalStartTime, finalEndTime, finalStatus, finalTotalPrice, finalCommissionVal, id, tenantId]
+           staff_commission_value = $7,
+           client_membership_id = $8,
+           cashback_redeemed = $9,
+           checkin_status = $10,
+           checkin_request = $11
+       WHERE id = $12 AND tenant_id = $13
+       RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, staff_commission_value, checkin_status, checkin_request, commission_status, commission_paid_at, created_at`,
+      [finalStaffId, finalServiceId, finalStartTime, finalEndTime, finalStatus, finalTotalPrice, finalCommissionVal, finalMembershipId || null, finalCashbackRedeemed || 0, finalCheckinStatus || null, finalCheckinRequest || null, id, tenantId]
     );
+
+    // Se mudou para check-in, disparar notificação
+    if (finalCheckinStatus === 'checked_in' && currentApp.checkin_status !== 'checked_in') {
+      const clientRes = await clientConnection.query('SELECT name FROM public.cap_clients WHERE id = $1 AND tenant_id = $2', [currentApp.client_id, tenantId]);
+      const clientName = clientRes.rows[0]?.name || 'Um cliente';
+      
+      notifyStaff(
+        tenantId, 
+        finalStaffId, 
+        '🔔 Novo Check-in!', 
+        `${clientName} fez check-in e solicitou: ${finalCheckinRequest || 'Nenhum mimo'}.`
+      ).catch(err => console.error('Falha ao disparar push notification de check-in:', err));
+    }
+
+    // Se mudou para cancelado, checar fila de espera
+    if (finalStatus === 'cancelled' && currentApp.status !== 'cancelled') {
+      await checkWaitlistAndNotify(clientConnection, tenantId, finalStartTime);
+    }
 
     await clientConnection.query('COMMIT');
     return updateResult.rows[0];
@@ -273,7 +314,43 @@ export const deleteAppointment = async ({ id, tenantId, userId, userRole }) => {
     [id, tenantId]
   );
 
+  // Checar fila de espera
+  await checkWaitlistAndNotify(pool, tenantId, result.rows[0].start_time);
+
   return result.rows[0];
+};
+
+// Helper function to check waitlist and notify managers
+const checkWaitlistAndNotify = async (dbClient, tenantId, dateOrString) => {
+  try {
+    const dateObj = new Date(dateOrString);
+    const dateStr = dateObj.toISOString().split('T')[0];
+
+    const waitlist = await dbClient.query(
+      `SELECT count(*) as count FROM public.cap_waitlist WHERE tenant_id = $1 AND desired_date = $2 AND status = 'pending'`,
+      [tenantId, dateStr]
+    );
+
+    if (parseInt(waitlist.rows[0].count, 10) > 0) {
+      // Find all managers and superadmins
+      const managers = await dbClient.query(
+        `SELECT id FROM public.cap_staff WHERE tenant_id = $1 AND role IN ('manager', 'superadmin')`,
+        [tenantId]
+      );
+      
+      const formattedDate = dateObj.toLocaleDateString('pt-BR');
+      for (const manager of managers.rows) {
+        notifyStaff(
+          tenantId,
+          manager.id,
+          '🚨 Vaga Liberada!',
+          `Um agendamento foi cancelado dia ${formattedDate} e há clientes na fila de espera. Verifique a Agenda!`
+        ).catch(err => console.error(err));
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao notificar gestor sobre lista de espera:', err);
+  }
 };
 
 export const payCommissions = async ({ tenantId, userRole, staff_id }) => {

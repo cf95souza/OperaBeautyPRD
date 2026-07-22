@@ -11,6 +11,7 @@ const GestaoEquipe = () => {
   const { showSuccess, showError } = useNotification();
 
   const [staffList, setStaffList] = useState([]);
+  const [reviewsStats, setReviewsStats] = useState({});
   const [loading, setLoading] = useState(true);
   
   // Performance states
@@ -34,6 +35,17 @@ const GestaoEquipe = () => {
       const data = await api.staff.list(tenant.id);
       if (data) {
         setStaffList(data);
+      }
+      
+      try {
+        const stats = await api.request('/reviews/stats');
+        if (stats && stats.staff) {
+          const statsMap = {};
+          stats.staff.forEach(s => { statsMap[s.id] = s.average; });
+          setReviewsStats(statsMap);
+        }
+      } catch (e) {
+        console.error("Erro ao carregar avaliações", e);
       }
       
       // Fetch performance data for current month
@@ -240,7 +252,7 @@ const GestaoEquipe = () => {
                   <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                     <span className="material-symbols-outlined text-primary text-[20px]">edit</span>
                   </div>
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start w-full">
                     <div className="flex items-center gap-md">
                       <div className="w-16 h-16 rounded-full overflow-hidden bg-surface-variant border-2 border-surface flex items-center justify-center text-xl font-bold text-on-surface-variant">
                          {staff.name.substring(0,2).toUpperCase()}
@@ -250,6 +262,14 @@ const GestaoEquipe = () => {
                         <p className="font-body-sm text-sm text-secondary">{staff.role === 'manager' ? 'Gestor' : 'Profissional'}</p>
                       </div>
                     </div>
+                    {reviewsStats[staff.id] > 0 && (
+                      <div className="flex flex-col items-end">
+                        <div className="flex items-center gap-1 bg-surface-variant/30 px-2 py-1 rounded-lg shrink-0">
+                          <span className="material-symbols-outlined text-[16px] text-[#F59E0B] filled" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                          <span className="font-bold text-sm text-on-surface">{reviewsStats[staff.id]}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex justify-between items-center mt-2">

@@ -18,12 +18,56 @@ const updateBrandingSchema = z.object({
     address: z.string().nullable().optional(),
     social_instagram: z.string().nullable().optional(),
     social_facebook: z.string().nullable().optional(),
-    social_whatsapp: z.string().nullable().optional()
+    social_whatsapp: z.string().nullable().optional(),
+    cashback_percentage: z.number().min(0).max(100).optional(),
+    cashback_expiration_days: z.number().int().min(1).optional(),
+    waiting_menu_enabled: z.boolean().optional(),
+    waiting_menu_items: z.array(z.string()).optional()
   }),
   query: z.any(), params: z.any()
 });
 
 
+/**
+ * @swagger
+ * /api/tenants/by-slug/{slug}:
+ *   get:
+ *     summary: Retorna os dados públicos de um salão (Tenant)
+ *     description: Endpoint utilizado pela página pública para carregar o visual, banners e permissões do salão. Utiliza cache Redis.
+ *     tags:
+ *       - Tenants (Salões)
+ *     parameters:
+ *       - in: path
+ *         name: slug
+ *         required: true
+ *         description: Slug único do salão (ex. meusalao)
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Dados do salão retornados com sucesso.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                   example: 1
+ *                 slug:
+ *                   type: string
+ *                   example: "meusalao"
+ *                 name:
+ *                   type: string
+ *                   example: "Salão Beauty Express"
+ *                 status:
+ *                   type: string
+ *                   example: "active"
+ *       403:
+ *         description: O estabelecimento está temporariamente suspenso.
+ *       404:
+ *         description: Salão não encontrado.
+ */
 router.get('/by-slug/:slug', async (req, res) => {
   const { slug } = req.params;
 
@@ -49,7 +93,11 @@ router.put('/branding', authMiddleware, requireRole(['manager']), validate(updat
     address,
     social_instagram,
     social_facebook,
-    social_whatsapp
+    social_whatsapp,
+    cashback_percentage,
+    cashback_expiration_days,
+    waiting_menu_enabled,
+    waiting_menu_items
   } = req.body;
   const tenant_id = req.user.tenant_id;
 
@@ -66,7 +114,11 @@ router.put('/branding', authMiddleware, requireRole(['manager']), validate(updat
       address,
       social_instagram,
       social_facebook,
-      social_whatsapp
+      social_whatsapp,
+      cashback_percentage,
+      cashback_expiration_days,
+      waiting_menu_enabled,
+      waiting_menu_items
     );
 
     return res.json(updatedTenant);
@@ -74,6 +126,17 @@ router.put('/branding', authMiddleware, requireRole(['manager']), validate(updat
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     req.log.error(error, 'Erro ao atualizar branding');
     return res.status(500).json({ error: 'Erro interno ao atualizar customização.' });
+  }
+});
+
+router.get('/platform-announcements', async (req, res) => {
+  try {
+    const { getActiveAnnouncements } = await import('../services/superadminService.js');
+    const announcements = await getActiveAnnouncements();
+    return res.json(announcements);
+  } catch (error) {
+    req.log.error(error, 'Erro ao obter avisos da plataforma');
+    return res.status(500).json({ error: 'Erro ao buscar avisos.' });
   }
 });
 

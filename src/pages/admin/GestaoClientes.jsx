@@ -9,6 +9,25 @@ const GestaoClientes = () => {
   const { tenant } = useTenant();
   const { showSuccess, showError } = useNotification();
 
+  const getVipBadge = (tier) => {
+    const styles = {
+      Prata: 'bg-slate-100 text-slate-700 border border-slate-200/80 shadow-[0_1px_3px_rgba(148,163,184,0.05)]',
+      Ouro: 'bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A]/60 shadow-[0_1px_3px_rgba(180,83,9,0.03)]',
+      VIP: 'bg-[#FAF5FF] text-[#6B21A8] border border-[#E9D5FF]/60 shadow-[0_1px_3px_rgba(107,33,168,0.03)]',
+      Black: 'bg-neutral-900 text-amber-200 border border-neutral-800 shadow-[0_1px_4px_rgba(0,0,0,0.1)] font-bold'
+    };
+    
+    const label = tier || 'Prata';
+    const styleClass = styles[label] || styles.Prata;
+    
+    return (
+      <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-semibold uppercase tracking-wider transition-all duration-300 ${styleClass}`}>
+        <span className="material-symbols-outlined text-[11px] filled" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
+        {label}
+      </span>
+    );
+  };
+
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -148,12 +167,15 @@ const GestaoClientes = () => {
                          <div className="w-12 h-12 rounded-full bg-primary-container text-primary font-headline-sm flex items-center justify-center uppercase shrink-0">
                             {client.name.charAt(0)}
                          </div>
-                         <div>
-                            <h3 className="font-label-lg text-label-lg text-on-surface line-clamp-1" title={client.name}>{client.name}</h3>
-                            <p className="font-body-sm text-body-sm text-secondary flex items-center gap-1">
-                               <span className="material-symbols-outlined text-[14px]">phone_iphone</span> {client.phone}
-                            </p>
-                         </div>
+                          <div>
+                             <div className="flex items-center gap-2 flex-wrap">
+                               <h3 className="font-label-lg text-label-lg text-on-surface line-clamp-1" title={client.name}>{client.name}</h3>
+                               {getVipBadge(client.vip_tier)}
+                             </div>
+                             <p className="font-body-sm text-body-sm text-secondary flex items-center gap-1 mt-0.5">
+                                <span className="material-symbols-outlined text-[14px]">phone_iphone</span> {client.phone}
+                             </p>
+                          </div>
                       </div>
                       
                       {/* Context Menu or Direct Action */}

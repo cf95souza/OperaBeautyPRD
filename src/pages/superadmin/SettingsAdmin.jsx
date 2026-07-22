@@ -71,11 +71,20 @@ const SettingsAdmin = () => {
       )}
 
       {/* Navigation Drawer */}
-      <aside className={`flex flex-col h-screen w-72 fixed top-0 bg-surface shadow-md py-lg gap-sm z-50 transition-all duration-300 ${isDrawerOpen ? 'left-0' : '-left-72'} md:left-0`}>
-        <div className="px-md mb-lg flex justify-between items-center">
-          <h2 className="font-headline-md text-headline-md text-primary tracking-tight">OperaBeauty</h2>
+      <aside className={`flex flex-col h-screen w-80 fixed top-0 bg-surface-container-lowest border-r border-outline-variant/30 z-50 transition-all duration-300 ${isDrawerOpen ? 'left-0' : '-left-80'} md:left-0`}>
+        <div className="p-xl border-b border-outline-variant/30 bg-surface-container-lowest flex flex-col gap-4">
+          <h1 className="font-serif text-[28px] text-primary font-bold">OperaBeauty</h1>
+          <div className="flex items-center gap-md">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-sm">
+              <span className="material-symbols-outlined text-on-primary" style={{ fontVariationSettings: "'FILL' 1" }}>admin_panel_settings</span>
+            </div>
+            <div>
+              <h2 className="font-title-md text-title-md font-semibold text-on-surface tracking-tight">Super Admin</h2>
+              <p className="font-body-sm text-body-sm text-on-surface-variant">Gestão da Plataforma</p>
+            </div>
+          </div>
         </div>
-        <nav className="flex flex-col gap-xs flex-1">
+        <nav className="flex-1 overflow-y-auto py-md space-y-xs">
           <Link to="/superadmin" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
             <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>dashboard</span>
             Painel Geral
@@ -87,6 +96,22 @@ const SettingsAdmin = () => {
           <Link to="/superadmin/planos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
             <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>subscriptions</span>
             Gestão de Planos
+          </Link>
+          <Link to="/superadmin/equipe" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>admin_panel_settings</span>
+            Equipe SaaS
+          </Link>
+          <Link to="/superadmin/features" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>toggle_on</span>
+            Feature Flags
+          </Link>
+          <Link to="/superadmin/avisos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>campaign</span>
+            Mural de Avisos
+          </Link>
+          <Link to="/superadmin/auditoria" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>security</span>
+            Auditoria e Saúde
           </Link>
           <Link to="/superadmin/configuracoes" className="flex items-center gap-md py-3 px-4 bg-primary-container text-on-primary-container rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
             <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>settings</span>

@@ -112,10 +112,10 @@ export const api = {
         body: JSON.stringify({ tenant_id: tenantId, phone }),
       });
     },
-    async registerClient(tenantId, name, phone, password, birthDate) {
+    async registerClient(tenantId, name, phone, password, birthDate, ref) {
       return request('/auth/register-client', {
         method: 'POST',
-        body: JSON.stringify({ tenant_id: tenantId, name, phone, password, birth_date: birthDate }),
+        body: JSON.stringify({ tenant_id: tenantId, name, phone, password, birth_date: birthDate, ref }),
       });
     },
     async me() {
@@ -293,6 +293,60 @@ export const api = {
     }
   },
 
+  // Clube de Assinaturas do Salão
+  memberships: {
+    async createPlan(payload) {
+      return request('/memberships/plans', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    async listPlans(tenantId) {
+      return request(`/memberships/plans?tenant_id=${tenantId}`);
+    },
+    async updatePlan(id, payload) {
+      return request(`/memberships/plans/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    async subscribe(membershipId) {
+      return request('/memberships/subscribe', {
+        method: 'POST',
+        body: JSON.stringify({ membership_id: membershipId }),
+      });
+    },
+    async getMySubscriptions() {
+      return request('/memberships/my');
+    },
+    async listSubscriptions() {
+      return request('/memberships/subscriptions');
+    }
+  },
+
+  // Caixa Rápido / PDV (Venda de Produtos)
+  pdv: {
+    async createSale(payload) {
+      return request('/product-sales', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    async listSales() {
+      return request('/product-sales');
+    }
+  },
+
+  // Carteira Digital e Cashback
+  wallets: {
+    async getMyWallet() {
+      return request('/wallets/my');
+    },
+    async getClientWallet(clientId) {
+      return request(`/wallets/client/${clientId}`);
+    }
+  },
+
   // Agendamentos
   appointments: {
     async list(filters = {}) {
@@ -447,6 +501,9 @@ export const api = {
     async getDashboardMetrics() {
       return request('/superadmin/dashboard-metrics');
     },
+    async getOverdueTenants() {
+      return request('/superadmin/overdue-tenants');
+    },
     async listTenants() {
       return request('/superadmin/tenants');
     },
@@ -490,6 +547,88 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+    },
+    async listAdmins() {
+      return request('/superadmin/admins');
+    },
+    async createAdmin(payload) {
+      return request('/superadmin/admins', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    async updateAdmin(id, payload) {
+      return request(`/superadmin/admins/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    async deleteAdmin(id) {
+      return request(`/superadmin/admins/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    async listAnnouncements() {
+      return request('/superadmin/announcements');
+    },
+    async createAnnouncement(payload) {
+      return request('/superadmin/announcements', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    async updateAnnouncement(id, payload) {
+      return request(`/superadmin/announcements/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    async deleteAnnouncement(id) {
+      return request(`/superadmin/announcements/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    async getAuditLogs() {
+      return request('/superadmin/audit-logs');
+    },
+    async getStorageUsage() {
+      return request('/superadmin/storage-usage');
+    },
+    async listFeatureFlags() {
+      return request('/superadmin/feature-flags');
+    },
+    async createFeatureFlag(payload) {
+      return request('/superadmin/feature-flags', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    async updateFeatureFlag(id, payload) {
+      return request(`/superadmin/feature-flags/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
+    async deleteFeatureFlag(id) {
+      return request(`/superadmin/feature-flags/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    async listTenantFeatureFlags(tenantId) {
+      return request(`/superadmin/feature-flags/tenants/${tenantId}`);
+    },
+    async toggleTenantFeatureFlag(payload) {
+      return request('/superadmin/feature-flags/tenants', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    }
+  },
+
+  // Platform (Public)
+  platform: {
+    async getActiveAnnouncements() {
+      return request('/tenants/platform-announcements');
     }
   },
 

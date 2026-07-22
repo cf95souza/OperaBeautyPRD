@@ -50,9 +50,15 @@ const AdminLayout = () => {
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/equipe`, icon: 'diversity_3', label: 'Equipe' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/clientes`, icon: 'groups', label: 'Clientes' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/servicos`, icon: 'spa', label: 'Serviços' }] : []),
+    ...(isManager && tenant?.features?.clube ? [{ to: `/${tenant_slug}/staff/admin/assinaturas`, icon: 'card_membership', label: 'Assinaturas' }] : []),
+    ...(isManager && tenant?.features?.pdv ? [{ to: `/${tenant_slug}/staff/admin/pdv`, icon: 'point_of_sale', label: 'PDV (Caixa)' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/estoque`, icon: 'shelves', label: 'Estoque' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/configuracoes`, icon: 'settings_account_box', label: 'Operacional' }] : []),
+    ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/lgpd`, icon: 'gavel', label: 'Segurança e LGPD' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/branding`, icon: 'palette', label: 'Branding' }] : []),
+    ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/lookbook`, icon: 'photo_library', label: 'Lookbook' }] : []),
+    ...(isManager && tenant?.features?.giftcards ? [{ to: `/${tenant_slug}/staff/admin/giftcards`, icon: 'card_giftcard', label: 'Vales-Presente' }] : []),
+    ...(isManager && tenant?.features?.bi_reports ? [{ to: `/${tenant_slug}/staff/admin/relatorios-bi`, icon: 'insights', label: 'Relatórios BI' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/assinatura`, icon: 'workspace_premium', label: 'Assinatura' }] : []),
   ];
 

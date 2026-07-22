@@ -9,7 +9,7 @@ import { ptBR } from 'date-fns/locale';
 const FichaClienteCRM = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { showError } = useNotification();
+  const { showSuccess, showError } = useNotification();
   const { tenant, session } = useTenant();
 
   const [client, setClient] = useState(null);
@@ -19,14 +19,44 @@ const FichaClienteCRM = () => {
   const [newNote, setNewNote] = useState('');
   const [newImage, setNewImage] = useState(null);
   const [savingNote, setSavingNote] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (!tenant || !id) return;
     fetchClientData();
   }, [tenant, id]);
 
+  const handleUpdateVipTier = async (newTier) => {
+    try {
+      const updated = await api.clients.update(id, { vip_tier: newTier });
+      setClient(prev => ({ ...prev, vip_tier: updated.vip_tier }));
+      showSuccess(`Categoria VIP atualizada para ${newTier}!`);
+    } catch (err) {
+      console.error(err);
+      showError("Erro ao atualizar categoria VIP.");
+    }
+  };
+
+  const getVipBadge = (tier) => {
+    const styles = {
+      Prata: 'bg-slate-100 text-slate-700 border border-slate-200/80 shadow-[0_2px_4px_rgba(148,163,184,0.06)]',
+      Ouro: 'bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A]/60 shadow-[0_2px_4px_rgba(180,83,9,0.04)]',
+      VIP: 'bg-[#FAF5FF] text-[#6B21A8] border border-[#E9D5FF]/60 shadow-[0_2px_4px_rgba(107,33,168,0.04)]',
+      Black: 'bg-neutral-900 text-amber-200 border border-neutral-800 shadow-[0_2px_6px_rgba(0,0,0,0.12)] font-bold'
+    };
+    
+    const label = tier || 'Prata';
+    const styleClass = styles[label] || styles.Prata;
+    
+    return (
+      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-all duration-300 ${styleClass}`}>
+        <span className="material-symbols-outlined text-[13px] filled" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
+        {label}
+      </span>
+    );
+  };
+
   const fetchClientData = async () => {
-    setLoading(true);
     try {
       // 1. Fetch Client info + appointments via API
       const clientData = await api.clients.get(id);
@@ -144,6 +174,49 @@ const FichaClienteCRM = () => {
               {client.name.charAt(0)}
             </div>
             <h2 className="font-headline-md text-headline-md text-on-surface mb-1">{client.name}</h2>
+            
+            {/* VIP Tier Badge & Custom Selector */}
+            <div className="flex flex-col items-center gap-2 mt-1 mb-3 relative">
+              {getVipBadge(client.vip_tier)}
+              
+              {(session?.role === 'manager' || session?.role === 'professional') && (
+                <div className="relative">
+                  <button
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    className="flex items-center gap-1 text-[11px] font-semibold text-secondary hover:text-primary bg-surface-container-low hover:bg-surface-variant border border-outline-variant/60 rounded-full px-3 py-1 transition-all outline-none"
+                  >
+                    <span>Classificar</span>
+                    <span className="material-symbols-outlined text-[14px]">expand_more</span>
+                  </button>
+                  
+                  {isDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)}></div>
+                      
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-32 bg-surface border border-outline-variant/40 rounded-xl shadow-lg py-1 z-20 animate-fade-in origin-top">
+                        {['Prata', 'Ouro', 'VIP', 'Black'].map((tier) => (
+                          <button
+                            key={tier}
+                            onClick={() => {
+                              handleUpdateVipTier(tier);
+                              setIsDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-xs font-semibold hover:bg-surface-variant flex items-center justify-between transition-colors ${
+                              (client.vip_tier || 'Prata') === tier ? 'text-primary bg-primary/5' : 'text-on-surface-variant'
+                            }`}
+                          >
+                            <span>{tier}</span>
+                            {(client.vip_tier || 'Prata') === tier && (
+                              <span className="material-symbols-outlined text-[14px] text-primary">check</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
             
             <div className="flex items-center gap-2 mb-1">
               <p className="font-body-md text-body-md text-secondary flex items-center gap-1">

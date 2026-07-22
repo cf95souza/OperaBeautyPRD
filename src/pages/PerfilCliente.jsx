@@ -20,6 +20,25 @@ const PerfilCliente = () => {
   const [saved, setSaved] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
 
+  const getVipBadge = (tier) => {
+    const styles = {
+      Prata: 'bg-slate-100 text-slate-700 border border-slate-200/80 shadow-[0_2px_4px_rgba(148,163,184,0.06)]',
+      Ouro: 'bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A]/60 shadow-[0_2px_4px_rgba(180,83,9,0.04)]',
+      VIP: 'bg-[#FAF5FF] text-[#6B21A8] border border-[#E9D5FF]/60 shadow-[0_2px_4px_rgba(107,33,168,0.04)]',
+      Black: 'bg-neutral-900 text-amber-200 border border-neutral-800 shadow-[0_2px_6px_rgba(0,0,0,0.12)] font-bold'
+    };
+    
+    const label = tier || 'Prata';
+    const styleClass = styles[label] || styles.Prata;
+    
+    return (
+      <span className={`inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-all duration-300 ${styleClass}`}>
+        <span className="material-symbols-outlined text-[12px] filled" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
+        {label}
+      </span>
+    );
+  };
+
   // Fetch client data
   useEffect(() => {
     if (loadingTenant) return;
@@ -134,7 +153,9 @@ const PerfilCliente = () => {
           <h2 className="font-headline-md text-headline-md-mobile text-on-surface">
             {nome || 'Cliente'}
           </h2>
-          <p className="font-label-sm text-label-sm text-secondary">Membro Platinum</p>
+          <div className="mt-1">
+            {getVipBadge(session?.vip_tier)}
+          </div>
         </section>
 
         {/* Form Sections */}
@@ -239,6 +260,32 @@ const PerfilCliente = () => {
               </div>
             </div>
           </section>
+
+          {/* Indique e Ganhe Section */}
+          {tenant?.features?.referral && (
+            <section>
+              <div className="flex items-center gap-2 mb-md">
+                <span className="material-symbols-outlined text-primary text-[20px]">volunteer_activism</span>
+                <h3 className="font-label-md text-label-md text-primary uppercase tracking-widest">Programa de Indicação</h3>
+              </div>
+              
+              <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] overflow-hidden border border-[#f4c8ce]/30">
+                <button 
+                  type="button"
+                  onClick={() => navigate(`/${tenant_slug}/indique-e-ganhe`)}
+                  className="w-full relative flex items-center justify-between p-lg group active:scale-[0.99] transition-all bg-gradient-to-r from-[#ffe4e8] to-surface-container-lowest"
+                >
+                  <div className="flex flex-col items-start text-left">
+                    <span className="font-headline-sm text-on-surface mb-1 font-bold">Indique e Ganhe</span>
+                    <span className="text-sm text-secondary">Convide amigos e ganhe R$ 20</span>
+                  </div>
+                  <div className="w-10 h-10 bg-white text-[#b0616b] rounded-full shadow-sm flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <span className="material-symbols-outlined">arrow_forward</span>
+                  </div>
+                </button>
+              </div>
+            </section>
+          )}
 
           {/* Privacidade / LGPD Section */}
           <section>

@@ -3,7 +3,8 @@ import crypto from 'crypto';
 const ALGORITHM = 'aes-256-gcm';
 
 const getEncryptionKey = () => {
-  const key = process.env.ENCRYPTION_KEY || 'default_secret_key_32_bytes_long';
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key) throw new Error('FATAL ERROR: ENCRYPTION_KEY is not defined. Set it in your .env file.');
   return crypto.createHash('sha256').update(key).digest();
 };
 

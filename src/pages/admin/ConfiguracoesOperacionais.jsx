@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
 import { api } from '../../lib/api';
 import { format, parseISO } from 'date-fns';
@@ -17,6 +17,7 @@ const DAYS_OF_WEEK = [
 
 const ConfiguracoesOperacionais = () => {
   const { tenant_slug } = useParams();
+  const navigate = useNavigate();
   const { tenant } = useTenant();
   const { showSuccess, showError, confirm } = useNotification();
 
@@ -30,6 +31,15 @@ const ConfiguracoesOperacionais = () => {
   const [socialInstagram, setSocialInstagram] = useState('');
   const [socialFacebook, setSocialFacebook] = useState('');
   const [socialWhatsapp, setSocialWhatsapp] = useState('');
+
+  // Estados para cashback
+  const [cashbackPercentage, setCashbackPercentage] = useState(0);
+  const [cashbackExpirationDays, setCashbackExpirationDays] = useState(30);
+
+  // Estados para Self Check-in (Mimos)
+  const [waitingMenuEnabled, setWaitingMenuEnabled] = useState(false);
+  const [waitingMenuItems, setWaitingMenuItems] = useState([]);
+  const [newItemInput, setNewItemInput] = useState('');
 
   // Modal Exception State
   const [showExceptionModal, setShowExceptionModal] = useState(false);
@@ -48,6 +58,10 @@ const ConfiguracoesOperacionais = () => {
       setSocialInstagram(tenant.social_instagram || '');
       setSocialFacebook(tenant.social_facebook || '');
       setSocialWhatsapp(tenant.social_whatsapp || '');
+      setCashbackPercentage(tenant.cashback_percentage || 0);
+      setCashbackExpirationDays(tenant.cashback_expiration_days || 30);
+      setWaitingMenuEnabled(tenant.waiting_menu_enabled || false);
+      setWaitingMenuItems(tenant.waiting_menu_items || ['Água', 'Café', 'Espumante']);
     }
   }, [tenant]);
 
@@ -102,12 +116,16 @@ const ConfiguracoesOperacionais = () => {
   const handleSaveAll = async () => {
     setSaving(true);
     try {
-      // 1. Salvar dados de endereço e redes sociais do Tenant
+      // 1. Salvar dados de endereço, redes sociais e cashback do Tenant
       await api.tenants.updateBranding({
         address,
         social_instagram: socialInstagram,
         social_facebook: socialFacebook,
-        social_whatsapp: socialWhatsapp
+        social_whatsapp: socialWhatsapp,
+        cashback_percentage: parseFloat(cashbackPercentage),
+        cashback_expiration_days: parseInt(cashbackExpirationDays),
+        waiting_menu_enabled: waitingMenuEnabled,
+        waiting_menu_items: waitingMenuItems
       });
 
       // 2. Upsert Business Hours
@@ -324,6 +342,134 @@ const ConfiguracoesOperacionais = () => {
                     className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
                     type="url"
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* Seção Bento: Fidelização e Cashback */}
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg flex flex-col gap-md mt-lg">
+              <h3 className="font-headline-md text-[20px] text-on-surface mb-xs flex items-center gap-sm">
+                <span className="material-symbols-outlined text-primary">stars</span>
+                Regras de Cashback (Clube Fidelidade)
+              </h3>
+              <p className="font-body-md text-body-md text-secondary">
+                Habilite o retorno de saldo para fidelizar clientes em serviços.
+              </p>
+              
+              {!tenant?.features?.clube ? (
+                <div className="bg-surface p-md rounded-xl border border-outline-variant/30 text-center">
+                  <span className="material-symbols-outlined text-3xl text-secondary mb-1">lock</span>
+                  <p className="font-label-md text-secondary mb-1">Recurso Indisponível</p>
+                  <p className="text-xs text-secondary mb-3">Ative o Clube de Assinaturas no seu plano SaaS para habilitar o Cashback.</p>
+                  <button 
+                    type="button" 
+                    onClick={() => navigate(`/${tenant_slug}/staff/admin/assinatura`)}
+                    className="text-primary font-bold text-xs hover:underline"
+                  >
+                    Ver Planos SaaS &rarr;
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-md mt-base">
+                  <div className="flex flex-col gap-xs">
+                    <label className="font-label-md text-label-md text-on-surface">Porcentagem de Cashback (%)</label>
+                    <input
+                      value={cashbackPercentage}
+                      onChange={(e) => setCashbackPercentage(e.target.value)}
+                      placeholder="Ex: 5.00"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                      type="number"
+                    />
+                    <span className="text-[10px] text-secondary">Porcentagem que retorna como saldo na carteira da cliente.</span>
+                  </div>
+
+                  <div className="flex flex-col gap-xs">
+                    <label className="font-label-md text-label-md text-on-surface">Prazo de Expiração (Dias)</label>
+                    <input
+                      value={cashbackExpirationDays}
+                      onChange={(e) => setCashbackExpirationDays(e.target.value)}
+                      placeholder="Ex: 30"
+                      min="1"
+                      className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                      type="number"
+                    />
+                    <span className="text-[10px] text-secondary">Dias para a cliente utilizar o cashback antes de expirar.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Experiência do Cliente */}
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg flex flex-col gap-md mt-lg border-l-4 border-l-accent">
+              <div className="flex justify-between items-center mb-xs">
+                <h3 className="font-headline-md text-[20px] text-on-surface flex items-center gap-sm">
+                  <span className="material-symbols-outlined text-primary">concierge</span>
+                  Self Check-in e Menu de Espera
+                </h3>
+                <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                  <input 
+                    checked={waitingMenuEnabled}
+                    onChange={(e) => setWaitingMenuEnabled(e.target.checked)}
+                    className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer" 
+                    id="toggle-waiting-menu" 
+                    type="checkbox"
+                  />
+                  <label className="toggle-label block overflow-hidden h-5 rounded-full bg-surface-variant cursor-pointer" htmlFor="toggle-waiting-menu"></label>
+                </div>
+              </div>
+              <p className="font-body-md text-body-md text-secondary">
+                Permita que suas clientes façam check-in pelo app e escolham um mimo (ex: café, água) antes de serem atendidas.
+              </p>
+              
+              <div className={`transition-all duration-300 ${waitingMenuEnabled ? 'opacity-100 max-h-[500px] mt-md' : 'opacity-50 max-h-0 overflow-hidden mt-0 pointer-events-none'}`}>
+                <label className="font-label-md text-label-md text-on-surface mb-2 block">Opções do Menu</label>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {waitingMenuItems.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-1 bg-primary-container text-on-primary-container px-3 py-1.5 rounded-full text-sm font-medium">
+                      {item}
+                      <button 
+                        onClick={() => setWaitingMenuItems(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-on-primary-container hover:text-error flex items-center justify-center ml-1"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
+                    </div>
+                  ))}
+                  {waitingMenuItems.length === 0 && (
+                    <span className="text-secondary text-sm italic">Nenhum item adicionado.</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    value={newItemInput}
+                    onChange={(e) => setNewItemInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newItemInput.trim() && !waitingMenuItems.includes(newItemInput.trim())) {
+                          setWaitingMenuItems([...waitingMenuItems, newItemInput.trim()]);
+                          setNewItemInput('');
+                        }
+                      }
+                    }}
+                    placeholder="Ex: Chá gelado (pressione Enter)"
+                    className="flex-1 p-3 bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                  />
+                  <button 
+                    onClick={() => {
+                      if (newItemInput.trim() && !waitingMenuItems.includes(newItemInput.trim())) {
+                        setWaitingMenuItems([...waitingMenuItems, newItemInput.trim()]);
+                        setNewItemInput('');
+                      }
+                    }}
+                    className="bg-secondary-container text-on-secondary-container px-4 py-2 rounded-xl font-bold hover:bg-secondary-container/80 transition-colors"
+                  >
+                    Adicionar
+                  </button>
                 </div>
               </div>
             </div>

@@ -20,6 +20,9 @@ const CadastroCliente = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const queryParams = new URLSearchParams(location.search);
+  const refCode = queryParams.get('ref');
+
   useEffect(() => {
     if (!phone) {
       navigate(`/${tenant_slug}/login`);
@@ -32,7 +35,7 @@ const CadastroCliente = () => {
     setError(null);
 
     try {
-      const { token, user } = await api.auth.registerClient(tenant.id, name, phone, password, birthDate || null);
+      const { token, user } = await api.auth.registerClient(tenant.id, name, phone, password, birthDate || null, refCode);
       login(user, token);
 
       navigate(`/${tenant_slug}/home`);
@@ -97,12 +100,22 @@ const CadastroCliente = () => {
         </section>
 
         <section className="mb-lg animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-          <h1 className="font-serif text-headline-md font-semibold text-on-surface mb-xs">
-            Parece que você é novo por aqui!
-          </h1>
-          <p className="font-sans text-body-md text-on-surface-variant">
-            Vamos fazer seu cadastro para você aproveitar a melhor experiência de beleza.
-          </p>
+          {refCode ? (
+            <div className="bg-success-container/20 border border-success/30 p-4 rounded-2xl mb-6 text-center animate-pulse">
+              <span className="material-symbols-outlined text-success text-[32px] mb-2">celebration</span>
+              <h2 className="font-headline-sm text-success-on-container font-bold">Você foi convidado(a)!</h2>
+              <p className="text-sm text-secondary">Finalize seu cadastro agora para ganhar <span className="font-bold text-success">R$ 20</span> na sua carteira digital para usar na primeira visita.</p>
+            </div>
+          ) : (
+            <>
+              <h1 className="font-serif text-headline-md font-semibold text-on-surface mb-xs">
+                Parece que você é novo por aqui!
+              </h1>
+              <p className="font-sans text-body-md text-on-surface-variant">
+                Vamos fazer seu cadastro para você aproveitar a melhor experiência de beleza.
+              </p>
+            </>
+          )}
         </section>
 
         <section className="animate-fade-in-up" style={{ animationDelay: '200ms' }}>

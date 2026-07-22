@@ -3,7 +3,7 @@ import pool from '../config/db.js';
 export const listClients = async (tenantId, limit, offset) => {
   const result = await pool.query(
     `SELECT 
-        c.id, c.name, c.phone, c.birth_date, c.created_at,
+        c.id, c.name, c.phone, c.birth_date, c.vip_tier, c.created_at,
         COUNT(a.id) FILTER (WHERE a.status = 'completed') as visits,
         COALESCE(SUM(a.total_price) FILTER (WHERE a.status = 'completed'), 0) as ltv
      FROM public.cap_clients c
@@ -42,7 +42,7 @@ export const getClientById = async (id, tenantId, userId, userRole) => {
   }
 
   const result = await pool.query(
-    'SELECT id, name, phone, birth_date, anamnese_data, created_at FROM public.cap_clients WHERE id = $1 AND tenant_id = $2',
+    'SELECT id, name, phone, birth_date, anamnese_data, vip_tier, created_at FROM public.cap_clients WHERE id = $1 AND tenant_id = $2',
     [id, tenantId]
   );
 
@@ -55,21 +55,26 @@ export const getClientById = async (id, tenantId, userId, userRole) => {
   return result.rows[0];
 };
 
-export const updateClient = async (id, tenantId, userId, userRole, name, phone, birth_date) => {
+export const updateClient = async (id, tenantId, userId, userRole, name, phone, birth_date, vip_tier) => {
   if (userRole === 'client' && userId !== id) {
     const error = new Error('Acesso negado. Você só pode atualizar seus próprios dados.');
     error.statusCode = 403;
     throw error;
   }
 
+  // Apenas equipe administrativa pode alterar a categoria VIP
+  const isStaff = userRole === 'manager' || userRole === 'professional';
+  const finalVipTier = isStaff ? vip_tier : undefined;
+
   const result = await pool.query(
     `UPDATE public.cap_clients 
      SET name = COALESCE($1, name),
          phone = COALESCE($2, phone),
-         birth_date = COALESCE($3, birth_date)
-     WHERE id = $4 AND tenant_id = $5
-     RETURNING id, name, phone, birth_date`,
-    [name, phone, birth_date || null, id, tenantId]
+         birth_date = COALESCE($3, birth_date),
+         vip_tier = COALESCE($4, vip_tier)
+     WHERE id = $5 AND tenant_id = $6
+     RETURNING id, name, phone, birth_date, vip_tier`,
+    [name, phone, birth_date || null, finalVipTier || null, id, tenantId]
   );
 
   if (result.rows.length === 0) {

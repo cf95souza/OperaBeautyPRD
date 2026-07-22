@@ -8,6 +8,8 @@ import rateLimit from 'express-rate-limit';
 import pool from './config/db.js'; // Adicionado para uso no healthcheck
 import path from 'path';
 import { fileURLToPath } from 'url';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,6 +29,21 @@ import invoiceRoutes from './routes/invoices.js';
 import superadminRoutes from './routes/superadmin.js';
 import couponRoutes from './routes/coupons.js';
 import notificationRoutes from './routes/notifications.js';
+import membershipRoutes from './routes/memberships.js';
+import productSaleRoutes from './routes/productSales.js';
+import walletRoutes from './routes/wallets.js';
+import lookbookRoutes from './routes/lookbook.js';
+import giftcardRoutes from './routes/giftcards.js';
+import referralRoutes from './routes/referral.js';
+// import aiRoutes from './routes/ai.js';
+import reportsRoutes from './routes/reports.js';
+import reviewsRoutes from './routes/reviews.js';
+import waitlistRoutes from './routes/waitlist.js';
+import termsRoutes from './routes/terms.js';
+import consentsRoutes from './routes/consents.js';
+import { initCronJobs } from './cron/reminders.js';
+
+import './workers/notificationWorker.js';
 
 dotenv.config();
 
@@ -71,9 +88,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV || process.env.NODE_ENV === 'test';
+
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: isDev ? 100000 : 200, // Aumenta o limite para desenvolvimento local
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Muitas requisições. Tente novamente mais tarde.' }
@@ -81,7 +100,10 @@ const globalLimiter = rateLimit({
 app.use('/api/', globalLimiter);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Rota do Swagger UI
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
 
 // Rota de Health Check
 app.get('/health', (req, res) => {
@@ -116,6 +138,19 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/superadmin', superadminRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/memberships', membershipRoutes);
+app.use('/api/product-sales', productSaleRoutes);
+app.use('/api/wallets', walletRoutes);
+app.use('/api/lookbook', lookbookRoutes);
+app.use('/api/giftcards', giftcardRoutes);
+app.use('/api/referral', referralRoutes);
+// app.use('/api/ai', aiRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/reviews', reviewsRoutes);
+app.use('/api/waitlist', waitlistRoutes);
+app.use('/api/terms', termsRoutes);
+app.use('/api/consents', consentsRoutes);
+
 // Middleware de tratamento global de erros
 app.use((err, req, res, next) => {
   req.log.error({ err }, '❌ Erro não tratado');
@@ -129,7 +164,11 @@ app.use((err, req, res, next) => {
     }).catch(e => req.log.error(e, 'Falha ao enviar webhook de erro'));
   }
 
-  res.status(500).json({ error: 'Ocorreu um erro interno de servidor. Por favor, tente novamente mais tarde.', detail: err.message, stack: err.stack });
+  const isDev = process.env.NODE_ENV !== 'production';
+  res.status(500).json({ 
+    error: 'Ocorreu um erro interno de servidor. Por favor, tente novamente mais tarde.',
+    ...(isDev && { detail: err.message, stack: err.stack })
+  });
 });
 
 export default app;

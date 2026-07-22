@@ -4,6 +4,7 @@ import { useTenant } from '../context/TenantContext';
 import { api } from '../lib/api';
 import { format, addDays, startOfWeek, isSameDay, parseISO, startOfDay, endOfDay, differenceInMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import WaitlistManagerModal from '../components/WaitlistManagerModal';
 
 const START_HOUR = 8;
 const END_HOUR = 20;
@@ -17,6 +18,9 @@ const AgendaProfissional = () => {
   const [viewMode, setViewMode] = useState('me'); // 'me' or 'all'
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  const [showWaitlist, setShowWaitlist] = useState(false);
+  const [waitlistCount, setWaitlistCount] = useState(0);
 
   const [weekStart, setWeekStart] = useState(() => startOfDay(new Date()));
 
@@ -56,6 +60,12 @@ const AgendaProfissional = () => {
 
       const data = await api.appointments.list(filters);
       setAppointments(data || []);
+
+      if (session?.role === 'manager' || session?.role === 'superadmin') {
+        const dateStr = selectedDate.toISOString().split('T')[0];
+        const waitData = await api.request('/waitlist', { params: { date: dateStr } });
+        setWaitlistCount(waitData ? waitData.length : 0);
+      }
     } catch (err) {
       console.error("Erro ao carregar agenda:", err);
     } finally {
@@ -152,6 +162,22 @@ const AgendaProfissional = () => {
                 Agenda do Salão
               </button>
             </div>
+          )}
+
+          {/* Waitlist Badge (Somente Gestores) */}
+          {(session?.role === 'manager' || session?.role === 'superadmin') && tenant?.features?.waitlist && (
+            <button
+              onClick={() => setShowWaitlist(true)}
+              className="flex items-center gap-2 bg-surface-container-high hover:bg-surface-variant px-4 py-2 rounded-full transition-colors border border-outline-variant relative"
+            >
+              <span className="material-symbols-outlined text-[20px] text-primary">hourglass_empty</span>
+              <span className="font-label-md text-on-surface">Fila de Espera</span>
+              {waitlistCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-error text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full animate-bounce">
+                  {waitlistCount}
+                </span>
+              )}
+            </button>
           )}
         </div>
 
@@ -267,6 +293,16 @@ const AgendaProfissional = () => {
           )}
         </div>
       </div>
+
+      {showWaitlist && (
+        <WaitlistManagerModal
+          selectedDate={selectedDate}
+          onClose={() => {
+            setShowWaitlist(false);
+            fetchAgenda();
+          }}
+        />
+      )}
     </>
   );
 };
