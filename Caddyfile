@@ -1,14 +1,6 @@
 # Caddyfile para o OperaBeauty
-{
-    email cf95.souza@gmail.com
-}
-
 
 {$DOMAIN:localhost} {
-    tls {
-        issuer zerossl
-    }
-
     # Compressão gzip/zstd para otimizar tráfego
     encode zstd gzip
 
