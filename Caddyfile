@@ -1,9 +1,10 @@
 # Caddyfile para o OperaBeauty
 
 {$DOMAIN:localhost} {
-    tls cf95.souza@gmail.com {
+    tls {
         issuer acme {
             dir https://api.buypass.com/acme/directory
+            email cf95.souza@gmail.com
         }
     }
 
