@@ -667,7 +667,45 @@ CREATE TABLE IF NOT EXISTS public.cap_reviews (
     tenant_id UUID REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
     client_id UUID REFERENCES public.cap_clients(id) ON DELETE CASCADE,
     appointment_id UUID REFERENCES public.cap_appointments(id) ON DELETE SET NULL,
+    professional_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
     rating INTEGER CHECK (rating >= 1 AND rating <= 5) NOT NULL,
     comment TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==========================================
+-- 6.6 LISTA DE ESPERA
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.cap_waitlist (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    client_id UUID REFERENCES public.cap_clients(id) ON DELETE CASCADE,
+    service_id UUID REFERENCES public.cap_services(id) ON DELETE SET NULL,
+    professional_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
+    desired_date DATE NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ==========================================
+-- 6.7 TERMOS E LGPD
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.cap_terms_templates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.cap_consents (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    client_id UUID REFERENCES public.cap_clients(id) ON DELETE CASCADE,
+    staff_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
+    term_template_id UUID REFERENCES public.cap_terms_templates(id) ON DELETE SET NULL,
+    content_snapshot TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    signed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
