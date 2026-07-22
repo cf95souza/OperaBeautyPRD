@@ -399,6 +399,7 @@ const FeatureFlagsAdmin = () => {
             </div>
           </div>
         )}
+        </div>
       </main>
     </div>
   );
