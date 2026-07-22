@@ -705,6 +705,9 @@ CREATE TABLE IF NOT EXISTS public.cap_consents (
     staff_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
     term_template_id UUID REFERENCES public.cap_terms_templates(id) ON DELETE SET NULL,
     content_snapshot TEXT NOT NULL,
+    client_ip TEXT,
+    user_agent TEXT,
+    digital_hash TEXT,
     status TEXT DEFAULT 'pending',
     signed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
