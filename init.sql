@@ -40,6 +40,7 @@ DROP TABLE IF EXISTS public.cap_wallet_transactions CASCADE;
 DROP TABLE IF EXISTS public.cap_lookbook CASCADE;
 DROP TABLE IF EXISTS public.cap_giftcards CASCADE;
 DROP TABLE IF EXISTS public.cap_leads CASCADE;
+DROP TABLE IF EXISTS public.cap_reviews CASCADE;
 
 -- ==========================================
 -- 1. EXTENSÕES NECESSÁRIAS
@@ -643,7 +644,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 INSERT INTO public.cap_platform_admins (email, password_hash, name)
 VALUES (
     'cf95.souza@gmail.com',
-    crypt('mudar_senha_mestre_123', gen_salt('bf')),
+    crypt('Mudar_senha_mestre_123', gen_salt('bf')),
     'Caio Admin'
 ),
 (
@@ -659,3 +660,16 @@ ON CONFLICT (email) DO NOTHING;
 CREATE INDEX IF NOT EXISTS idx_appointments_tenant_time ON public.cap_appointments(tenant_id, start_time);
 CREATE INDEX IF NOT EXISTS idx_clients_tenant_phone ON public.cap_clients(tenant_id, phone);
 CREATE INDEX IF NOT EXISTS idx_staff_tenant_email ON public.cap_staff(tenant_id, email);
+
+-- ==========================================
+-- 6.5 AVALIAÇÕES (REVIEWS)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.cap_reviews (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    client_id UUID REFERENCES public.cap_clients(id) ON DELETE CASCADE,
+    appointment_id UUID REFERENCES public.cap_appointments(id) ON DELETE SET NULL,
+    rating INTEGER CHECK (rating >= 1 AND rating <= 5) NOT NULL,
+    comment TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
