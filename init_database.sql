@@ -1,5 +1,3 @@
--- Arquivo auto-gerado a partir do database.md para inicialização da VPS
-
 -- ==========================================
 -- 0. CLEANUP (CUIDADO: APAGA TUDO!)
 -- ==========================================

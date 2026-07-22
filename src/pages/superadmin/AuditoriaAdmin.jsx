@@ -81,7 +81,7 @@ const AuditoriaAdmin = () => {
           </Link>
           <Link to="/superadmin/tenants" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
             <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>storefront</span>
-            Studios e Clientes
+            Salões e Clientes
           </Link>
           <Link to="/superadmin/planos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
             <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>subscriptions</span>
@@ -134,8 +134,8 @@ const AuditoriaAdmin = () => {
 
       <main className="flex-1 flex flex-col p-lg md:p-xl max-w-[1200px] w-full mx-auto gap-xl">
         <header>
-          <h1 className="font-headline-lg text-headline-lg text-on-surface tracking-tight mb-2">Auditoria e Saúde</h1>
-          <p className="font-body-lg text-body-lg text-on-surface-variant">
+          <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-xs">Auditoria e Saúde</h1>
+          <p className="font-body-md text-body-md text-secondary">
             Monitore o consumo de armazenamento dos studios e acompanhe os logs de segurança do painel mestre.
           </p>
         </header>
