@@ -21,3 +21,8 @@ database.sql
 # Agentes e Skills
 skills/
 .agents/
+
+# Logs
+*.log
+logs/
+backend/logs/

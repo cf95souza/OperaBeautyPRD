@@ -1,20 +1,19 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useParams } from 'react-router-dom';
 import { 
   Calendar, 
-  Scissors, 
-  Package, 
+  Wallet, 
   UserCircle, 
   LogOut,
   X 
 } from 'lucide-react';
 
 const ProfessionalSidebar = ({ profile, onLogout, onClose }) => {
+  const { tenant_slug } = useParams();
   const menuItems = [
-    { to: '/portal', icon: Calendar, label: 'Minha Agenda' },
-    { to: '/servicos', icon: Scissors, label: 'Serviços' },
-    { to: '/estoque', icon: Package, label: 'Estoque' },
-    { to: '/minha-conta', icon: UserCircle, label: 'Meu Perfil' },
+    { to: `/${tenant_slug || ''}/staff/agenda-profissional`, icon: Calendar, label: 'Minha Agenda' },
+    { to: `/${tenant_slug || ''}/staff/comissoes`, icon: Wallet, label: 'Minhas Comissões' },
+    { to: `/${tenant_slug || ''}/staff/perfil`, icon: UserCircle, label: 'Meu Perfil' },
   ];
 
   return (

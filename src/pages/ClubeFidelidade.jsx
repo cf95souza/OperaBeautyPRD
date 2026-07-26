@@ -118,7 +118,7 @@ const ClubeFidelidade = () => {
                       <span className="font-headline-sm text-primary font-bold">{sub.remaining_sessions} sessões</span>
                     </div>
                     <button 
-                      onClick={() => navigate(`/${tenant_slug}/agendar/profissionais`)}
+                      onClick={() => navigate(`/${tenant_slug}/agendar/servicos`)}
                       className="bg-primary text-on-primary text-xs font-semibold px-4 py-2.5 rounded-full hover:opacity-90 shadow-sm transition-all"
                     >
                       Agendar

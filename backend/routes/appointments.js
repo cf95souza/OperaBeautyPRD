@@ -49,6 +49,7 @@ const updateAppointmentSchema = z.object({
     total_price: z.number().min(0, 'Preço total inválido.').optional(),
     client_membership_id: z.string().uuid('ID do plano inválido.').nullable().optional(),
     cashback_redeemed: z.coerce.number().min(0, 'Valor de cashback inválido.').optional(),
+    status: z.enum(['scheduled', 'in-progress', 'completed', 'cancelled']).optional(),
     checkin_status: z.enum(['pending', 'checked_in']).optional(),
     checkin_request: z.string().optional()
   }),
@@ -71,9 +72,12 @@ router.get('/', authMiddleware, validate(listAppointmentsSchema), async (req, re
     return res.status(400).json({ error: 'tenant_id é obrigatório para listar agendamentos.' });
   }
 
+  // Reforço de Segurança e Isolamento: Se o usuário for profissional, forçar filtro pelo próprio ID
+  const effectiveStaffId = role === 'professional' ? id : staff_id;
+
   try {
     const appointments = await listAppointments({
-      role, id, userTenantId, targetTenantId, start_date, end_date, staff_id, client_id, limit, offset
+      role, id, userTenantId, targetTenantId, start_date, end_date, staff_id: effectiveStaffId, client_id, limit, offset
     });
     return res.json(appointments);
   } catch (error) {

@@ -17,7 +17,7 @@ router.post('/', authMiddleware, requireRole(['client']), async (req, res) => {
   try {
     // Verificar se o agendamento pertence ao cliente e está concluído
     const apptQuery = await pool.query(
-      `SELECT professional_id, status FROM public.cap_appointments 
+      `SELECT staff_id as professional_id, status FROM public.cap_appointments 
        WHERE id = $1 AND client_id = $2 AND tenant_id = $3`,
       [appointment_id, client_id, tenant_id]
     );
@@ -58,15 +58,15 @@ router.get('/pending', authMiddleware, requireRole(['client']), async (req, res)
     // Busca agendamentos concluídos que NÃO existem na tabela de reviews
     // Retorna apenas 1 (o mais recente)
     const pendingQuery = await pool.query(
-      `SELECT a.id as appointment_id, a.appointment_date, s.name as service_name, p.name as professional_name
+      `SELECT a.id as appointment_id, a.start_time as appointment_date, s.name as service_name, p.name as professional_name
        FROM public.cap_appointments a
        JOIN public.cap_services s ON a.service_id = s.id
-       JOIN public.cap_staff p ON a.professional_id = p.id
+       JOIN public.cap_staff p ON a.staff_id = p.id
        LEFT JOIN public.cap_reviews r ON a.id = r.appointment_id
        WHERE a.client_id = $1 AND a.tenant_id = $2 
        AND a.status = 'completed'
        AND r.id IS NULL
-       ORDER BY a.appointment_date DESC, a.appointment_time DESC
+       ORDER BY a.start_time DESC
        LIMIT 1`,
       [client_id, tenant_id]
     );

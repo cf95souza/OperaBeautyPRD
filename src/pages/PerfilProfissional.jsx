@@ -53,8 +53,17 @@ const PerfilProfissional = () => {
       if (novaSenha !== confirmarSenha) {
         showError("As senhas não coincidem."); return;
       }
-      if (novaSenha.length < 4) {
-        showError("A nova senha deve ter no mínimo 4 caracteres."); return;
+      if (novaSenha.length < 8) {
+        showError("A nova senha deve ter no mínimo 8 caracteres."); return;
+      }
+      if (!/[A-Z]/.test(novaSenha)) {
+        showError("A senha precisa ter pelo menos 1 letra maiúscula."); return;
+      }
+      if (!/[a-z]/.test(novaSenha)) {
+        showError("A senha precisa ter pelo menos 1 letra minúscula."); return;
+      }
+      if (!/[\W_]/.test(novaSenha)) {
+        showError("A senha precisa ter pelo menos 1 caractere especial (@, #, $, etc)."); return;
       }
     }
 
@@ -190,7 +199,7 @@ const PerfilProfissional = () => {
               </div>
             </div>
             <p className="text-xs text-secondary mt-md">
-              Preencha os campos acima apenas se desejar alterar a sua senha de acesso atual.
+              Preencha apenas se desejar alterar a senha atual. Mínimo de 8 caracteres, contendo letra maiúscula, minúscula e caractere especial.
             </p>
           </div>
 

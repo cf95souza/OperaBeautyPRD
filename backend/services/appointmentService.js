@@ -1,5 +1,5 @@
 import pool from '../config/db.js';
-import { consumeMembershipSession } from './membershipService.js';
+import { applyMembershipSession, refundMembershipSession } from './membershipService.js';
 import { processCashbackEarnings, processCashbackRedemption } from './walletService.js';
 
 export const listAppointments = async ({ role, id, userTenantId, targetTenantId, start_date, end_date, staff_id, client_id, limit, offset }) => {
@@ -116,6 +116,12 @@ export const getAppointmentById = async ({ id, tenant_id, role, userId }) => {
     throw error;
   }
 
+  if (role === 'professional' && appointment.staff_id !== userId) {
+    const error = new Error('Acesso negado. Você só pode visualizar seus próprios agendamentos.');
+    error.statusCode = 403;
+    throw error;
+  }
+
   return appointment;
 };
 
@@ -134,11 +140,20 @@ export const createAppointment = async ({ finalClientId, staff_id, service_id, s
   const startTime = new Date(start_time);
   const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
 
+  // Aplica e consome a sessão do clube automaticamente no agendamento (se houver)
+  let appliedMembershipId = client_membership_id || null;
+  if (!appliedMembershipId) {
+    const memResult = await applyMembershipSession(finalClientId, tenantId, service_id);
+    if (memResult) {
+      appliedMembershipId = memResult.id;
+    }
+  }
+
   const result = await pool.query(
     `INSERT INTO public.cap_appointments (tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7, $8, $9, NOW())
      RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, staff_commission_value, created_at`,
-    [tenantId, finalClientId, staff_id, service_id, startTime, endTime, total_price, client_membership_id || null, cashback_redeemed || 0]
+    [tenantId, finalClientId, staff_id, service_id, startTime, endTime, total_price, appliedMembershipId, cashback_redeemed || 0]
   );
 
   const clientRes = await pool.query('SELECT name FROM public.cap_clients WHERE id = $1 AND tenant_id = $2', [finalClientId, tenantId]);
@@ -213,10 +228,8 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
       const commissionRate = parseFloat(staffRes.rows[0]?.commission_rate || '0');
       finalCommissionVal = (finalTotalPrice * commissionRate) / 100;
 
-      // Consome sessão se houver associação com assinatura
-      if (finalMembershipId) {
-        await consumeMembershipSession(finalMembershipId, tenantId);
-      }
+      // A dedução do Clube de Assinatura já foi feita no momento do agendamento
+      // Nenhuma dedução extra é necessária aqui para evitar cobrança duplicada.
 
       // Processar resgate de cashback (débito) se aplicável
       if (parseFloat(finalCashbackRedeemed) > 0) {
@@ -276,8 +289,11 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
       ).catch(err => console.error('Falha ao disparar push notification de check-in:', err));
     }
 
-    // Se mudou para cancelado, checar fila de espera
+    // Se mudou para cancelado, checar fila de espera e reembolsar sessão
     if (finalStatus === 'cancelled' && currentApp.status !== 'cancelled') {
+      if (currentApp.client_membership_id) {
+        await refundMembershipSession(currentApp.client_membership_id);
+      }
       await checkWaitlistAndNotify(clientConnection, tenantId, finalStartTime);
     }
 
@@ -310,9 +326,14 @@ export const deleteAppointment = async ({ id, tenantId, userId, userRole }) => {
   }
 
   const result = await pool.query(
-    "UPDATE public.cap_appointments SET status = 'cancelled' WHERE id = $1 AND tenant_id = $2 RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, staff_commission_value, created_at",
+    "UPDATE public.cap_appointments SET status = 'cancelled' WHERE id = $1 AND tenant_id = $2 RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, staff_commission_value, client_membership_id, created_at",
     [id, tenantId]
   );
+
+  // Devolver sessão do clube se aplicável
+  if (result.rows[0].client_membership_id) {
+    await refundMembershipSession(result.rows[0].client_membership_id);
+  }
 
   // Checar fila de espera
   await checkWaitlistAndNotify(pool, tenantId, result.rows[0].start_time);

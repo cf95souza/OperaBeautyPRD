@@ -80,7 +80,7 @@ const FidelidadeCarteira = () => {
           <div className="flex justify-between items-center border-t border-white/10 pt-md mt-md">
             <span className="text-[11px] opacity-75">Use o seu saldo como desconto no próximo serviço!</span>
             <button 
-              onClick={() => navigate(`/${tenant_slug}/agendar/profissionais`)}
+              onClick={() => navigate(`/${tenant_slug}/agendar/servicos`)}
               className="bg-white text-primary text-xs font-bold px-4 py-2.5 rounded-full hover:bg-white/95 transition-all shadow-sm shrink-0 active:scale-95"
             >
               Agendar Agora

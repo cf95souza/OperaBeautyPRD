@@ -19,7 +19,7 @@ const router = express.Router();
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 100,
   message: { error: 'Muitas tentativas de login. Tente novamente mais tarde.' }
 });
 
@@ -130,6 +130,7 @@ router.post('/check-client', loginLimiter, validate(checkClientSchema), async (r
   const { tenant_id, phone } = req.body;
   try {
     const result = await checkClientExists(tenant_id, phone);
+    console.log(`[check-client] tenant_id: ${tenant_id}, phone: ${phone}, exists: ${result.exists}`);
     return res.json({ action: result.exists ? 'login' : 'register' });
   } catch (error) {
     req.log.error(error, 'Erro ao checar cliente');

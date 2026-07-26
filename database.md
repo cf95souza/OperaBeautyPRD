@@ -1,5 +1,15 @@
--- Arquivo auto-gerado a partir do database.md para inicialização da VPS
+# Estrutura do Banco de Dados PostgreSQL (OperaBeauty)
 
+Este arquivo descreve a estrutura oficial e definitiva do banco de dados PostgreSQL do OperaBeauty SaaS Multi-Tenant.
+Ele é o documento oficial de referência para a implantação do banco de dados em homologação e produção (VPS).
+
+---
+
+## 1. DDL de Criação das Tabelas
+
+O script abaixo cria todas as tabelas necessárias, os relacionamentos e as restrições de integridade.
+
+```sql
 -- ==========================================
 -- 0. CLEANUP (CUIDADO: APAGA TUDO!)
 -- ==========================================
@@ -21,26 +31,9 @@ DROP TABLE IF EXISTS public.cap_settings CASCADE;
 DROP TABLE IF EXISTS public.cap_coupons CASCADE;
 DROP TABLE IF EXISTS public.cap_invoices CASCADE;
 DROP TABLE IF EXISTS public.cap_platform_admins CASCADE;
-DROP TABLE IF EXISTS public.cap_platform_announcements CASCADE;
 DROP TABLE IF EXISTS public.cap_plans CASCADE;
 DROP TABLE IF EXISTS public.cap_platform_settings CASCADE;
 DROP TABLE IF EXISTS public.cap_tenants CASCADE;
-DROP TABLE IF EXISTS public.cap_refresh_tokens CASCADE;
-DROP TABLE IF EXISTS public.cap_crm_images CASCADE;
-DROP TABLE IF EXISTS public.cap_push_subscriptions CASCADE;
-DROP TABLE IF EXISTS public.cap_notifications CASCADE;
-DROP TABLE IF EXISTS public.cap_feature_flags CASCADE;
-DROP TABLE IF EXISTS public.cap_tenant_feature_flags CASCADE;
-DROP TABLE IF EXISTS public.cap_salon_memberships CASCADE;
-DROP TABLE IF EXISTS public.cap_client_memberships CASCADE;
-DROP TABLE IF EXISTS public.cap_product_sales CASCADE;
-DROP TABLE IF EXISTS public.cap_product_sale_items CASCADE;
-DROP TABLE IF EXISTS public.cap_client_wallets CASCADE;
-DROP TABLE IF EXISTS public.cap_wallet_transactions CASCADE;
-DROP TABLE IF EXISTS public.cap_lookbook CASCADE;
-DROP TABLE IF EXISTS public.cap_giftcards CASCADE;
-DROP TABLE IF EXISTS public.cap_leads CASCADE;
-DROP TABLE IF EXISTS public.cap_reviews CASCADE;
 
 -- ==========================================
 -- 1. EXTENSÕES NECESSÁRIAS
@@ -103,10 +96,6 @@ CREATE TABLE public.cap_tenants (
     social_instagram TEXT,
     social_facebook TEXT,
     social_whatsapp TEXT,
-
-    -- Cashback
-    cashback_percentage DECIMAL(5, 2) DEFAULT 0.00,
-    cashback_expiration_days INTEGER DEFAULT 30,
     
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -241,7 +230,6 @@ CREATE TABLE public.cap_appointments (
     client_membership_id UUID, -- Referência ao plano do clube (caso use créditos de assinatura)
     checkin_status TEXT DEFAULT 'pending', -- pending, checked_in
     checkin_request TEXT, -- Ex: Café sem açúcar
-    cashback_redeemed DECIMAL(10, 2) DEFAULT 0.00,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -253,7 +241,6 @@ CREATE TABLE public.cap_timeline_notes (
     appointment_id UUID REFERENCES public.cap_appointments(id),
     staff_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
     content TEXT NOT NULL,
-    image_path VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -361,10 +348,228 @@ CREATE TABLE public.cap_notifications (
 CREATE INDEX idx_audit_tenant ON public.cap_audit_logs(tenant_id);
 CREATE INDEX idx_audit_entity ON public.cap_audit_logs(entity_name, entity_id);
 CREATE INDEX idx_audit_created_at ON public.cap_audit_logs(created_at);
+```
 
--- ==========================================
--- 8. Tabelas de Feature Flags
--- ==========================================
+---
+
+## 3. Segurança e Acesso (RLS)
+
+> [!NOTE]
+> Durante a fase de desenvolvimento e testes locais, o Row Level Security (RLS) pode estar temporariamente desabilitado. Na implantação de produção (VPS), o controle lógico de tenant é feito no backend (Express) e reforçado no banco conforme necessário.
+
+```sql
+ALTER TABLE public.cap_tenants DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_clients DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_staff DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_services DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_inventory DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_service_inventory DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_appointments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_timeline_notes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_invoices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_plans DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_coupons DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_audit_logs DISABLE ROW LEVEL SECURITY;
+```
+
+---
+
+## 4. Funções e Procedures de Autenticação (pgcrypto)
+
+Estas funções executam a criptografia de senhas no lado do banco utilizando `blowfish` (`bf`).
+
+```sql
+-- 4.1 Criar Cliente com Senha Segura
+CREATE OR REPLACE FUNCTION cap_register_client(p_tenant_id UUID, p_name TEXT, p_phone TEXT, p_password TEXT)
+RETURNS UUID AS $$
+DECLARE
+    new_id UUID;
+BEGIN
+    INSERT INTO public.cap_clients (tenant_id, name, phone, password_hash)
+    VALUES (p_tenant_id, p_name, p_phone, crypt(p_password, gen_salt('bf')))
+    RETURNING id INTO new_id;
+    
+    RETURN new_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4.2 Login de Cliente
+CREATE OR REPLACE FUNCTION cap_login_client(p_tenant_slug TEXT, p_phone TEXT, p_password TEXT)
+RETURNS jsonb AS $$
+DECLARE
+    v_tenant_id UUID;
+    v_client RECORD;
+BEGIN
+    -- 1. Achar o tenant pelo slug
+    SELECT id INTO v_tenant_id FROM public.cap_tenants WHERE slug = p_tenant_slug AND status = 'active';
+    IF NOT FOUND THEN RETURN NULL; END IF;
+
+    -- 2. Achar cliente e validar senha usando pgcrypto
+    SELECT id, name, phone INTO v_client
+    FROM public.cap_clients 
+    WHERE tenant_id = v_tenant_id 
+      AND phone = p_phone 
+      AND password_hash = crypt(p_password, password_hash);
+      
+    IF NOT FOUND THEN RETURN NULL; END IF;
+
+    -- 3. Retornar os dados não sensíveis
+    RETURN jsonb_build_object('id', v_client.id, 'name', v_client.name, 'tenant_id', v_tenant_id, 'role', 'client');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4.3 Login de Membro da Equipe (Staff)
+CREATE OR REPLACE FUNCTION cap_login_staff(p_tenant_slug TEXT, p_email TEXT, p_password TEXT)
+RETURNS jsonb AS $$
+DECLARE
+    v_tenant_id UUID;
+    v_staff RECORD;
+BEGIN
+    -- 1. Achar o tenant pelo slug
+    SELECT id INTO v_tenant_id FROM public.cap_tenants WHERE slug = p_tenant_slug AND status = 'active';
+    IF NOT FOUND THEN RETURN NULL; END IF;
+
+    -- 2. Achar staff e validar senha usando pgcrypto
+    SELECT id, name, email, role INTO v_staff
+    FROM public.cap_staff 
+    WHERE tenant_id = v_tenant_id 
+      AND email = p_email 
+      AND password_hash = crypt(p_password, password_hash)
+      AND is_active = true;
+      
+    IF NOT FOUND THEN RETURN NULL; END IF;
+
+    -- 3. Retornar os dados não sensíveis
+    RETURN jsonb_build_object('id', v_staff.id, 'name', v_staff.name, 'tenant_id', v_tenant_id, 'role', v_staff.role);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4.4 Criar Staff com Senha Segura
+CREATE OR REPLACE FUNCTION cap_register_staff(
+    p_tenant_id UUID, 
+    p_name TEXT, 
+    p_phone TEXT, 
+    p_email TEXT,
+    p_password TEXT, 
+    p_role TEXT DEFAULT 'professional'
+)
+RETURNS UUID AS $$
+DECLARE
+    new_id UUID;
+BEGIN
+    INSERT INTO public.cap_staff (tenant_id, name, phone, email, password_hash, role, is_active)
+    VALUES (
+        p_tenant_id, 
+        p_name, 
+        p_phone, 
+        p_email,
+        crypt(p_password, gen_salt('bf')),
+        p_role,
+        true
+    )
+    RETURNING id INTO new_id;
+    
+    RETURN new_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4.5 Atualizar Staff (com senha opcional)
+CREATE OR REPLACE FUNCTION cap_update_staff(
+    p_staff_id UUID, 
+    p_tenant_id UUID,
+    p_name TEXT, 
+    p_phone TEXT, 
+    p_email TEXT,
+    p_password TEXT, 
+    p_role TEXT,
+    p_is_active BOOLEAN
+)
+RETURNS void AS $$
+BEGIN
+    IF p_password IS NOT NULL AND p_password != '' THEN
+        UPDATE public.cap_staff 
+        SET name = p_name, phone = p_phone, email = p_email, role = p_role, is_active = p_is_active, password_hash = crypt(p_password, gen_salt('bf'))
+        WHERE id = p_staff_id AND tenant_id = p_tenant_id;
+    ELSE
+        UPDATE public.cap_staff 
+        SET name = p_name, phone = p_phone, email = p_email, role = p_role, is_active = p_is_active
+        WHERE id = p_staff_id AND tenant_id = p_tenant_id;
+    END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4.6 Atualizar Senha de Cliente pelo Gestor
+CREATE OR REPLACE FUNCTION cap_update_client_password(
+    p_client_id UUID, 
+    p_tenant_id UUID,
+    p_password TEXT
+)
+RETURNS void AS $$
+BEGIN
+    UPDATE public.cap_clients 
+    SET password_hash = crypt(p_password, gen_salt('bf'))
+    WHERE id = p_client_id AND tenant_id = p_tenant_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+---
+
+## 5. Seed de Inicialização (Super Admin Padrão)
+
+Para criar o primeiro administrador mestre da plataforma SaaS:
+
+```sql
+INSERT INTO public.cap_platform_admins (email, password_hash, name)
+VALUES (
+    'cf95.souza@gmail.com',
+    crypt('mudar_senha_mestre_123', gen_salt('bf')),
+    'Super Admin'
+)
+ON CONFLICT (email) DO NOTHING;
+```
+
+---
+
+## 6. Índices de Performance
+
+Para otimizar consultas pesadas (como filtragem de agendamentos por data e logins por telefone/email), os seguintes índices foram criados:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_appointments_tenant_time ON public.cap_appointments(tenant_id, start_time);
+CREATE INDEX IF NOT EXISTS idx_clients_tenant_phone ON public.cap_clients(tenant_id, phone);
+CREATE INDEX IF NOT EXISTS idx_staff_tenant_email ON public.cap_staff(tenant_id, email);
+```
+
+---
+
+## 7. Tabela de Controle de Sessões e Refresh Tokens
+
+Esta tabela gerencia o tempo de vida das sessões (refresh tokens), prevenindo fixação de sessão e permitindo invalidação de dispositivos (FINDING-07).
+
+```sql
+CREATE TABLE IF NOT EXISTS public.cap_refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    
+    -- Binding e Rotação
+    family_id UUID, -- Identifica a família de tokens (rotação)
+    is_revoked BOOLEAN DEFAULT FALSE, -- Flag de invalidação
+    ip_address TEXT, -- IP associado ao token original
+    user_agent TEXT -- Dispositivo associado
+);
+```
+
+---
+
+## 8. Tabelas de Feature Flags (Gestão de Módulos Beta)
+
+Estas tabelas gerenciam quais funcionalidades experimentais ou premium estão ativas globalmente ou por tenant (salão).
+
+```sql
 CREATE TABLE IF NOT EXISTS public.cap_feature_flags (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL UNIQUE,
@@ -379,10 +584,15 @@ CREATE TABLE IF NOT EXISTS public.cap_tenant_feature_flags (
     is_enabled BOOLEAN DEFAULT TRUE,
     PRIMARY KEY (tenant_id, feature_flag_id)
 );
+```
 
--- ==========================================
--- 9. Tabelas de Assinaturas e Fidelidade (Clube do Salão)
--- ==========================================
+---
+
+## 9. Tabelas de Assinaturas e Fidelidade (Clube do Salão)
+
+Estas tabelas gerenciam os planos de assinatura locais criados pelos salões e o saldo de créditos das clientes.
+
+```sql
 CREATE TABLE IF NOT EXISTS public.cap_salon_memberships (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
@@ -413,10 +623,15 @@ CREATE TABLE IF NOT EXISTS public.cap_client_memberships (
 
 CREATE INDEX IF NOT EXISTS idx_client_memberships_client ON public.cap_client_memberships(client_id);
 CREATE INDEX IF NOT EXISTS idx_client_memberships_tenant ON public.cap_client_memberships(tenant_id);
+```
 
--- ==========================================
--- 10. Tabelas do Caixa Rápido / PDV
--- ==========================================
+---
+
+## 10. Tabelas do Caixa Rápido / PDV (Vendas Físicas)
+
+Estas tabelas registram as vendas diretas de produtos em estoque realizadas na frente de caixa, dando a baixa automática de quantidade e vinculando a clientes de forma opcional.
+
+```sql
 CREATE TABLE IF NOT EXISTS public.cap_product_sales (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
@@ -438,10 +653,25 @@ CREATE TABLE IF NOT EXISTS public.cap_product_sale_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_product_sale_items_sale ON public.cap_product_sale_items(sale_id);
+```
 
--- ==========================================
--- 11. Carteira Digital e Cashback
--- ==========================================
+---
+
+## 11. Tabelas de Carteira Digital e Cashback
+
+Estas tabelas controlam o saldo de cashback acumulado pelas clientes ao realizar serviços, bem como o extrato de movimentação financeira (crédito por serviço, débito por agendamento ou baixa por expiração).
+
+```sql
+-- Adicionar colunas de configuração à tabela de Tenants
+ALTER TABLE public.cap_tenants
+ADD COLUMN IF NOT EXISTS cashback_percentage DECIMAL(5, 2) DEFAULT 0.00,
+ADD COLUMN IF NOT EXISTS cashback_expiration_days INTEGER DEFAULT 30;
+
+-- Adicionar coluna de controle de resgate ao agendamento
+ALTER TABLE public.cap_appointments
+ADD COLUMN IF NOT EXISTS cashback_redeemed DECIMAL(10, 2) DEFAULT 0.00;
+
+-- Criar tabela de Carteiras
 CREATE TABLE IF NOT EXISTS public.cap_client_wallets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
@@ -453,6 +683,7 @@ CREATE TABLE IF NOT EXISTS public.cap_client_wallets (
 
 CREATE INDEX IF NOT EXISTS idx_client_wallets_tenant_client ON public.cap_client_wallets(tenant_id, client_id);
 
+-- Criar tabela de Transações de Carteira
 CREATE TABLE IF NOT EXISTS public.cap_wallet_transactions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
@@ -467,10 +698,15 @@ CREATE TABLE IF NOT EXISTS public.cap_wallet_transactions (
 
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_client ON public.cap_wallet_transactions(client_id);
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_tenant_client ON public.cap_wallet_transactions(tenant_id, client_id);
+```
 
--- ==========================================
--- 12. Tabelas de Experiência do Cliente (Lookbook)
--- ==========================================
+---
+
+## 12. Tabelas de Experiência do Cliente (Lookbook)
+
+Esta tabela armazena a galeria de resultados/inspirações do salão.
+
+```sql
 CREATE TABLE public.cap_lookbook (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
@@ -481,11 +717,18 @@ CREATE TABLE public.cap_lookbook (
     staff_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_cap_lookbook_tenant ON public.cap_lookbook(tenant_id);
 
--- ==========================================
--- 13. Vales-Presente (Gift Cards)
--- ==========================================
+-- Índices
+CREATE INDEX IF NOT EXISTS idx_cap_lookbook_tenant ON public.cap_lookbook(tenant_id);
+```
+
+---
+
+## 13. Vales-Presente (Gift Cards)
+
+Esta tabela armazena os cartões presente emitidos pelo salão.
+
+```sql
 CREATE TABLE public.cap_giftcards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
@@ -497,221 +740,8 @@ CREATE TABLE public.cap_giftcards (
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Índices
 CREATE INDEX IF NOT EXISTS idx_cap_giftcards_tenant ON public.cap_giftcards(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_cap_giftcards_code ON public.cap_giftcards(code);
-
-
--- ==========================================
--- SEGURANÇA E ACESSO (RLS)
--- ==========================================
-ALTER TABLE public.cap_tenants DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_clients DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_staff DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_services DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_inventory DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_service_inventory DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_appointments DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_timeline_notes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_invoices DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_plans DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_coupons DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cap_audit_logs DISABLE ROW LEVEL SECURITY;
-
--- ==========================================
--- FUNÇÕES DE AUTENTICAÇÃO E REGISTRO
--- ==========================================
-CREATE OR REPLACE FUNCTION cap_register_client(p_tenant_id UUID, p_name TEXT, p_phone TEXT, p_password TEXT)
-RETURNS UUID AS $$
-DECLARE
-    new_id UUID;
-BEGIN
-    INSERT INTO public.cap_clients (tenant_id, name, phone, password_hash)
-    VALUES (p_tenant_id, p_name, p_phone, crypt(p_password, gen_salt('bf')))
-    RETURNING id INTO new_id;
-    RETURN new_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE FUNCTION cap_login_client(p_tenant_slug TEXT, p_phone TEXT, p_password TEXT)
-RETURNS jsonb AS $$
-DECLARE
-    v_tenant_id UUID;
-    v_client RECORD;
-BEGIN
-    SELECT id INTO v_tenant_id FROM public.cap_tenants WHERE slug = p_tenant_slug AND status = 'active';
-    IF NOT FOUND THEN RETURN NULL; END IF;
-
-    SELECT id, name, phone INTO v_client
-    FROM public.cap_clients 
-    WHERE tenant_id = v_tenant_id 
-      AND phone = p_phone 
-      AND password_hash = crypt(p_password, password_hash);
-      
-    IF NOT FOUND THEN RETURN NULL; END IF;
-
-    RETURN jsonb_build_object('id', v_client.id, 'name', v_client.name, 'tenant_id', v_tenant_id, 'role', 'client');
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE FUNCTION cap_login_staff(p_tenant_slug TEXT, p_email TEXT, p_password TEXT)
-RETURNS jsonb AS $$
-DECLARE
-    v_tenant_id UUID;
-    v_staff RECORD;
-BEGIN
-    SELECT id INTO v_tenant_id FROM public.cap_tenants WHERE slug = p_tenant_slug AND status = 'active';
-    IF NOT FOUND THEN RETURN NULL; END IF;
-
-    SELECT id, name, email, role INTO v_staff
-    FROM public.cap_staff 
-    WHERE tenant_id = v_tenant_id 
-      AND email = p_email 
-      AND password_hash = crypt(p_password, password_hash)
-      AND is_active = true;
-      
-    IF NOT FOUND THEN RETURN NULL; END IF;
-
-    RETURN jsonb_build_object('id', v_staff.id, 'name', v_staff.name, 'tenant_id', v_tenant_id, 'role', v_staff.role);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE FUNCTION cap_register_staff(
-    p_tenant_id UUID, 
-    p_name TEXT, 
-    p_phone TEXT, 
-    p_email TEXT,
-    p_password TEXT, 
-    p_role TEXT DEFAULT 'professional'
-)
-RETURNS UUID AS $$
-DECLARE
-    new_id UUID;
-BEGIN
-    INSERT INTO public.cap_staff (tenant_id, name, phone, email, password_hash, role, is_active)
-    VALUES (
-        p_tenant_id, 
-        p_name, 
-        p_phone, 
-        p_email,
-        crypt(p_password, gen_salt('bf')),
-        p_role,
-        true
-    )
-    RETURNING id INTO new_id;
-    RETURN new_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE FUNCTION cap_update_staff(
-    p_staff_id UUID, 
-    p_tenant_id UUID,
-    p_name TEXT, 
-    p_phone TEXT, 
-    p_email TEXT,
-    p_password TEXT, 
-    p_role TEXT,
-    p_is_active BOOLEAN
-)
-RETURNS void AS $$
-BEGIN
-    IF p_password IS NOT NULL AND p_password != '' THEN
-        UPDATE public.cap_staff 
-        SET name = p_name, phone = p_phone, email = p_email, role = p_role, is_active = p_is_active, password_hash = crypt(p_password, gen_salt('bf'))
-        WHERE id = p_staff_id AND tenant_id = p_tenant_id;
-    ELSE
-        UPDATE public.cap_staff 
-        SET name = p_name, phone = p_phone, email = p_email, role = p_role, is_active = p_is_active
-        WHERE id = p_staff_id AND tenant_id = p_tenant_id;
-    END IF;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE FUNCTION cap_update_client_password(
-    p_client_id UUID, 
-    p_tenant_id UUID,
-    p_password TEXT
-)
-RETURNS void AS $$
-BEGIN
-    UPDATE public.cap_clients 
-    SET password_hash = crypt(p_password, gen_salt('bf'))
-    WHERE id = p_client_id AND tenant_id = p_tenant_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- ==========================================
--- SUPER ADMIN INICIAL
--- ==========================================
-INSERT INTO public.cap_platform_admins (email, password_hash, name)
-VALUES (
-    'cf95.souza@gmail.com',
-    crypt('Mudar_senha_mestre_123', gen_salt('bf')),
-    'Caio Admin'
-),
-(
-    'thais98sn@gmail.com',
-    crypt('Thais_Mestre@2026', gen_salt('bf')),
-    'Thais Admin'
-)
-ON CONFLICT (email) DO NOTHING;
-
--- ==========================================
--- ÍNDICES DE PERFORMANCE
--- ==========================================
-CREATE INDEX IF NOT EXISTS idx_appointments_tenant_time ON public.cap_appointments(tenant_id, start_time);
-CREATE INDEX IF NOT EXISTS idx_clients_tenant_phone ON public.cap_clients(tenant_id, phone);
-CREATE INDEX IF NOT EXISTS idx_staff_tenant_email ON public.cap_staff(tenant_id, email);
-
--- ==========================================
--- 6.5 AVALIAÇÕES (REVIEWS)
--- ==========================================
-CREATE TABLE IF NOT EXISTS public.cap_reviews (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    tenant_id UUID REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
-    client_id UUID REFERENCES public.cap_clients(id) ON DELETE CASCADE,
-    appointment_id UUID REFERENCES public.cap_appointments(id) ON DELETE SET NULL,
-    professional_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
-    rating INTEGER CHECK (rating >= 1 AND rating <= 5) NOT NULL,
-    comment TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- ==========================================
--- 6.6 LISTA DE ESPERA
--- ==========================================
-CREATE TABLE IF NOT EXISTS public.cap_waitlist (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    tenant_id UUID REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
-    client_id UUID REFERENCES public.cap_clients(id) ON DELETE CASCADE,
-    service_id UUID REFERENCES public.cap_services(id) ON DELETE SET NULL,
-    professional_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
-    desired_date DATE NOT NULL,
-    status TEXT DEFAULT 'pending',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- ==========================================
--- 6.7 TERMOS E LGPD
--- ==========================================
-CREATE TABLE IF NOT EXISTS public.cap_terms_templates (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    tenant_id UUID REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.cap_consents (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    tenant_id UUID REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
-    client_id UUID REFERENCES public.cap_clients(id) ON DELETE CASCADE,
-    staff_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
-    term_template_id UUID REFERENCES public.cap_terms_templates(id) ON DELETE SET NULL,
-    content_snapshot TEXT NOT NULL,
-    client_ip TEXT,
-    user_agent TEXT,
-    digital_hash TEXT,
-    status TEXT DEFAULT 'pending',
-    signed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+```

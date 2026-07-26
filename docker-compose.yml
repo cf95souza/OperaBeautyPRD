@@ -1,4 +1,4 @@
-version: '3.9'
+
 
 services:
   db:
@@ -62,9 +62,7 @@ services:
       - operabeauty-network
 
   caddy:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
+    image: caddy:2-alpine
     container_name: operabeauty-caddy
     restart: always
     ports:
@@ -80,6 +78,8 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      - ./dist:/srv/dist
+      - ./Caddyfile:/etc/caddy/Caddyfile
     depends_on:
       - api
     networks:

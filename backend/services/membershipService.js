@@ -127,14 +127,76 @@ export const listAllSubscriptionsForTenant = async (tenantId) => {
   return result.rows;
 };
 
-// 7. Decrementar sessão consumida
-export const consumeMembershipSession = async (clientMembershipId, tenantId) => {
+// 7. Aplicar e decrementar sessão do Clube para um agendamento
+export const applyMembershipSession = async (clientId, tenantId, serviceId) => {
+  // Buscar se o cliente tem assinatura ativa e com sessões restantes para este serviço
   const result = await pool.query(
+    `SELECT cm.id, cm.remaining_sessions 
+     FROM public.cap_client_memberships cm
+     JOIN public.cap_salon_memberships sm ON cm.membership_id = sm.id
+     WHERE cm.client_id = $1 AND cm.tenant_id = $2 
+       AND cm.status = 'active' 
+       AND sm.service_id = $3
+       AND (cm.remaining_sessions > 0 OR cm.remaining_sessions IS NULL)
+       AND cm.current_period_end > NOW()
+     LIMIT 1`,
+    [clientId, tenantId, serviceId]
+  );
+
+  if (result.rows.length === 0) {
+    return null; // Não há assinatura válida para este serviço
+  }
+
+  const membership = result.rows[0];
+
+  // Se tem número limite de sessões, decrementa
+  if (membership.remaining_sessions !== null) {
+    await pool.query(
+      `UPDATE public.cap_client_memberships
+       SET remaining_sessions = GREATEST(0, remaining_sessions - 1)
+       WHERE id = $1`,
+      [membership.id]
+    );
+  }
+
+  return membership;
+};
+
+// 7.5 Consumir sessão diretamente pelo ID do membership
+export const consumeMembershipSession = async (membershipId, tenantId) => {
+  await pool.query(
     `UPDATE public.cap_client_memberships
      SET remaining_sessions = GREATEST(0, remaining_sessions - 1)
-     WHERE id = $1 AND tenant_id = $2
-     RETURNING id, remaining_sessions`,
-    [clientMembershipId, tenantId]
+     WHERE id = $1 AND tenant_id = $2 AND remaining_sessions IS NOT NULL`,
+    [membershipId, tenantId]
   );
+};
+
+// 8. Reembolsar sessão caso o agendamento seja cancelado
+export const refundMembershipSession = async (clientMembershipId) => {
+  await pool.query(
+    `UPDATE public.cap_client_memberships
+     SET remaining_sessions = remaining_sessions + 1
+     WHERE id = $1 AND remaining_sessions IS NOT NULL`,
+    [clientMembershipId]
+  );
+};
+
+// 9. Cancelar assinatura do cliente
+export const cancelClientSubscription = async (subscriptionId, clientId, tenantId) => {
+  const result = await pool.query(
+    `UPDATE public.cap_client_memberships
+     SET status = 'cancelled'
+     WHERE id = $1 AND client_id = $2 AND tenant_id = $3
+     RETURNING id, status`,
+    [subscriptionId, clientId, tenantId]
+  );
+  
+  if (result.rows.length === 0) {
+    const error = new Error('Assinatura não encontrada.');
+    error.statusCode = 404;
+    throw error;
+  }
+  
   return result.rows[0];
 };

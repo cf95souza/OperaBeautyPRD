@@ -282,24 +282,29 @@ const FichaClienteCRM = () => {
             </h3>
             
             {/* Add Note Area */}
-            <div className="mb-8 bg-surface-container-low p-4 rounded-xl relative border border-outline-variant/50">
-              <div className="flex gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary-container text-primary flex items-center justify-center shrink-0 uppercase font-bold text-sm">
-                  {session?.name ? session.name.charAt(0) : 'S'}
+            <div className="mb-8 bg-white p-5 rounded-2xl relative border border-surface-variant/40 shadow-[0px_4px_20px_rgba(0,0,0,0.03)]">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex items-center gap-2.5 sm:block">
+                  <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0 uppercase font-bold text-sm shadow-sm">
+                    {session?.name ? session.name.charAt(0) : 'S'}
+                  </div>
+                  <span className="font-bold text-sm text-on-surface sm:hidden">
+                    {session?.name || 'Profissional'}
+                  </span>
                 </div>
-                <div className="w-full">
+                <div className="w-full flex flex-col gap-3">
                   <textarea 
-                    className="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-xl p-3 font-body-md text-body-md text-on-surface placeholder:text-secondary resize-none outline-none transition-all shadow-inner" 
+                    className="w-full bg-surface-variant/10 border border-outline-variant/60 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl p-3.5 font-body-md text-body-md text-on-surface placeholder:text-secondary/70 resize-none outline-none transition-all" 
                     placeholder="Adicionar nova observação sobre preferências, misturas, alertas..." 
                     rows="3"
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
                   ></textarea>
-                  <div className="flex justify-between items-center mt-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
                     <div className="flex items-center gap-2">
-                      <label className="cursor-pointer bg-surface-container-high hover:bg-surface-variant text-on-surface p-2 rounded-lg flex items-center gap-2 transition-colors border border-outline-variant/50">
-                        <span className="material-symbols-outlined text-[20px]">image</span>
-                        <span className="text-sm">{newImage ? newImage.name : 'Anexar Imagem'}</span>
+                      <label className="cursor-pointer bg-surface-variant/30 hover:bg-surface-variant/50 text-on-surface px-4 py-2.5 rounded-xl flex items-center justify-center sm:justify-start gap-2 transition-all border border-outline-variant/40 font-semibold text-sm w-full sm:w-auto shadow-2xs">
+                        <span className="material-symbols-outlined text-[20px] text-primary">add_photo_alternate</span>
+                        <span className="truncate max-w-[180px]">{newImage ? newImage.name : 'Anexar Imagem'}</span>
                         <input 
                           type="file" 
                           accept="image/*"
@@ -308,17 +313,22 @@ const FichaClienteCRM = () => {
                         />
                       </label>
                       {newImage && (
-                        <button onClick={() => setNewImage(null)} className="text-error hover:text-error-container p-1 flex items-center justify-center">
-                           <span className="material-symbols-outlined text-[18px]">close</span>
+                        <button 
+                          onClick={() => setNewImage(null)} 
+                          title="Remover anexo"
+                          className="w-10 h-10 rounded-xl bg-error/10 text-error hover:bg-error hover:text-white flex items-center justify-center transition-colors shrink-0"
+                        >
+                           <span className="material-symbols-outlined text-[18px]">delete</span>
                         </button>
                       )}
                     </div>
                     <button 
                       onClick={handleAddNote}
                       disabled={savingNote || (!newNote.trim() && !newImage)}
-                      className="bg-primary text-on-primary font-label-md text-label-md px-5 py-2 rounded-xl hover:bg-on-primary-container transition-colors disabled:opacity-50 shadow-sm"
+                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm px-6 py-2.5 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-40 disabled:shadow-none flex items-center justify-center gap-2 w-full sm:w-auto cursor-pointer"
                     >
-                      {savingNote ? 'Salvando...' : 'Salvar Observação'}
+                      <span className="material-symbols-outlined text-[18px]">send</span>
+                      <span>{savingNote ? 'Salvando...' : 'Salvar Observação'}</span>
                     </button>
                   </div>
                 </div>

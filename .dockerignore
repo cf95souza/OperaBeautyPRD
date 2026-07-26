@@ -1,0 +1,12 @@
+.env
+node_modules
+backend/node_modules
+backend
+arquivados
+stitch_telas
+tests
+*.md
+.git
+.github
+dist
+build

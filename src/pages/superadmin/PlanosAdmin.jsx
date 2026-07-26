@@ -4,6 +4,11 @@ import { api } from '../../lib/api';
 import { useNotification } from '../../context/NotificationProvider';
 
 const PlanosAdmin = () => {
+  const SYSTEM_MODULES = [
+    { id: 'clube', label: 'Clube de Fidelidade' },
+    { id: 'pdv', label: 'Ponto de Venda (PDV)' }
+  ];
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const { showSuccess, showError } = useNotification();
   const [plans, setPlans] = useState([]);
@@ -277,12 +282,18 @@ const PlanosAdmin = () => {
                     </div>
 
                     <div className="flex flex-col gap-3 flex-1">
-                      {plan.features && plan.features.map((feature, i) => (
-                        <div key={i} className="flex items-start gap-2">
-                          <span className="material-symbols-outlined text-[18px] text-[#10b981] shrink-0 mt-0.5">check_circle</span>
-                          <span className="text-sm text-on-surface-variant leading-tight">{feature}</span>
-                        </div>
-                      ))}
+                      {plan.features && plan.features.map((feature, i) => {
+                        const moduleObj = SYSTEM_MODULES.find(m => m.id === feature);
+                        const displayFeature = moduleObj ? moduleObj.label : feature;
+                        return (
+                          <div key={i} className="flex items-start gap-2">
+                            <span className="material-symbols-outlined text-[18px] text-[#10b981] shrink-0 mt-0.5">
+                              {moduleObj ? 'extension' : 'check_circle'}
+                            </span>
+                            <span className="text-sm text-on-surface-variant leading-tight">{displayFeature}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -388,12 +399,35 @@ const PlanosAdmin = () => {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  {formFeatures.length === 0 && <span className="text-secondary text-sm italic">Nenhum benefício adicionado.</span>}
-                  {formFeatures.map((feature, idx) => (
+                  {formFeatures.filter(f => !SYSTEM_MODULES.some(m => m.id === f)).length === 0 && <span className="text-secondary text-sm italic">Nenhum benefício em texto adicionado.</span>}
+                  {formFeatures.filter(f => !SYSTEM_MODULES.some(m => m.id === f)).map((feature, idx) => (
                     <div key={idx} className="flex justify-between items-center bg-surface-container-low px-3 py-2 rounded-lg">
                       <span className="text-sm text-on-surface-variant">{feature}</span>
-                      <button onClick={() => handleRemoveFeature(idx)} className="text-secondary hover:text-error"><span className="material-symbols-outlined text-[18px]">delete</span></button>
+                      <button onClick={() => setFormFeatures(formFeatures.filter(f => f !== feature))} className="text-secondary hover:text-error"><span className="material-symbols-outlined text-[18px]">delete</span></button>
                     </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-2 border-t border-surface-variant pt-4">
+                <label className="block font-label-md text-on-surface mb-2">Módulos do Sistema</label>
+                <div className="flex flex-col gap-2">
+                  {SYSTEM_MODULES.map(module => (
+                    <label key={module.id} className="flex items-center gap-2 cursor-pointer bg-surface-container-lowest border border-surface-variant p-3 rounded-lg hover:border-primary transition-colors">
+                      <input 
+                        type="checkbox" 
+                        className="w-5 h-5 rounded text-primary focus:ring-primary border-surface-variant"
+                        checked={formFeatures.includes(module.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormFeatures([...formFeatures, module.id]);
+                          } else {
+                            setFormFeatures(formFeatures.filter(f => f !== module.id));
+                          }
+                        }}
+                      />
+                      <span className="font-label-md text-on-surface">{module.label}</span>
+                    </label>
                   ))}
                 </div>
               </div>

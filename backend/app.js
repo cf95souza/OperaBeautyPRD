@@ -49,6 +49,9 @@ dotenv.config();
 
 const app = express();
 
+// Trust reverse proxy (Caddy/Nginx) for correct IP rate limiting
+app.set('trust proxy', 1);
+
 // Middlewares
 app.use(helmet({
   contentSecurityPolicy: false,

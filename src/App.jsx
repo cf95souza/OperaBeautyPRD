@@ -29,6 +29,7 @@ import LandingPage from './pages/LandingPage';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import PerfilProfissional from './pages/PerfilProfissional';
+import ComissoesProfissional from './pages/ComissoesProfissional';
 import ComprarGiftCard from './pages/ComprarGiftCard';
 import IndiqueGanhe from './pages/IndiqueGanhe';
 import NotificacoesCliente from './pages/NotificacoesCliente';
@@ -202,6 +203,7 @@ function App() {
                 <Route path="staff/agendamento/:id" element={<ResumoAgendamento />} />
                 <Route path="staff/ficha-cliente/:id" element={<FichaClienteCRM />} />
                 <Route path="staff/agenda-profissional" element={<AgendaProfissional />} />
+                <Route path="staff/comissoes" element={<ComissoesProfissional />} />
                 <Route path="staff/perfil" element={<PerfilProfissional />} />
                 <Route path="staff/admin/dashboard" element={<DashboardAdmin />} />
                 <Route path="staff/admin/financeiro" element={<GestaoFinanceira />} />

@@ -68,6 +68,25 @@ export const initCronJobs = () => {
         );
       }
 
+      // 4. Renovação do Clube de Assinaturas (30 dias)
+      const expiredMemberships = await pool.query(`
+        SELECT cm.id, cm.current_period_end, sm.usage_limit
+        FROM public.cap_client_memberships cm
+        JOIN public.cap_salon_memberships sm ON cm.membership_id = sm.id
+        WHERE cm.status = 'active'
+        AND cm.current_period_end <= CURRENT_TIMESTAMP
+      `);
+
+      for (const mem of expiredMemberships.rows) {
+        await pool.query(`
+          UPDATE public.cap_client_memberships
+          SET remaining_sessions = $1,
+              current_period_start = current_period_end,
+              current_period_end = current_period_end + INTERVAL '30 days'
+          WHERE id = $2
+        `, [mem.usage_limit, mem.id]);
+      }
+
       console.log('✅ [CRON] Rotinas diárias concluídas.');
     } catch (err) {
       console.error('❌ [CRON] Erro nas rotinas diárias:', err);

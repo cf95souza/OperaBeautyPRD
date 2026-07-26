@@ -136,10 +136,10 @@ const AcessoSenha = () => {
                 </button>
                 <button 
                   type="button" 
-                  onClick={() => navigate(`/${tenant_slug}/cadastro`, { state: { phone } })}
+                  onClick={() => navigate(`/${tenant_slug}/login`)}
                   className="text-center font-medium text-label-sm text-on-surface-variant hover:text-primary transition-all mt-2"
                 >
-                  Não tem uma conta? Cadastre-se
+                  Acessar com outro número
                 </button>
               </div>
             </div>

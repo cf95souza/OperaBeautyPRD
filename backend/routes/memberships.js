@@ -9,7 +9,8 @@ import {
   updateSalonMembership,
   subscribeClientToMembership,
   listClientSubscriptions,
-  listAllSubscriptionsForTenant
+  listAllSubscriptionsForTenant,
+  cancelClientSubscription
 } from '../services/membershipService.js';
 
 const router = express.Router();
@@ -125,6 +126,22 @@ router.get('/my', authMiddleware, requireFeature('clube'), requireRole(['client'
   } catch (error) {
     req.log.error(error, 'Erro ao obter assinaturas do cliente');
     return res.status(500).json({ error: 'Erro interno ao consultar assinaturas.' });
+  }
+});
+
+// Cancelar assinatura (Cliente)
+router.delete('/my/:id/cancel', authMiddleware, requireFeature('clube'), requireRole(['client']), async (req, res) => {
+  const { id } = req.params;
+  const clientId = req.user.id;
+  const tenantId = req.user.tenant_id;
+
+  try {
+    const cancelled = await cancelClientSubscription(id, clientId, tenantId);
+    return res.json(cancelled);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao cancelar assinatura');
+    return res.status(500).json({ error: 'Erro interno ao cancelar assinatura.' });
   }
 });
 

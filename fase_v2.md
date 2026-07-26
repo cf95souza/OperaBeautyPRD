@@ -426,8 +426,39 @@ Antes de abrir a aplicação para as primeiras clínicas clientes, a equipe téc
 - [ ] **16.1. Verificação do Status do Domínio**
   - Checar se o Caddy conseguiu obter o certificado de produção para `operabeauty.tech`.
   - Caso não tenha obtido automaticamente, reiniciar o container Caddy sem a tag `-v` (apenas `docker compose restart caddy`).
-- [ ] **16.2. Confirmação do Caddyfile**
+- [x] **16.2. Confirmação do Caddyfile**
   - Certificar-se de que o `Caddyfile` não está forçando o ambiente de `staging` ou outras CAs (como ZeroSSL/BuyPass) caso elas tenham falhado anteriormente, mantendo a configuração padrão e definitiva de roteamento TLS automático.
 
+---
+
+## 💻 FASE 17: Ambiente de Homologação Local (WSL/Docker)
+**Meta:** Testar a aplicação localmente utilizando Docker Desktop no Windows para validar a estabilidade do sistema antes de re-tentar o deploy na VPS.
+
+- [x] **17.1. Instalação e Configuração do WSL no Windows**
+  - O Docker Desktop falhou com Erro 500 (`unable to get image`) porque o WSL (Subsistema Windows para Linux) não estava instalado na máquina host.
+  - [x] Executar `wsl --install` no PowerShell como Administrador.
+  - [x] Reiniciar o PC para aplicar as configurações do Hyper-V/WSL.
+- [x] **17.2. Teste do Docker e Deploy Local**
+  - [x] Abrir o Docker Desktop e aguardar o Engine (baleia) ficar verde.
+  - [x] Abrir o PowerShell na pasta `D:\Repositorios\OperaBeauty`.
+  - [x] Executar o comando: `docker compose up -d --build`.
+  - [x] Acessar `https://localhost` no navegador para homologar o painel completo.
+
+---
+
+## 🌟 FASE 18: Portal do Profissional (Comissões e Autoatendimento)
+**Meta:** Expandir a experiência dos membros da equipe do salão além da agenda, provendo transparência de ganhos e autonomia de gestão de credenciais com isolamento estrito de dados.
+
+- [x] **18.1. Reforço de Segurança e Isolamento no Backend**
+  - Impor filtro `staff_id = req.user.id` na rota `GET /api/appointments` para usuários com cargo `professional`.
+- [x] **18.2. Interface "Minhas Comissões" no Frontend**
+  - Criar página `ComissoesProfissional.jsx` com KPIs de ganhos (Pendente vs. Pago), filtro mensal e extrato detalhado.
+- [x] **18.3. Gestão de Perfil e Senha do Profissional**
+  - Refinar e conectar a página `PerfilProfissional.jsx` aos menus de navegação do sistema para alteração autônoma de Nome, Telefone e Senha via API `PUT /api/staff/me`.
+- [x] **18.4. Adequação da Navegação e Rotas**
+  - Adicionar links no menu lateral do `AdminLayout.jsx` e `ProfessionalSidebar.jsx` e registrar rota em `App.jsx`.
+- [x] **18.5. Aprimoramentos de UI/UX e Responsividade Mobile-First**
+  - Cards feed mobile para comissões (`ComissoesProfissional.jsx`) e redesenho dos botões de observação no CRM (`FichaClienteCRM.jsx`).
+
 *Documento mantido e atualizado conforme as diretrizes do Security Auditor do OperaBeauty.*
-*Última atualização: 22/07/2026 — Adição da Fase 16 para gestão do Rate Limit SSL.*
+*Última atualização: 25/07/2026 — Conclusão da Fase 18: Portal do Profissional e Refinamento de UI/UX Mobile-First.*

@@ -47,6 +47,8 @@ const AdminLayout = () => {
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/dashboard`, icon: 'analytics', label: 'Dashboard' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/financeiro`, icon: 'payments', label: 'Financeiro' }] : []),
     { to: `/${tenant_slug}/staff/agenda-profissional`, icon: 'today', label: isManager ? 'Agenda do Salão' : 'Minha Agenda' },
+    { to: `/${tenant_slug}/staff/comissoes`, icon: 'account_balance_wallet', label: 'Minhas Comissões' },
+    { to: `/${tenant_slug}/staff/perfil`, icon: 'manage_accounts', label: 'Meu Perfil' },
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/equipe`, icon: 'diversity_3', label: 'Equipe' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/clientes`, icon: 'groups', label: 'Clientes' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/servicos`, icon: 'spa', label: 'Serviços' }] : []),
