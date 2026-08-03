@@ -341,7 +341,7 @@ export default function LandingPage() {
                                             </div>
                                         )}
                                         <div className="mb-lg">
-                                            <h3 className={`font-headline-md text-headline-md mb-2 ${isFeatured ? 'text-on-primary' : 'text-on-surface'}`}>{plan.name}</h3>
+                                            <h3 className={`font-headline-md text-headline-md mb-2 capitalize ${isFeatured ? 'text-on-primary' : 'text-on-surface'}`}>{plan.name}</h3>
                                             <div className="flex items-baseline gap-1">
                                                 <span className={`text-label-md ${isFeatured ? 'text-surface-variant' : 'text-secondary'}`}>R$</span>
                                                 <span className={`text-4xl font-bold ${isFeatured ? 'text-on-primary' : 'text-on-surface'}`}>{Number(plan.price).toFixed(2).replace('.', ',')}</span>
@@ -349,14 +349,20 @@ export default function LandingPage() {
                                             </div>
                                         </div>
                                         <ul className="space-y-md flex-grow mb-xl">
-                                            {plan.features && plan.features.map((feature, i) => (
-                                                <li key={i} className={`flex items-center gap-2 text-label-md ${isFeatured ? 'text-surface-variant' : 'text-secondary'}`}>
-                                                    <span className={`material-symbols-outlined scale-75 ${isFeatured ? 'text-primary-container' : 'text-primary'}`} style={{ fontVariationSettings: isFeatured ? "'FILL' 1" : undefined }}>
-                                                        {isFeatured ? 'check_circle' : 'done'}
-                                                    </span>
-                                                    {feature}
-                                                </li>
-                                            ))}
+                                            {plan.features && plan.features.map((feature, i) => {
+                                                let displayFeature = feature;
+                                                if (feature === 'clube') displayFeature = 'Clube de Fidelidade';
+                                                if (feature === 'pdv') displayFeature = 'Ponto de Venda (PDV)';
+                                                
+                                                return (
+                                                    <li key={i} className={`flex items-center gap-2 text-label-md ${isFeatured ? 'text-surface-variant' : 'text-secondary'}`}>
+                                                        <span className={`material-symbols-outlined scale-75 ${isFeatured ? 'text-primary-container' : 'text-primary'}`} style={{ fontVariationSettings: isFeatured ? "'FILL' 1" : undefined }}>
+                                                            {isFeatured ? 'check_circle' : 'done'}
+                                                        </span>
+                                                        {displayFeature}
+                                                    </li>
+                                                );
+                                            })}
                                         </ul>
                                         <button onClick={() => setIsModalOpen(true)} className={`w-full py-md rounded-xl font-label-md transition-colors ${isFeatured
                                             ? 'bg-primary text-on-primary hover:opacity-90 transition-opacity'

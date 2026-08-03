@@ -14,7 +14,7 @@ const FichaClienteCRM = () => {
 
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ visits: 0, ltv: 0, favoriteService: '-', nextAppt: null });
+  const [stats, setStats] = useState({ visits: 0, ltv: 0, favoriteServices: [], nextAppt: null });
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
   const [newImage, setNewImage] = useState(null);
@@ -75,17 +75,16 @@ const FichaClienteCRM = () => {
         const completed = appts.filter(a => a.status === 'completed');
         const ltv = completed.reduce((sum, a) => sum + Number(a.total_price), 0);
         
-        // Favorite Service
+        // Favorite Services Ranking
         const srvCounts = {};
         completed.forEach(a => {
           const srvName = a.service_name || 'Serviço';
           srvCounts[srvName] = (srvCounts[srvName] || 0) + 1;
         });
-        let fav = '-';
-        let maxC = 0;
-        Object.keys(srvCounts).forEach(k => {
-          if (srvCounts[k] > maxC) { maxC = srvCounts[k]; fav = k; }
-        });
+        const sortedServices = Object.keys(srvCounts)
+          .map(k => ({ name: k, count: srvCounts[k] }))
+          .sort((a, b) => b.count - a.count);
+        const top3 = sortedServices.slice(0, 3);
 
         // Next Appt
         const now = new Date();
@@ -96,7 +95,7 @@ const FichaClienteCRM = () => {
         setStats({
           visits: completed.length,
           ltv,
-          favoriteService: fav,
+          favoriteServices: top3,
           nextAppt: future.length > 0 ? future[0] : null
         });
       }
@@ -248,9 +247,23 @@ const FichaClienteCRM = () => {
                 <span className="font-headline-sm text-headline-sm text-primary font-bold mt-1">R$ {stats.ltv.toFixed(2).replace('.',',')}</span>
               </div>
             </div>
-            <div className="w-full mt-3 bg-surface-container-low p-3 rounded-xl flex flex-col items-center border border-outline-variant/50">
-                <span className="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-1">Serviço Favorito</span>
-                <span className="font-label-md text-label-md text-on-surface">{stats.favoriteService}</span>
+            <div className="w-full mt-3 bg-surface-container-low p-3 rounded-xl flex flex-col border border-outline-variant/50">
+                <span className="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-2 text-center w-full block">Top 3 Serviços (Ranking)</span>
+                <div className="flex flex-col gap-1 w-full">
+                  {stats.favoriteServices && stats.favoriteServices.length > 0 ? (
+                    stats.favoriteServices.map((srv, index) => (
+                      <div key={index} className="flex items-center justify-between bg-white border border-outline-variant/30 rounded-lg p-2 shadow-sm">
+                        <span className="font-label-sm text-on-surface flex items-center gap-2">
+                           <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${index === 0 ? 'bg-amber-100 text-amber-700' : index === 1 ? 'bg-slate-100 text-slate-700' : 'bg-[#FFF2EB] text-[#B45309]'}`}>{index + 1}º</span>
+                           <span className="truncate max-w-[120px]" title={srv.name}>{srv.name}</span>
+                        </span>
+                        <span className="font-label-sm text-secondary bg-surface-variant/40 px-2 rounded-md">{srv.count}x</span>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="font-label-md text-label-md text-secondary text-center py-2">Nenhum serviço</span>
+                  )}
+                </div>
             </div>
           </div>
 

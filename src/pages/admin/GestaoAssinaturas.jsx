@@ -24,7 +24,7 @@ const GestaoAssinaturas = () => {
     description: '',
     price: '',
     billing_cycle: 'monthly',
-    service_id: '',
+    service_ids: [],
     usage_limit: 4
   });
 
@@ -49,8 +49,8 @@ const GestaoAssinaturas = () => {
       const activeServices = srvData ? srvData.filter(s => s.is_active) : [];
       setServices(activeServices);
       
-      if (activeServices.length > 0 && !newPlan.service_id) {
-        setNewPlan(prev => ({ ...prev, service_id: activeServices[0].id }));
+      if (activeServices.length > 0 && (!newPlan.service_ids || newPlan.service_ids.length === 0)) {
+        setNewPlan(prev => ({ ...prev, service_ids: [activeServices[0].id] }));
       }
     } catch (err) {
       console.error(err);
@@ -66,7 +66,7 @@ const GestaoAssinaturas = () => {
       description: plan.description || '',
       price: plan.price,
       billing_cycle: plan.billing_cycle,
-      service_id: plan.service_id,
+      service_ids: plan.service_ids || [],
       usage_limit: plan.usage_limit
     });
     setEditingId(plan.id);
@@ -94,7 +94,7 @@ const GestaoAssinaturas = () => {
       description: '',
       price: '',
       billing_cycle: 'monthly',
-      service_id: services[0]?.id || '',
+      service_ids: services.length > 0 ? [services[0].id] : [],
       usage_limit: 4
     });
     setShowModal(true);
@@ -104,7 +104,7 @@ const GestaoAssinaturas = () => {
     e.preventDefault();
     if (!newPlan.name.trim()) { showError('Nome é obrigatório.'); return; }
     if (!newPlan.price || isNaN(newPlan.price)) { showError('Preço inválido.'); return; }
-    if (!newPlan.service_id) { showError('Selecione um serviço para vincular ao plano.'); return; }
+    if (!newPlan.service_ids || newPlan.service_ids.length === 0) { showError('Selecione um serviço para vincular ao plano.'); return; }
 
     setSaving(true);
     try {
@@ -200,8 +200,8 @@ const GestaoAssinaturas = () => {
                   
                   <div className="bg-surface-container-low p-3 rounded-xl border border-outline-variant/50 space-y-2 mb-lg">
                     <div className="flex justify-between text-sm">
-                      <span className="text-secondary font-label-sm">Serviço incluso:</span>
-                      <span className="font-semibold text-on-surface">{plan.service_name}</span>
+                      <span className="text-secondary font-label-sm shrink-0">Serviços:</span>
+                      <span className="font-semibold text-on-surface truncate ml-2 text-right" title={plan.service_name}>{plan.service_name}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-secondary font-label-sm">Uso por ciclo:</span>
@@ -355,22 +355,9 @@ const GestaoAssinaturas = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-md">
+              <div className="grid grid-cols-1 gap-md">
                 <div>
-                  <label className="block font-label-sm text-secondary mb-1">Serviço Atrelado</label>
-                  <select
-                    className="w-full border border-outline rounded-xl px-3 py-2 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm"
-                    value={newPlan.service_id}
-                    onChange={e => setNewPlan(prev => ({ ...prev, service_id: e.target.value }))}
-                  >
-                    {services.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-label-sm text-secondary mb-1">Limite de Sessões / Ciclo</label>
+                  <label className="block font-label-sm text-secondary mb-1">Limite Global de Sessões / Ciclo</label>
                   <input 
                     required
                     type="number" 
@@ -379,6 +366,31 @@ const GestaoAssinaturas = () => {
                     value={newPlan.usage_limit}
                     onChange={e => setNewPlan(prev => ({ ...prev, usage_limit: e.target.value }))}
                   />
+                  <p className="text-[11px] text-secondary mt-1">O limite total que o cliente pode usar, somando todos os serviços abaixo. Digite 0 para Ilimitado.</p>
+                </div>
+
+                <div>
+                  <label className="block font-label-sm text-secondary mb-1">Serviços Atrelados</label>
+                  <div className="w-full border border-outline rounded-xl bg-white max-h-40 overflow-y-auto p-2 space-y-1">
+                    {services.map(s => (
+                      <label key={s.id} className="flex items-center gap-2 p-2 hover:bg-surface-variant/20 rounded cursor-pointer transition-colors">
+                        <input 
+                          type="checkbox"
+                          className="accent-primary w-4 h-4 shrink-0"
+                          checked={newPlan.service_ids?.includes(s.id)}
+                          onChange={(e) => {
+                            setNewPlan(prev => {
+                              const ids = new Set(prev.service_ids || []);
+                              if (e.target.checked) ids.add(s.id);
+                              else ids.delete(s.id);
+                              return { ...prev, service_ids: Array.from(ids) };
+                            });
+                          }}
+                        />
+                        <span className="text-sm text-on-surface line-clamp-1">{s.name}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
 

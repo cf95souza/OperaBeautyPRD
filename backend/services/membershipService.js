@@ -1,12 +1,12 @@
 import pool from '../config/db.js';
 
 // 1. Criar Plano de Assinatura do Salão
-export const createSalonMembership = async (tenantId, name, description, price, billingCycle, serviceId, usageLimit) => {
+export const createSalonMembership = async (tenantId, name, description, price, billingCycle, serviceIds, usageLimit) => {
   const result = await pool.query(
-    `INSERT INTO public.cap_salon_memberships (tenant_id, name, description, price, billing_cycle, service_id, usage_limit, is_active, created_at)
+    `INSERT INTO public.cap_salon_memberships (tenant_id, name, description, price, billing_cycle, service_ids, usage_limit, is_active, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NOW())
-     RETURNING id, tenant_id, name, description, price, billing_cycle, service_id, usage_limit, is_active, created_at`,
-    [tenantId, name, description, price, billingCycle, serviceId, usageLimit]
+     RETURNING id, tenant_id, name, description, price, billing_cycle, service_ids, usage_limit, is_active, created_at`,
+    [tenantId, name, description, price, billingCycle, JSON.stringify(serviceIds), usageLimit]
   );
   return result.rows[0];
 };
@@ -14,10 +14,13 @@ export const createSalonMembership = async (tenantId, name, description, price, 
 // 2. Listar Planos de Assinatura do Salão
 export const listSalonMemberships = async (tenantId, onlyActive = true) => {
   let query = `
-    SELECT sm.id, sm.tenant_id, sm.name, sm.description, sm.price, sm.billing_cycle, sm.service_id, sm.usage_limit, sm.is_active, sm.created_at,
-           s.name as service_name
+    SELECT sm.id, sm.tenant_id, sm.name, sm.description, sm.price, sm.billing_cycle, sm.service_ids, sm.usage_limit, sm.is_active, sm.created_at,
+           (
+             SELECT string_agg(s.name, ', ')
+             FROM public.cap_services s
+             WHERE s.id::text = ANY(ARRAY(SELECT jsonb_array_elements_text(sm.service_ids)))
+           ) as service_name
     FROM public.cap_salon_memberships sm
-    JOIN public.cap_services s ON sm.service_id = s.id
     WHERE sm.tenant_id = $1
   `;
   if (onlyActive) {
@@ -29,19 +32,19 @@ export const listSalonMemberships = async (tenantId, onlyActive = true) => {
 };
 
 // 3. Atualizar Plano de Assinatura
-export const updateSalonMembership = async (id, tenantId, name, description, price, billingCycle, serviceId, usageLimit, isActive) => {
+export const updateSalonMembership = async (id, tenantId, name, description, price, billingCycle, serviceIds, usageLimit, isActive) => {
   const result = await pool.query(
     `UPDATE public.cap_salon_memberships 
      SET name = COALESCE($1, name),
          description = COALESCE($2, description),
          price = COALESCE($3, price),
          billing_cycle = COALESCE($4, billing_cycle),
-         service_id = COALESCE($5, service_id),
+         service_ids = COALESCE($5, service_ids),
          usage_limit = COALESCE($6, usage_limit),
          is_active = COALESCE($7, is_active)
      WHERE id = $8 AND tenant_id = $9
-     RETURNING id, tenant_id, name, description, price, billing_cycle, service_id, usage_limit, is_active`,
-    [name, description, price, billingCycle, serviceId, usageLimit, isActive, id, tenantId]
+     RETURNING id, tenant_id, name, description, price, billing_cycle, service_ids, usage_limit, is_active`,
+    [name, description, price, billingCycle, serviceIds ? JSON.stringify(serviceIds) : null, usageLimit, isActive, id, tenantId]
   );
   
   if (result.rows.length === 0) {
@@ -99,10 +102,13 @@ export const listClientSubscriptions = async (clientId, tenantId) => {
   const result = await pool.query(
     `SELECT cm.id, cm.tenant_id, cm.client_id, cm.membership_id, cm.status, cm.current_period_start, cm.current_period_end, cm.remaining_sessions, cm.created_at,
             sm.name as membership_name, sm.description as membership_description, sm.price, sm.billing_cycle, sm.usage_limit,
-            s.name as service_name, s.id as service_id
+            (
+              SELECT string_agg(s.name, ', ')
+              FROM public.cap_services s
+              WHERE s.id::text = ANY(ARRAY(SELECT jsonb_array_elements_text(sm.service_ids)))
+            ) as service_name
      FROM public.cap_client_memberships cm
      JOIN public.cap_salon_memberships sm ON cm.membership_id = sm.id
-     JOIN public.cap_services s ON sm.service_id = s.id
      WHERE cm.client_id = $1 AND cm.tenant_id = $2 AND cm.status = 'active'`,
     [clientId, tenantId]
   );
@@ -115,11 +121,14 @@ export const listAllSubscriptionsForTenant = async (tenantId) => {
     `SELECT cm.id, cm.tenant_id, cm.status, cm.current_period_start, cm.current_period_end, cm.remaining_sessions, cm.created_at,
             c.name as client_name, c.phone as client_phone,
             sm.name as membership_name, sm.price, sm.billing_cycle, sm.usage_limit,
-            s.name as service_name
+            (
+              SELECT string_agg(s.name, ', ')
+              FROM public.cap_services s
+              WHERE s.id::text = ANY(ARRAY(SELECT jsonb_array_elements_text(sm.service_ids)))
+            ) as service_name
      FROM public.cap_client_memberships cm
      JOIN public.cap_clients c ON cm.client_id = c.id
      JOIN public.cap_salon_memberships sm ON cm.membership_id = sm.id
-     JOIN public.cap_services s ON sm.service_id = s.id
      WHERE cm.tenant_id = $1
      ORDER BY cm.created_at DESC`,
     [tenantId]
@@ -136,7 +145,7 @@ export const applyMembershipSession = async (clientId, tenantId, serviceId) => {
      JOIN public.cap_salon_memberships sm ON cm.membership_id = sm.id
      WHERE cm.client_id = $1 AND cm.tenant_id = $2 
        AND cm.status = 'active' 
-       AND sm.service_id = $3
+       AND sm.service_ids @> jsonb_build_array($3::text)
        AND (cm.remaining_sessions > 0 OR cm.remaining_sessions IS NULL)
        AND cm.current_period_end > NOW()
      LIMIT 1`,

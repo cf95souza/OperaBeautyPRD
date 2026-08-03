@@ -22,7 +22,7 @@ const createPlanSchema = z.object({
     description: z.string().optional(),
     price: z.number().positive('O preço deve ser maior que zero.'),
     billing_cycle: z.enum(['monthly', 'yearly']),
-    service_id: z.string().uuid('ID do serviço inválido.'),
+    service_ids: z.array(z.string().uuid('ID de serviço inválido.')).min(1, 'Selecione pelo menos um serviço.'),
     usage_limit: z.number().int().nonnegative('Limite inválido.')
   }),
   params: z.any(), query: z.any()
@@ -34,7 +34,7 @@ const updatePlanSchema = z.object({
     description: z.string().optional(),
     price: z.number().positive('O preço deve ser maior que zero.').optional(),
     billing_cycle: z.enum(['monthly', 'yearly']).optional(),
-    service_id: z.string().uuid('ID do serviço inválido.').optional(),
+    service_ids: z.array(z.string().uuid('ID de serviço inválido.')).min(1, 'Selecione pelo menos um serviço.').optional(),
     usage_limit: z.number().int().nonnegative('Limite inválido.').optional(),
     is_active: z.boolean().optional()
   }),
@@ -54,11 +54,11 @@ const subscribeSchema = z.object({
 
 // Criar Plano (Apenas gerente)
 router.post('/plans', authMiddleware, requireFeature('clube'), requireRole(['manager']), validate(createPlanSchema), async (req, res) => {
-  const { name, description, price, billing_cycle, service_id, usage_limit } = req.body;
+  const { name, description, price, billing_cycle, service_ids, usage_limit } = req.body;
   const tenantId = req.user.tenant_id;
 
   try {
-    const plan = await createSalonMembership(tenantId, name, description, price, billing_cycle, service_id, usage_limit);
+    const plan = await createSalonMembership(tenantId, name, description, price, billing_cycle, service_ids, usage_limit);
     return res.status(201).json(plan);
   } catch (error) {
     req.log.error(error, 'Erro ao criar plano de assinatura');
@@ -86,11 +86,11 @@ router.get('/plans', async (req, res) => {
 // Atualizar Plano (Apenas gerente)
 router.put('/plans/:id', authMiddleware, requireFeature('clube'), requireRole(['manager']), validate(updatePlanSchema), async (req, res) => {
   const { id } = req.params;
-  const { name, description, price, billing_cycle, service_id, usage_limit, is_active } = req.body;
+  const { name, description, price, billing_cycle, service_ids, usage_limit, is_active } = req.body;
   const tenantId = req.user.tenant_id;
 
   try {
-    const updated = await updateSalonMembership(id, tenantId, name, description, price, billing_cycle, service_id, usage_limit, is_active);
+    const updated = await updateSalonMembership(id, tenantId, name, description, price, billing_cycle, service_ids, usage_limit, is_active);
     return res.json(updated);
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
