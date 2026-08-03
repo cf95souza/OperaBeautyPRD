@@ -390,7 +390,7 @@ CREATE TABLE IF NOT EXISTS public.cap_salon_memberships (
     description TEXT,
     price DECIMAL(10, 2) NOT NULL,
     billing_cycle TEXT NOT NULL CHECK (billing_cycle IN ('monthly', 'yearly')),
-    service_id UUID NOT NULL REFERENCES public.cap_services(id) ON DELETE CASCADE,
+    service_ids JSONB DEFAULT '[]'::jsonb,
     usage_limit INTEGER NOT NULL DEFAULT 4 CHECK (usage_limit >= 0),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
