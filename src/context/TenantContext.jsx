@@ -49,23 +49,33 @@ export const TenantProvider = ({ children }) => {
           
           // --- Injeção Dinâmica de PWA (Especial para iOS e Multi-Tenant) ---
           // 1. Altera o título da página e da home screen do iOS
-          document.title = tenantData.name || 'OperaBeauty';
+          const isStaff = window.location.pathname.includes('/staff');
+          const pwaDisplayName = isStaff 
+            ? (tenantData.name || 'OperaBeauty') + ' - Staff' 
+            : (tenantData.name || 'OperaBeauty');
+          
+          document.title = pwaDisplayName;
           let appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
           if (appleTitle) {
-            appleTitle.content = tenantData.name || 'OperaBeauty';
+            appleTitle.content = pwaDisplayName;
           }
 
-          // 2. Cria um manifest dinâmico para garantir o redirecionamento nativo correto
-          const isStaff = window.location.pathname.includes('/staff');
+          // 2. Atualiza o manifest dinâmico com o nome REAL do salão
+          // (o script inline do index.html já criou um manifest provisório com o slug,
+          //  agora substituímos pelo nome real vindo da API)
           const startUrl = isStaff ? `/${tenant_slug}/staff/login` : `/${tenant_slug}/home`;
+          const scope = `/${tenant_slug}/`;
           
           const manifest = {
-            name: tenantData.name || 'OperaBeauty',
-            short_name: tenantData.name || 'OperaBeauty',
+            name: pwaDisplayName,
+            short_name: pwaDisplayName,
             display: 'standalone',
             start_url: startUrl,
+            scope: scope,
             theme_color: tenantData.primary_color || '#be185d',
             background_color: '#ffffff',
+            orientation: 'portrait',
+            lang: 'pt-BR',
             icons: [
               { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
               { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },

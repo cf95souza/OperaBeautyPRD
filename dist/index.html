@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
@@ -9,13 +9,143 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="OperaBeauty" />
+    <meta name="apple-mobile-web-app-title" id="apple-title" content="OperaBeauty" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
     <meta name="theme-color" content="#be185d" />
-    <script type="module" crossorigin src="/assets/index-CxsjYRO6.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CngPkk-3.css">
-  <link rel="manifest" href="/manifest.webmanifest"></head>
+    
+    <script>
+      // ============================================================
+      // PWA DINÂMICO MULTI-TENANT — Manifest + Apple Meta Tags
+      // Este script DEVE executar ANTES do React carregar.
+      // Ele detecta a rota atual e injeta o manifest correto
+      // para que ao "Adicionar à Tela Inicial" o PWA abra
+      // na página correta (staff/login ou tenant/home).
+      // ============================================================
+      (function() {
+        var path = window.location.pathname;
+        var hostname = window.location.origin;
+        
+        // Rotas globais que NÃO pertencem a um tenant
+        var globalRoutes = ['/', '/privacidade', '/termos'];
+        var isGlobalRoute = globalRoutes.indexOf(path) !== -1 || path.indexOf('/superadmin') === 0;
+        
+        if (!isGlobalRoute) {
+          // --- PWA TENANT-SPECIFIC ---
+          var segments = path.split('/').filter(Boolean);
+          if (segments.length > 0) {
+            var slug = segments[0];
+            var isStaff = path.indexOf('/staff') !== -1;
+            
+            // Define start_url baseado no contexto:
+            // Staff → /{slug}/staff/login (gestores/profissionais)
+            // Client → /{slug}/home (clientes do salão)
+            var startUrl = isStaff ? '/' + slug + '/staff/login' : '/' + slug + '/home';
+            
+            // Define scope como o slug do tenant para isolar o PWA
+            var scope = '/' + slug + '/';
+            
+            // Nome exibido no PWA
+            var pwaName = slug.charAt(0).toUpperCase() + slug.slice(1);
+            if (isStaff) {
+              pwaName = pwaName + ' - Staff';
+            }
+            
+            var m = {
+              name: pwaName,
+              short_name: pwaName,
+              display: 'standalone',
+              start_url: startUrl,
+              scope: scope,
+              theme_color: '#be185d',
+              background_color: '#ffffff',
+              orientation: 'portrait',
+              lang: 'pt-BR',
+              icons: [
+                { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+                { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+                { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+              ]
+            };
+            
+            var encoded = encodeURIComponent(JSON.stringify(m));
+            var manifestUrl = 'data:application/manifest+json;charset=utf-8,' + encoded;
+            
+            // Força injeção síncrona do manifest ANTES do parse do DOM terminar
+            // Isso é CRÍTICO para iOS Safari que lê o manifest durante o parse
+            document.write('<link rel="manifest" id="dynamic-manifest" href="' + manifestUrl + '">');
+            
+            // Atualiza Apple-specific meta tags para iOS
+            var appleMeta = document.getElementById('apple-title');
+            if (appleMeta) { appleMeta.content = pwaName; }
+            
+            // Salva informações no localStorage para que o React possa recuperar
+            try {
+              localStorage.setItem('operabeauty_last_tenant', slug);
+              localStorage.setItem('operabeauty_pwa_mode', isStaff ? 'staff' : 'client');
+            } catch(e) {}
+          }
+        } else {
+          // --- PWA GLOBAL (Landing Page) ---
+          // Se o usuário está na landing page mas já visitou um tenant antes,
+          // redireciona para o último tenant (melhora UX do PWA)
+          var lastTenant = null;
+          try { lastTenant = localStorage.getItem('operabeauty_last_tenant'); } catch(e) {}
+          
+          var globalStartUrl = '/';
+          if (lastTenant && path === '/') {
+            // Se está em standalone mode (já instalou como PWA), redireciona para o último tenant
+            if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+              var lastMode = null;
+              try { lastMode = localStorage.getItem('operabeauty_pwa_mode'); } catch(e) {}
+              globalStartUrl = lastMode === 'staff' 
+                ? '/' + lastTenant + '/staff/login' 
+                : '/' + lastTenant + '/home';
+            }
+          }
+          
+          var globalM = {
+            name: 'OperaBeauty',
+            short_name: 'OperaBeauty',
+            description: 'Sistema de Gestão para Salões de Beleza e Barbearias',
+            display: 'standalone',
+            start_url: globalStartUrl,
+            scope: '/',
+            theme_color: '#be185d',
+            background_color: '#ffffff',
+            orientation: 'portrait',
+            lang: 'pt-BR',
+            icons: [
+              { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+              { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+              { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+            ]
+          };
+          var globalEncoded = encodeURIComponent(JSON.stringify(globalM));
+          var globalUrl = 'data:application/manifest+json;charset=utf-8,' + globalEncoded;
+          document.write('<link rel="manifest" id="dynamic-manifest" href="' + globalUrl + '">');
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-D_HQgSt-.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-wxRvgPWF.css">
+  </head>
   <body>
     <div id="root"></div>
+    
+    <!-- Registro manual do Service Worker (desabilitamos auto-register no Vite) -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function(registration) {
+              console.log('[PWA] Service Worker registrado com sucesso:', registration.scope);
+            })
+            .catch(function(error) {
+              console.warn('[PWA] Falha ao registrar Service Worker:', error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
+

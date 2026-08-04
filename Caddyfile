@@ -9,6 +9,20 @@
         reverse_proxy api:5000
     }
 
+    # BLOQUEIO: Impede o manifest.webmanifest estático de ser servido
+    # O manifest é gerado DINAMICAMENTE via script inline no index.html
+    # para suportar multi-tenant PWA (cada salão tem seu próprio start_url)
+    handle /manifest.webmanifest {
+        respond 404
+    }
+
+    # Service Worker - sem cache para sempre pegar a versão mais recente
+    handle /sw.js {
+        root * /srv/dist
+        header Cache-Control "no-cache, no-store, must-revalidate"
+        file_server
+    }
+
     # Todo o resto vai pro Frontend (React)
     handle {
         root * /srv/dist
@@ -16,3 +30,4 @@
         file_server
     }
 }
+

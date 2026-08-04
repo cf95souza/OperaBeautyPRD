@@ -16,12 +16,23 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      injectRegister: 'auto',
+      // NÃO injetar registro automático — o manifest é dinâmico via script inline no index.html
+      injectRegister: null,
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        importScripts: ['/custom-sw.js']
+        importScripts: ['/custom-sw.js'],
+        // Garantir que navegação sempre retorna o index.html (SPA)
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api\//]
       },
-      manifest: false
+      // CRÍTICO: false desabilita a geração de manifest estático.
+      // O manifest é injetado dinamicamente pelo script no index.html
+      // baseado na URL atual para suportar multi-tenant PWA.
+      manifest: false,
+      // Desabilitar injeção de link de manifest pelo plugin
+      injectManifest: {
+        injectionPoint: undefined
+      }
     })
   ],
 })
