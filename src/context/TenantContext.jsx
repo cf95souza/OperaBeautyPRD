@@ -46,6 +46,43 @@ export const TenantProvider = ({ children }) => {
           setTenant(tenantData);
           // Salva o último salão visitado para redirecionamento do PWA
           localStorage.setItem('operabeauty_last_tenant', tenant_slug);
+          
+          // --- Injeção Dinâmica de PWA (Especial para iOS e Multi-Tenant) ---
+          // 1. Altera o título da página e da home screen do iOS
+          document.title = tenantData.name || 'OperaBeauty';
+          let appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+          if (appleTitle) {
+            appleTitle.content = tenantData.name || 'OperaBeauty';
+          }
+
+          // 2. Cria um manifest dinâmico para garantir o redirecionamento nativo correto
+          const isStaff = window.location.pathname.includes('/staff');
+          const startUrl = isStaff ? `/${tenant_slug}/staff/login` : `/${tenant_slug}/home`;
+          
+          const manifest = {
+            name: tenantData.name || 'OperaBeauty',
+            short_name: tenantData.name || 'OperaBeauty',
+            display: 'standalone',
+            start_url: startUrl,
+            theme_color: tenantData.primary_color || '#be185d',
+            background_color: '#ffffff',
+            icons: [
+              { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+              { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+              { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+            ]
+          };
+
+          const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+          const manifestURL = URL.createObjectURL(blob);
+
+          let manifestLink = document.querySelector('link[rel="manifest"]');
+          if (!manifestLink) {
+            manifestLink = document.createElement('link');
+            manifestLink.rel = 'manifest';
+            document.head.appendChild(manifestLink);
+          }
+          manifestLink.href = manifestURL;
         }
 
         // 2. Aplica as cores do Salão (White Label)
