@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { api } from '../lib/api';
 
 const TenantContext = createContext({});
@@ -8,9 +8,22 @@ export const useTenant = () => useContext(TenantContext);
 
 export const TenantProvider = ({ children }) => {
   const { tenant_slug } = useParams();
+  const location = useLocation();
   const [tenant, setTenant] = useState(null);
   const [session, setSession] = useState(null); // { id, name, role, tenant_id }
   const [loading, setLoading] = useState(true);
+
+  // Monitora a rota para decidir o modo do PWA
+  useEffect(() => {
+    if (tenant_slug) {
+      if (location.pathname.includes('/staff')) {
+        localStorage.setItem('operabeauty_pwa_mode', 'staff');
+      } else {
+        localStorage.setItem('operabeauty_pwa_mode', 'client');
+      }
+    }
+  }, [tenant_slug, location.pathname]);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -29,7 +42,11 @@ export const TenantProvider = ({ children }) => {
           return;
         }
 
-        if (isMounted) setTenant(tenantData);
+        if (isMounted) {
+          setTenant(tenantData);
+          // Salva o último salão visitado para redirecionamento do PWA
+          localStorage.setItem('operabeauty_last_tenant', tenant_slug);
+        }
 
         // 2. Aplica as cores do Salão (White Label)
         if (tenantData.primary_color) {

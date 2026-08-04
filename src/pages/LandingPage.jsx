@@ -3,6 +3,25 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api'; // Precisamos usar o api.js do frontend para requisições se possível, ou fetch direto.
 
 export default function LandingPage() {
+    const navigate = useNavigate();
+    
+    // --- Redirecionamento Automático PWA ---
+    useEffect(() => {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        if (isStandalone) {
+            const lastTenant = localStorage.getItem('operabeauty_last_tenant');
+            const pwaMode = localStorage.getItem('operabeauty_pwa_mode');
+            
+            if (lastTenant) {
+                if (pwaMode === 'staff') {
+                    navigate(`/${lastTenant}/staff/login`, { replace: true });
+                } else {
+                    navigate(`/${lastTenant}/home`, { replace: true });
+                }
+            }
+        }
+    }, [navigate]);
+
     const [plans, setPlans] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [leadForm, setLeadForm] = useState({ name: '', email: '', phone: '', salon_name: '' });
