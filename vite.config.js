@@ -21,30 +21,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         importScripts: ['/custom-sw.js']
       },
-      manifest: {
-        name: 'OperaBeauty',
-        short_name: 'OperaBeauty',
-        description: 'Sistema de Gestão para Salões de Beleza e Barbearias',
-        theme_color: '#be185d',
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          }
-        ]
-      }
+      manifest: false
     })
   ],
 })

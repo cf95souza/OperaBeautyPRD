@@ -73,8 +73,8 @@ export const TenantProvider = ({ children }) => {
             ]
           };
 
-          const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-          const manifestURL = URL.createObjectURL(blob);
+          const manifestString = JSON.stringify(manifest);
+          const manifestURL = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(manifestString);
 
           let manifestLink = document.querySelector('link[rel="manifest"]');
           if (!manifestLink) {

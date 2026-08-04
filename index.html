@@ -9,9 +9,64 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="OperaBeauty" />
+    <meta name="apple-mobile-web-app-title" id="apple-title" content="OperaBeauty" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
     <meta name="theme-color" content="#be185d" />
+    
+    <script>
+      (function() {
+        var path = window.location.pathname;
+        if (path !== '/' && path !== '/privacidade' && path !== '/termos' && !path.startsWith('/superadmin')) {
+          var segments = path.split('/').filter(Boolean);
+          if (segments.length > 0) {
+            var slug = segments[0];
+            var isStaff = path.indexOf('/staff') !== -1;
+            var startUrl = isStaff ? '/' + slug + '/staff/login' : '/' + slug + '/home';
+            
+            var m = {
+              name: slug,
+              short_name: slug,
+              display: 'standalone',
+              start_url: startUrl,
+              theme_color: '#be185d',
+              background_color: '#ffffff',
+              icons: [
+                { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+                { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+                { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+              ]
+            };
+            var encoded = encodeURIComponent(JSON.stringify(m));
+            var manifestUrl = 'data:application/manifest+json;charset=utf-8,' + encoded;
+            
+            // Força a injeção síncrona do manifest pro iOS ler na hora
+            document.write('<link rel="manifest" id="sync-dynamic-manifest" href="' + manifestUrl + '">');
+            
+            // Troca o title da maçã temporariamente pro slug (até o React carregar o nome real)
+            var appleMeta = document.getElementById('apple-title');
+            if (appleMeta) { appleMeta.content = slug; }
+          }
+        } else {
+          // --- PWA Global (Landing Page) ---
+          var globalM = {
+            name: 'OperaBeauty',
+            short_name: 'OperaBeauty',
+            display: 'standalone',
+            start_url: '/',
+            theme_color: '#be185d',
+            background_color: '#ffffff',
+            icons: [
+              { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+              { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+              { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+            ]
+          };
+          var globalEncoded = encodeURIComponent(JSON.stringify(globalM));
+          var globalUrl = 'data:application/manifest+json;charset=utf-8,' + globalEncoded;
+          document.write('<link rel="manifest" id="sync-dynamic-manifest" href="' + globalUrl + '">');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
