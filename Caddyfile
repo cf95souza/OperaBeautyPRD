@@ -8,6 +8,11 @@
     handle /api/* {
         reverse_proxy api:5000
     }
+    
+    # Proxy para os arquivos de upload do backend
+    handle /uploads/* {
+        reverse_proxy api:5000
+    }
 
     # BLOQUEIO: Impede o manifest.webmanifest estático de ser servido
     # O manifest é gerado DINAMICAMENTE via script inline no index.html
