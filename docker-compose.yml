@@ -62,7 +62,9 @@ services:
       - operabeauty-network
 
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
     container_name: operabeauty-caddy
     restart: always
     ports:
@@ -78,8 +80,6 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
-      - ./dist:/srv/dist
-      - ./Caddyfile:/etc/caddy/Caddyfile
     depends_on:
       - api
     networks:
