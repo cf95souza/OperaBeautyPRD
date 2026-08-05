@@ -106,7 +106,7 @@ export const updateAnamnese = async (id, tenantId, anamnese_data) => {
 
 export const getClientTimeline = async (id, tenantId) => {
   const result = await pool.query(
-    `SELECT n.id, n.content, n.created_at, n.appointment_id, 
+    `SELECT n.id, n.content, n.image_path, n.created_at, n.appointment_id, 
             a.start_time as appointment_date,
             json_build_object('name', COALESCE(s.name, s2.name)) as cap_staff
      FROM public.cap_timeline_notes n
