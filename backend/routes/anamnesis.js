@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { validate } from '../middlewares/validate.js';
 import { authMiddleware } from '../middlewares/auth.js';
 import { getTemplate, updateTemplate, getClientAnamnesis, submitClientAnamnesis } from '../services/anamnesisService.js';
-import { getTenantById } from '../services/tenantService.js'; // Needed to get tenantId from slug if necessary
 
 const router = express.Router();
 
