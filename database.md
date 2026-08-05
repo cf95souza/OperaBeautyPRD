@@ -241,6 +241,7 @@ CREATE TABLE public.cap_timeline_notes (
     appointment_id UUID REFERENCES public.cap_appointments(id),
     staff_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
     content TEXT NOT NULL,
+    image_path VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -4,8 +4,8 @@ import pool from './config/db.js';
 
 async function run() {
   try {
-    const sql = fs.readFileSync(path.resolve('../migrations/phase8_auth_security.sql'), 'utf-8');
-    console.log('Aplicando o script phase8_auth_security.sql no banco...');
+    const sql = fs.readFileSync(path.resolve('../migrations/fix_timeline_columns.sql'), 'utf-8');
+    console.log('Aplicando o script fix_timeline_columns.sql no banco...');
     await pool.query(sql);
     console.log('✅ Banco de dados atualizado com sucesso!');
     process.exit(0);
