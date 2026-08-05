@@ -58,6 +58,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    volumes:
+      - operabeauty-uploads:/usr/src/app/public/uploads
     networks:
       - operabeauty-network
 
@@ -89,6 +91,7 @@ volumes:
   operabeauty-pgdata:
   caddy_data:
   caddy_config:
+  operabeauty-uploads:
 
 networks:
   operabeauty-network:
