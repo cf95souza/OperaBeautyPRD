@@ -1,6 +1,6 @@
 import pool from '../config/db.js';
 import { applyMembershipSession, refundMembershipSession } from './membershipService.js';
-import { processCashbackEarnings, processCashbackRedemption } from './walletService.js';
+import { processCashbackEarnings, processCashbackRedemption, processCashbackRefund } from './walletService.js';
 
 export const listAppointments = async ({ role, id, userTenantId, targetTenantId, start_date, end_date, staff_id, client_id, limit, offset }) => {
   let queryText = '';
@@ -128,51 +128,71 @@ export const getAppointmentById = async ({ id, tenant_id, role, userId }) => {
 import { notifyStaff } from './notificationService.js';
 
 export const createAppointment = async ({ finalClientId, staff_id, service_id, start_time, total_price, tenantId, client_membership_id, cashback_redeemed }) => {
-  const serviceRes = await pool.query('SELECT name, duration_minutes FROM public.cap_services WHERE id = $1 AND tenant_id = $2', [service_id, tenantId]);
-  if (serviceRes.rows.length === 0) {
-    const error = new Error('Serviço não encontrado.');
-    error.statusCode = 404;
-    throw error;
-  }
-
-  const duration = serviceRes.rows[0].duration_minutes;
-  const serviceName = serviceRes.rows[0].name;
-  const startTime = new Date(start_time);
-  const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
-
-  // Aplica e consome a sessão do clube automaticamente no agendamento (se houver)
-  let appliedMembershipId = client_membership_id || null;
-  if (!appliedMembershipId) {
-    const memResult = await applyMembershipSession(finalClientId, tenantId, service_id);
-    if (memResult) {
-      appliedMembershipId = memResult.id;
+  const clientConnection = await pool.connect();
+  
+  try {
+    await clientConnection.query('BEGIN');
+    
+    const serviceRes = await clientConnection.query('SELECT name, duration_minutes FROM public.cap_services WHERE id = $1 AND tenant_id = $2', [service_id, tenantId]);
+    if (serviceRes.rows.length === 0) {
+      const error = new Error('Serviço não encontrado.');
+      error.statusCode = 404;
+      throw error;
     }
+
+    const duration = serviceRes.rows[0].duration_minutes;
+    const serviceName = serviceRes.rows[0].name;
+    const startTime = new Date(start_time);
+    const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
+
+    // Aplica e consome a sessão do clube automaticamente no agendamento (se houver)
+    let appliedMembershipId = client_membership_id || null;
+    if (!appliedMembershipId) {
+      const memResult = await applyMembershipSession(finalClientId, tenantId, service_id);
+      if (memResult) {
+        appliedMembershipId = memResult.id;
+      }
+    }
+
+    const final_price = appliedMembershipId ? 0 : total_price;
+
+    const result = await clientConnection.query(
+      `INSERT INTO public.cap_appointments (tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7, $8, $9, NOW())
+       RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, staff_commission_value, created_at`,
+      [tenantId, finalClientId, staff_id, service_id, startTime, endTime, final_price, appliedMembershipId, cashback_redeemed || 0]
+    );
+    
+    const appointment = result.rows[0];
+
+    // Deduzir o cashback imediatamente no momento do agendamento
+    if (cashback_redeemed && parseFloat(cashback_redeemed) > 0) {
+      await processCashbackRedemption(clientConnection, tenantId, finalClientId, appointment.id, parseFloat(cashback_redeemed));
+    }
+
+    await clientConnection.query('COMMIT');
+
+    const clientRes = await pool.query('SELECT name FROM public.cap_clients WHERE id = $1 AND tenant_id = $2', [finalClientId, tenantId]);
+    const clientName = clientRes.rows[0]?.name || 'Um cliente';
+
+    const formattedTime = startTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const formattedDate = startTime.toLocaleDateString('pt-BR');
+
+    // Disparar Push/In-App (não travar o processo principal)
+    notifyStaff(
+      tenantId, 
+      staff_id, 
+      'Novo Agendamento 📅', 
+      `${clientName} agendou ${serviceName} para ${formattedDate} às ${formattedTime}.`
+    ).catch(err => console.error('Falha ao disparar push notification:', err));
+
+    return appointment;
+  } catch (error) {
+    await clientConnection.query('ROLLBACK');
+    throw error;
+  } finally {
+    clientConnection.release();
   }
-
-  const final_price = appliedMembershipId ? 0 : total_price;
-
-  const result = await pool.query(
-    `INSERT INTO public.cap_appointments (tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7, $8, $9, NOW())
-     RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, staff_commission_value, created_at`,
-    [tenantId, finalClientId, staff_id, service_id, startTime, endTime, final_price, appliedMembershipId, cashback_redeemed || 0]
-  );
-
-  const clientRes = await pool.query('SELECT name FROM public.cap_clients WHERE id = $1 AND tenant_id = $2', [finalClientId, tenantId]);
-  const clientName = clientRes.rows[0]?.name || 'Um cliente';
-
-  const formattedTime = startTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  const formattedDate = startTime.toLocaleDateString('pt-BR');
-
-  // Disparar Push/In-App (não travar o processo principal)
-  notifyStaff(
-    tenantId, 
-    staff_id, 
-    'Novo Agendamento 📅', 
-    `${clientName} agendou ${serviceName} para ${formattedDate} às ${formattedTime}.`
-  ).catch(err => console.error('Falha ao disparar push notification:', err));
-
-  return result.rows[0];
 };
 
 export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_id, service_id, start_time, status, total_price, client_membership_id, cashback_redeemed, checkin_status, checkin_request }) => {
@@ -233,10 +253,8 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
       // A dedução do Clube de Assinatura já foi feita no momento do agendamento
       // Nenhuma dedução extra é necessária aqui para evitar cobrança duplicada.
 
-      // Processar resgate de cashback (débito) se aplicável
-      if (parseFloat(finalCashbackRedeemed) > 0) {
-        await processCashbackRedemption(clientConnection, tenantId, currentApp.client_id, id, parseFloat(finalCashbackRedeemed));
-      }
+      // A dedução do Cashback também já foi feita no momento do agendamento
+      // (na função createAppointment). Nenhuma dedução extra aqui.
 
       // Processar ganho de cashback (crédito)
       await processCashbackEarnings(clientConnection, tenantId, currentApp.client_id, id, finalTotalPrice);
@@ -291,11 +309,17 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
       ).catch(err => console.error('Falha ao disparar push notification de check-in:', err));
     }
 
-    // Se mudou para cancelado, checar fila de espera e reembolsar sessão
+    // Se mudou para cancelado, checar fila de espera e reembolsar sessão / cashback
     if (finalStatus === 'cancelled' && currentApp.status !== 'cancelled') {
       if (currentApp.client_membership_id) {
         await refundMembershipSession(currentApp.client_membership_id);
       }
+      
+      // Estornar cashback (se foi usado no agendamento)
+      if (parseFloat(finalCashbackRedeemed) > 0) {
+        await processCashbackRefund(clientConnection, tenantId, currentApp.client_id, id, parseFloat(finalCashbackRedeemed));
+      }
+
       await checkWaitlistAndNotify(clientConnection, tenantId, finalStartTime);
     }
 

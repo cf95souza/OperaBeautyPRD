@@ -142,3 +142,23 @@ export const processCashbackRedemption = async (clientConnection, tenantId, clie
     [amount, tenantId, clientId]
   );
 };
+
+// 6. Processar Estorno de Cashback (Devolução no Cancelamento)
+export const processCashbackRefund = async (clientConnection, tenantId, clientId, appointmentId, amount) => {
+  if (amount <= 0) return;
+
+  // 1. Cria transação de crédito (estorno)
+  await clientConnection.query(
+    `INSERT INTO public.cap_wallet_transactions (tenant_id, client_id, amount, type, description, created_at)
+     VALUES ($1, $2, $3, 'credit', $4, NOW())`,
+    [tenantId, clientId, amount, `Estorno de cashback do agendamento #${appointmentId.substring(0, 8)} cancelado`]
+  );
+
+  // 2. Atualiza saldo da carteira somando o valor de volta
+  await clientConnection.query(
+    `UPDATE public.cap_client_wallets 
+     SET balance = balance + $1, updated_at = NOW()
+     WHERE tenant_id = $2 AND client_id = $3`,
+    [amount, tenantId, clientId]
+  );
+};
