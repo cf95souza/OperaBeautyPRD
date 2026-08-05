@@ -375,7 +375,7 @@ const FichaClienteCRM = () => {
                       </p>
                       {note.image_path && (
                         <div className="mt-3 rounded-lg overflow-hidden border border-outline-variant/30">
-                          <img src={`http://localhost:5000${note.image_path}`} alt="Anexo da nota" className="max-w-full h-auto max-h-64 object-contain" />
+                          <img src={note.image_path} alt="Anexo da nota" className="max-w-full h-auto max-h-64 object-contain" />
                         </div>
                       )}
                     </div>
