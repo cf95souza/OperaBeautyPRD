@@ -7,12 +7,22 @@ import { Input } from '../components/ui/Input';
 const AcessoProfissional = () => {
   const { tenant_slug } = useParams();
   const navigate = useNavigate();
-  const { tenant, loginStaff } = useTenant();
+  const { tenant, session, loginStaff } = useTenant();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  React.useEffect(() => {
+    if (session) {
+      if (session.role === 'manager' || session.role === 'admin') {
+        navigate(`/${tenant_slug}/staff/admin/dashboard`, { replace: true });
+      } else if (session.role === 'professional') {
+        navigate(`/${tenant_slug}/staff/agenda-profissional`, { replace: true });
+      }
+    }
+  }, [session, navigate, tenant_slug]);
 
   const handleLogin = async (e) => {
     e.preventDefault();

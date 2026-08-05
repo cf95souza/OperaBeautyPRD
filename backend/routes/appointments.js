@@ -47,6 +47,7 @@ const updateAppointmentSchema = z.object({
     service_id: z.string().uuid('ID do serviço inválido.').optional(),
     start_time: z.string().datetime({ message: 'Data/hora de início inválida.' }).optional(),
     total_price: z.number().min(0, 'Preço total inválido.').optional(),
+    discount_applied: z.coerce.number().min(0).optional(),
     client_membership_id: z.string().uuid('ID do plano inválido.').nullable().optional(),
     cashback_redeemed: z.coerce.number().min(0, 'Valor de cashback inválido.').optional(),
     status: z.enum(['scheduled', 'in-progress', 'completed', 'cancelled']).optional(),
@@ -158,14 +159,14 @@ router.post('/', authMiddleware, validate(createAppointmentSchema), async (req, 
 // Atualizar Agendamento
 router.put('/:id', authMiddleware, validate(updateAppointmentSchema), async (req, res) => {
   const { id } = req.params;
-  const { staff_id, service_id, start_time, status, total_price, client_membership_id, cashback_redeemed, checkin_status, checkin_request } = req.body;
+  const { staff_id, service_id, start_time, status, total_price, discount_applied, client_membership_id, cashback_redeemed, checkin_status, checkin_request } = req.body;
   const tenantId = req.user.tenant_id;
   const userRole = req.user.role;
   const userId = req.user.id;
 
   try {
     const updatedAppointment = await updateAppointment({
-      id, tenantId, userRole, userId, staff_id, service_id, start_time, status, total_price, client_membership_id, cashback_redeemed, checkin_status, checkin_request
+      id, tenantId, userRole, userId, staff_id, service_id, start_time, status, total_price, discount_applied, client_membership_id, cashback_redeemed, checkin_status, checkin_request
     });
     return res.json(updatedAppointment);
   } catch (error) {

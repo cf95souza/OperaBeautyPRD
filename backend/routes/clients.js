@@ -69,7 +69,7 @@ const updateAnamneseSchema = z.object({
 
 const timelineNoteSchema = z.object({
   body: z.object({
-    content: z.string().min(1, 'Conteúdo da nota não fornecido.'),
+    content: z.string().optional(),
     appointment_id: z.string().uuid().nullable().optional()
   }),
   query: z.any(), params: z.any()

@@ -19,6 +19,7 @@ const PerfilCliente = () => {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [anamnesisStatus, setAnamnesisStatus] = useState(null); // { isExpired: boolean, expiresAt: Date }
 
   const getVipBadge = (tier) => {
     const styles = {
@@ -62,6 +63,25 @@ const PerfilCliente = () => {
               : data.birth_date;
           }
           setDataNascimento(birthDateStr);
+        }
+
+        // Busca o status da Ficha de Anamnese
+        const token = localStorage.getItem('operabeauty_token');
+        const resAnamnesis = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/client/${session.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resAnamnesis.ok) {
+          const anamnesis = await resAnamnesis.json();
+          if (anamnesis && anamnesis.expires_at) {
+            const isExpired = new Date(anamnesis.expires_at) < new Date();
+            setAnamnesisStatus({
+              isExpired,
+              expiresAt: anamnesis.expires_at,
+              updatedAt: anamnesis.updated_at
+            });
+          } else {
+            setAnamnesisStatus({ isExpired: true }); // Missing = expired
+          }
         }
       } catch (err) {
         console.error("Erro ao buscar perfil do cliente", err);
@@ -157,6 +177,39 @@ const PerfilCliente = () => {
             {getVipBadge(session?.vip_tier)}
           </div>
         </section>
+
+        {/* Ficha de Anamnese - Alerta e Botão */}
+        {!initialLoad && anamnesisStatus && (
+          <section className="mb-xl">
+            <button
+              type="button"
+              onClick={() => navigate(`/${tenant_slug}/anamnese`)}
+              className={`w-full flex items-center justify-between p-md rounded-2xl border transition-colors ${
+                anamnesisStatus.isExpired 
+                ? 'bg-error-container/20 border-error/50 hover:bg-error-container/30' 
+                : 'bg-primary-container/10 border-primary/20 hover:bg-primary-container/20'
+              }`}
+            >
+              <div className="flex items-center gap-3 text-left">
+                <span className={`material-symbols-outlined text-2xl ${anamnesisStatus.isExpired ? 'text-error' : 'text-primary'}`}>
+                  {anamnesisStatus.isExpired ? 'warning' : 'assignment'}
+                </span>
+                <div>
+                  <h3 className={`font-label-lg ${anamnesisStatus.isExpired ? 'text-error' : 'text-primary'}`}>
+                    Ficha de Anamnese
+                  </h3>
+                  <p className="font-body-sm text-secondary">
+                    {anamnesisStatus.isExpired 
+                      ? 'Você precisa atualizar suas informações de saúde.' 
+                      : `Ficha em dia. Última atualização: ${new Date(anamnesisStatus.updatedAt).toLocaleDateString('pt-BR')}`
+                    }
+                  </p>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-secondary">chevron_right</span>
+            </button>
+          </section>
+        )}
 
         {/* Form Sections */}
         {initialLoad ? (

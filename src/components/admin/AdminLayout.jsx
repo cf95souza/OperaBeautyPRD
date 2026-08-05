@@ -55,6 +55,7 @@ const AdminLayout = () => {
     ...(isManager && tenant?.features?.clube ? [{ to: `/${tenant_slug}/staff/admin/assinaturas`, icon: 'card_membership', label: 'Assinaturas' }] : []),
     ...(isManager && tenant?.features?.pdv ? [{ to: `/${tenant_slug}/staff/admin/pdv`, icon: 'point_of_sale', label: 'PDV (Caixa)' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/estoque`, icon: 'shelves', label: 'Estoque' }] : []),
+    ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/anamnese`, icon: 'assignment', label: 'Ficha de Anamnese' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/configuracoes`, icon: 'settings_account_box', label: 'Operacional' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/lgpd`, icon: 'gavel', label: 'Segurança e LGPD' }] : []),
     ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/branding`, icon: 'palette', label: 'Branding' }] : []),

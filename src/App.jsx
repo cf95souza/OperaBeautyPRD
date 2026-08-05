@@ -20,9 +20,11 @@ import AgendamentoConfirmado from './pages/AgendamentoConfirmado';
 import HistoricoAgendamentos from './pages/HistoricoAgendamentos';
 import HomeCliente from './pages/HomeCliente';
 import PerfilCliente from './pages/PerfilCliente';
+import ClienteAnamnese from './pages/ClienteAnamnese';
 import AgendaProfissional from './pages/AgendaProfissional';
 import FichaClienteCRM from './pages/FichaClienteCRM';
 import ResumoAgendamento from './pages/ResumoAgendamento';
+import AnamneseTemplate from './pages/admin/AnamneseTemplate';
 import { BookingProvider } from './context/BookingContext';
 import AdminLayout from './components/admin/AdminLayout';
 import LandingPage from './pages/LandingPage';
@@ -106,6 +108,16 @@ const FeatureProtectedRoute = ({ feature, children }) => {
 // --- Rota de Redirecionamento da Raiz Staff ---
 const StaffRootRedirect = () => {
   const { tenant_slug } = useParams();
+  const { session } = useTenant();
+  
+  if (session) {
+    if (session.role === 'manager' || session.role === 'admin') {
+      return <Navigate to={`/${tenant_slug}/staff/admin/dashboard`} replace />;
+    } else if (session.role === 'professional') {
+      return <Navigate to={`/${tenant_slug}/staff/agenda-profissional`} replace />;
+    }
+  }
+  
   return <Navigate to={`/${tenant_slug}/staff/login`} replace />;
 };
 
@@ -187,6 +199,7 @@ function App() {
             <Route path="agendar/confirmado" element={<AgendamentoConfirmado />} />
             <Route path="historico" element={<HistoricoAgendamentos />} />
             <Route path="perfil" element={<PerfilCliente />} />
+            <Route path="anamnese" element={<ClienteAnamnese />} />
             <Route path="clube" element={<ClubeFidelidade />} />
             <Route path="carteira" element={<FidelidadeCarteira />} />
             <Route path="presentear" element={<ComprarGiftCard />} />
@@ -209,6 +222,7 @@ function App() {
                 <Route path="staff/admin/financeiro" element={<GestaoFinanceira />} />
                 <Route path="staff/admin/equipe" element={<GestaoEquipe />} />
                 <Route path="staff/admin/clientes" element={<GestaoClientes />} />
+                <Route path="staff/admin/anamnese" element={<AnamneseTemplate />} />
                 <Route path="staff/admin/servicos" element={<GestaoServicos />} />
                 <Route path="staff/admin/configuracoes" element={<ConfiguracoesOperacionais />} />
                 <Route path="staff/admin/lgpd" element={<GestaoLGPD />} />

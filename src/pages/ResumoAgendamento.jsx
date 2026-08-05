@@ -18,6 +18,10 @@ const ResumoAgendamento = () => {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [isRemanejarModalOpen, setIsRemanejarModalOpen] = useState(false);
+  const [isFinalizarModalOpen, setIsFinalizarModalOpen] = useState(false);
+  const [discountValue, setDiscountValue] = useState(0);
+
+  const session = JSON.parse(localStorage.getItem('operabeauty_user') || '{}');
 
   const fetchAppointment = async () => {
     try {
@@ -37,11 +41,16 @@ const ResumoAgendamento = () => {
     }
   }, [id]);
 
-  const handleUpdateStatus = async (newStatus) => {
+  const handleUpdateStatus = async (newStatus, appliedDiscount = 0) => {
     if (!id) return;
     setSaving(true);
     try {
-      await api.appointments.update(id, { status: newStatus });
+      const payload = { status: newStatus };
+      if (newStatus === 'completed' && appliedDiscount > 0) {
+        payload.discount_applied = appliedDiscount;
+        payload.total_price = Math.max(0, Number(agendamento.total_price) - appliedDiscount);
+      }
+      await api.appointments.update(id, payload);
       await fetchAppointment();
     } catch (err) {
       console.error(err);
@@ -163,6 +172,11 @@ const ResumoAgendamento = () => {
             <p className="font-label-sm text-label-sm text-secondary mb-1">Valor</p>
             <p className="font-body-lg text-body-lg text-primary font-medium">
               {Number(agendamento.total_price).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              {Number(agendamento.discount_applied) > 0 && (
+                <span className="text-sm text-secondary ml-2 font-normal">
+                  (Desconto de R$ {Number(agendamento.discount_applied).toFixed(2).replace('.', ',')})
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -193,7 +207,14 @@ const ResumoAgendamento = () => {
           {agendamento.status === 'in-progress' && (
             <button 
               disabled={saving}
-              onClick={() => handleUpdateStatus('completed')}
+              onClick={() => {
+                if (session?.role === 'manager' || session?.role === 'superadmin') {
+                  setDiscountValue(0);
+                  setIsFinalizarModalOpen(true);
+                } else {
+                  handleUpdateStatus('completed');
+                }
+              }}
               className="flex-1 bg-primary text-on-primary px-6 py-3 rounded-xl font-label-lg text-label-lg hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2 shadow-sm"
             >
               <span className="material-symbols-outlined">check_circle</span>
@@ -222,6 +243,66 @@ const ResumoAgendamento = () => {
         }}
       />
       
+      {/* Modal de Finalização (Desconto Gestor) */}
+      {isFinalizarModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-surface rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
+            <div className="p-xl border-b border-outline-variant/30 flex justify-between items-center">
+              <h2 className="font-headline-md text-headline-md text-on-surface">Finalizar Atendimento</h2>
+              <button onClick={() => setIsFinalizarModalOpen(false)} className="text-secondary hover:text-error transition-colors">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <div className="p-xl space-y-lg">
+              <div className="flex justify-between items-center bg-surface-variant/30 p-4 rounded-xl">
+                <span className="font-label-lg text-secondary">Valor Original:</span>
+                <span className="font-body-lg font-bold text-on-surface">
+                  {Number(agendamento.total_price).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
+              
+              <div>
+                <label className="block font-label-md text-label-md text-on-surface mb-2">Desconto Aplicado (R$)</label>
+                <input 
+                  type="number"
+                  min="0"
+                  max={agendamento.total_price}
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(Number(e.target.value))}
+                  className="w-full bg-surface-container border border-outline-variant rounded-xl p-4 font-body-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                />
+              </div>
+
+              <div className="flex justify-between items-center bg-primary-container/30 p-4 rounded-xl">
+                <span className="font-label-lg text-primary">Valor Final a Pagar:</span>
+                <span className="font-headline-sm text-primary font-bold">
+                  {Math.max(0, Number(agendamento.total_price) - discountValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
+            </div>
+            
+            <div className="p-xl bg-surface-container-lowest flex gap-4">
+              <button 
+                onClick={() => setIsFinalizarModalOpen(false)}
+                className="flex-1 px-6 py-3 rounded-xl font-label-lg text-secondary hover:bg-surface-variant transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => {
+                  setIsFinalizarModalOpen(false);
+                  handleUpdateStatus('completed', discountValue);
+                }}
+                className="flex-1 bg-primary text-on-primary px-6 py-3 rounded-xl font-label-lg hover:opacity-90 transition-opacity"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

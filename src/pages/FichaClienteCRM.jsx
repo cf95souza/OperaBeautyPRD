@@ -21,6 +21,10 @@ const FichaClienteCRM = () => {
   const [savingNote, setSavingNote] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
+  const [anamnesisTemplate, setAnamnesisTemplate] = useState([]);
+  const [anamnesisData, setAnamnesisData] = useState(null);
+  const [isAnamnesisExpired, setIsAnamnesisExpired] = useState(false);
+
   useEffect(() => {
     if (!tenant || !id) return;
     fetchClientData();
@@ -108,6 +112,31 @@ const FichaClienteCRM = () => {
         }
       } catch (nErr) {
         console.error("Erro ao carregar notas:", nErr);
+      }
+
+      // 4. Fetch Anamnesis
+      try {
+        const token = localStorage.getItem('operabeauty_token');
+        const resTmpl = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/template/${tenant.id}`);
+        if (resTmpl.ok) {
+          const tmpl = await resTmpl.json();
+          setAnamnesisTemplate(tmpl.fields_schema || []);
+        }
+
+        const resAns = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/client/${id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resAns.ok) {
+          const ans = await resAns.json();
+          if (ans) {
+            setAnamnesisData(ans);
+            setIsAnamnesisExpired(new Date(ans.expires_at) < new Date());
+          } else {
+            setIsAnamnesisExpired(true);
+          }
+        }
+      } catch (err) {
+         console.error("Erro ao carregar anamnese:", err);
       }
 
     } catch (err) {
@@ -289,6 +318,59 @@ const FichaClienteCRM = () => {
 
         {/* Right Column: CRM Timeline */}
         <div className="lg:col-span-2 flex flex-col gap-lg">
+
+          {/* Ficha de Anamnese */}
+          <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl shadow-sm p-lg flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">assignment</span> Ficha de Anamnese
+              </h3>
+              {isAnamnesisExpired ? (
+                <span className="bg-error-container text-error px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">warning</span> Vencida / Pendente
+                </span>
+              ) : (
+                <span className="bg-[#E6F4EA] text-[#137333] px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">check_circle</span> Atualizada
+                </span>
+              )}
+            </div>
+
+            {anamnesisTemplate.length === 0 ? (
+              <p className="text-secondary text-sm">O salão não possui ficha de anamnese configurada.</p>
+            ) : !anamnesisData ? (
+              <p className="text-secondary text-sm bg-surface-variant/30 p-4 rounded-xl">O cliente ainda não preencheu a ficha de anamnese.</p>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-secondary mb-4">
+                  Última atualização: {format(new Date(anamnesisData.updated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {anamnesisTemplate.map(field => {
+                    const answer = anamnesisData.answers[field.id];
+                    let displayAnswer = '-';
+                    
+                    if (answer !== undefined && answer !== null && answer !== '') {
+                      if (Array.isArray(answer)) {
+                        displayAnswer = answer.join(', ');
+                      } else {
+                        displayAnswer = String(answer);
+                      }
+                    }
+
+                    return (
+                      <div key={field.id} className="bg-surface-container-low border border-outline-variant/40 rounded-xl p-3">
+                        <p className="font-label-sm text-secondary mb-1">{field.label}</p>
+                        <p className="font-body-md text-on-surface font-medium">{displayAnswer}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* CRM Timeline */}
           <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl shadow-sm p-lg flex flex-col h-full">
             <h3 className="font-headline-md text-headline-md text-on-surface mb-6 flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">history_edu</span> CRM da Equipe (Linha do Tempo)

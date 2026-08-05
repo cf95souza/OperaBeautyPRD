@@ -8,7 +8,7 @@ export const listAppointments = async ({ role, id, userTenantId, targetTenantId,
 
   if (role === 'client') {
     queryText = `
-      SELECT a.id, a.start_time, a.end_time, a.status, a.total_price,
+      SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.discount_applied,
              s.name as service_name, s.duration_minutes,
              st.name as staff_name,
              t.name as tenant_name, t.slug as tenant_slug
@@ -22,7 +22,7 @@ export const listAppointments = async ({ role, id, userTenantId, targetTenantId,
     queryParams = [id, targetTenantId, limit, offset];
   } else {
     queryText = `
-      SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.staff_commission_value, a.commission_status, a.commission_paid_at,
+      SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.discount_applied, a.staff_commission_value, a.commission_status, a.commission_paid_at,
              s.name as service_name, s.duration_minutes, s.id as service_id, s.maintenance_days,
              st.name as staff_name, st.id as staff_id,
              c.name as client_name, c.phone as client_phone, c.id as client_id
@@ -89,7 +89,7 @@ export const getOccupiedSlots = async ({ tenant_id, date, staff_id }) => {
 
 export const getAppointmentById = async ({ id, tenant_id, role, userId }) => {
   const queryText = `
-    SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.staff_commission_value, a.commission_status, a.commission_paid_at,
+    SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.discount_applied, a.staff_commission_value, a.commission_status, a.commission_paid_at,
            s.name as service_name, s.duration_minutes, s.id as service_id,
            st.name as staff_name, st.id as staff_id,
            c.name as client_name, c.phone as client_phone, c.id as client_id
@@ -195,14 +195,14 @@ export const createAppointment = async ({ finalClientId, staff_id, service_id, s
   }
 };
 
-export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_id, service_id, start_time, status, total_price, client_membership_id, cashback_redeemed, checkin_status, checkin_request }) => {
+export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_id, service_id, start_time, status, total_price, discount_applied, client_membership_id, cashback_redeemed, checkin_status, checkin_request }) => {
   const clientConnection = await pool.connect();
 
   try {
     await clientConnection.query('BEGIN');
 
     const appQuery = await clientConnection.query(
-      'SELECT id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, staff_commission_value, checkin_status, created_at FROM public.cap_appointments WHERE id = $1 AND tenant_id = $2',
+      'SELECT id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, discount_applied, client_membership_id, cashback_redeemed, staff_commission_value, checkin_status, created_at FROM public.cap_appointments WHERE id = $1 AND tenant_id = $2',
       [id, tenantId]
     );
 
@@ -233,6 +233,7 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
     let finalEndTime = currentApp.end_time;
     let finalStatus = status || currentApp.status;
     let finalTotalPrice = total_price !== undefined ? total_price : currentApp.total_price;
+    let finalDiscountApplied = discount_applied !== undefined ? discount_applied : currentApp.discount_applied;
     let finalCommissionVal = currentApp.staff_commission_value;
     let finalMembershipId = client_membership_id !== undefined ? client_membership_id : currentApp.client_membership_id;
     let finalCashbackRedeemed = cashback_redeemed !== undefined ? cashback_redeemed : currentApp.cashback_redeemed;
@@ -290,10 +291,11 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
            client_membership_id = $8,
            cashback_redeemed = $9,
            checkin_status = $10,
-           checkin_request = $11
-       WHERE id = $12 AND tenant_id = $13
-       RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, staff_commission_value, checkin_status, checkin_request, commission_status, commission_paid_at, created_at`,
-      [finalStaffId, finalServiceId, finalStartTime, finalEndTime, finalStatus, finalTotalPrice, finalCommissionVal, finalMembershipId || null, finalCashbackRedeemed || 0, finalCheckinStatus || null, finalCheckinRequest || null, id, tenantId]
+           checkin_request = $11,
+           discount_applied = $12
+       WHERE id = $13 AND tenant_id = $14
+       RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, discount_applied, client_membership_id, cashback_redeemed, staff_commission_value, checkin_status, checkin_request, commission_status, commission_paid_at, created_at`,
+      [finalStaffId, finalServiceId, finalStartTime, finalEndTime, finalStatus, finalTotalPrice, finalCommissionVal, finalMembershipId || null, finalCashbackRedeemed || 0, finalCheckinStatus || null, finalCheckinRequest || null, finalDiscountApplied || 0, id, tenantId]
     );
 
     // Se mudou para check-in, disparar notificação
