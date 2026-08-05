@@ -27,7 +27,7 @@ const AnamneseTemplate = () => {
       setLoading(true);
       // Directly call API for now
       const token = localStorage.getItem('operabeauty_token');
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/template/${tenant.id}`, {
+      const res = await fetch(`/api/anamnesis/template/${tenant.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Falha ao buscar template');
@@ -45,7 +45,7 @@ const AnamneseTemplate = () => {
     try {
       setSaving(true);
       const token = localStorage.getItem('operabeauty_token');
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/template`, {
+      const res = await fetch(`/api/anamnesis/template`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

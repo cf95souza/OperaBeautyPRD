@@ -117,13 +117,13 @@ const FichaClienteCRM = () => {
       // 4. Fetch Anamnesis
       try {
         const token = localStorage.getItem('operabeauty_token');
-        const resTmpl = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/template/${tenant.id}`);
+        const resTmpl = await fetch(`/api/anamnesis/template/${tenant.id}`);
         if (resTmpl.ok) {
           const tmpl = await resTmpl.json();
           setAnamnesisTemplate(tmpl.fields_schema || []);
         }
 
-        const resAns = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/client/${id}`, {
+        const resAns = await fetch(`/api/anamnesis/client/${id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resAns.ok) {

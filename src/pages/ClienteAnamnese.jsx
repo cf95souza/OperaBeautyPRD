@@ -30,14 +30,14 @@ const ClienteAnamnese = () => {
       const session = JSON.parse(localStorage.getItem('operabeauty_user') || '{}');
       
       // Busca o template
-      const resTmpl = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/template/${tenant.id}`);
+      const resTmpl = await fetch(`/api/anamnesis/template/${tenant.id}`);
       if (!resTmpl.ok) throw new Error('Falha ao buscar template');
       const tmplData = await resTmpl.json();
       setTemplate(tmplData.fields_schema || []);
 
       // Busca as respostas do cliente logado
       if (session?.id) {
-        const resAns = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/client/${session.id}`, {
+        const resAns = await fetch(`/api/anamnesis/client/${session.id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resAns.ok) {
@@ -76,7 +76,7 @@ const ClienteAnamnese = () => {
     try {
       setSaving(true);
       const token = localStorage.getItem('operabeauty_token');
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/client`, {
+      const res = await fetch(`/api/anamnesis/client`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

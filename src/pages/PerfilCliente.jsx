@@ -67,7 +67,7 @@ const PerfilCliente = () => {
 
         // Busca o status da Ficha de Anamnese
         const token = localStorage.getItem('operabeauty_token');
-        const resAnamnesis = await fetch(`${import.meta.env.VITE_API_URL}/api/anamnesis/client/${session.id}`, {
+        const resAnamnesis = await fetch(`/api/anamnesis/client/${session.id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resAnamnesis.ok) {
