@@ -30,7 +30,8 @@ const createStaffSchema = z.object({
     email: z.string().email('E-mail inválido.'),
     password: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres.').regex(/[A-Z]/, 'Precisa ter 1 maiúscula.').regex(/[a-z]/, 'Precisa ter 1 minúscula.').regex(/[\W_]/, 'Precisa ter 1 caractere especial.'),
     role: z.enum(['professional', 'manager', 'admin'], { errorMap: () => ({ message: 'Cargo inválido. Deve ser professional, manager ou admin.' }) }),
-    commission_rate: z.number().min(0).max(100).optional()
+    commission_rate: z.number().min(0).max(100).optional(),
+    service_ids: z.array(z.string().uuid()).optional()
   }),
   query: z.any(), params: z.any()
 });
@@ -46,7 +47,8 @@ const updateStaffSchema = z.object({
     password: z.string().min(8, 'Senha deve ter no mínimo 8 caracteres.').regex(/[A-Z]/, 'Precisa ter 1 maiúscula.').regex(/[a-z]/, 'Precisa ter 1 minúscula.').regex(/[\W_]/, 'Precisa ter 1 caractere especial.').nullable().optional(),
     role: z.enum(['professional', 'manager', 'admin']).optional(),
     commission_rate: z.number().min(0).max(100).optional(),
-    is_active: z.boolean().optional()
+    is_active: z.boolean().optional(),
+    service_ids: z.array(z.string().uuid()).optional()
   }),
   query: z.any()
 });
@@ -91,11 +93,11 @@ router.put('/me', authMiddleware, requireRole(['manager', 'professional']), vali
 });
 
 router.post('/', authMiddleware, requireRole(['manager']), validate(createStaffSchema), async (req, res) => {
-  const { name, phone, email, password, role, commission_rate } = req.body;
+  const { name, phone, email, password, role, commission_rate, service_ids } = req.body;
   const tenantId = req.user.tenant_id;
 
   try {
-    const newStaff = await createStaff(tenantId, name, phone, email, password, role, commission_rate);
+    const newStaff = await createStaff(tenantId, name, phone, email, password, role, commission_rate, service_ids);
 
     await logAudit({
       req,
@@ -115,13 +117,13 @@ router.post('/', authMiddleware, requireRole(['manager']), validate(createStaffS
 
 router.put('/:id', authMiddleware, validate(updateStaffSchema), async (req, res) => {
   const { id } = req.params;
-  const { name, phone, email, password, role, commission_rate, is_active } = req.body;
+  const { name, phone, email, password, role, commission_rate, is_active, service_ids } = req.body;
   const tenantId = req.user.tenant_id;
   const isSelf = req.user.id === id;
   const isManager = req.user.role === 'manager' || req.user.role === 'admin';
 
   try {
-    const { currentStaff, updatedStaff } = await updateStaff(id, tenantId, isSelf, isManager, name, phone, email, password, role, commission_rate, is_active);
+    const { currentStaff, updatedStaff } = await updateStaff(id, tenantId, isSelf, isManager, name, phone, email, password, role, commission_rate, is_active, service_ids);
 
     await logAudit({
       req,

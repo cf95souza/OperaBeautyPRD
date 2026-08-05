@@ -2,7 +2,13 @@ import pool from '../config/db.js';
 
 export const listStaff = async (tenantId) => {
   const result = await pool.query(
-    'SELECT id, name, phone, email, role, commission_rate, is_active FROM public.cap_staff WHERE tenant_id = $1 ORDER BY is_active DESC, name ASC',
+    `SELECT s.id, s.name, s.phone, s.email, s.role, s.commission_rate, s.is_active,
+            COALESCE(json_agg(ss.service_id) FILTER (WHERE ss.service_id IS NOT NULL), '[]') AS service_ids
+     FROM public.cap_staff s
+     LEFT JOIN public.cap_staff_services ss ON s.id = ss.staff_id
+     WHERE s.tenant_id = $1 
+     GROUP BY s.id
+     ORDER BY s.is_active DESC, s.name ASC`,
     [tenantId]
   );
   return result.rows;
@@ -33,7 +39,7 @@ export const updateSelf = async (staffId, tenantId, name, phone, password) => {
   return result.rows[0];
 };
 
-export const createStaff = async (tenantId, name, phone, email, password, role, commission_rate) => {
+export const createStaff = async (tenantId, name, phone, email, password, role, commission_rate, service_ids = []) => {
   // Verificar limite do plano
   const planCheck = await pool.query(
     `SELECT p.max_professionals 
@@ -73,6 +79,14 @@ export const createStaff = async (tenantId, name, phone, email, password, role, 
     );
   }
 
+  if (service_ids && service_ids.length > 0) {
+    await pool.query(
+      `INSERT INTO public.cap_staff_services (staff_id, service_id) 
+       SELECT $1, unnest($2::uuid[])`,
+      [newStaffId, service_ids]
+    );
+  }
+
   return {
     id: newStaffId,
     name,
@@ -80,11 +94,12 @@ export const createStaff = async (tenantId, name, phone, email, password, role, 
     email,
     role,
     commission_rate: commission_rate || 0.00,
-    is_active: true
+    is_active: true,
+    service_ids
   };
 };
 
-export const updateStaff = async (id, tenantId, isSelf, isManager, name, phone, email, password, role, commission_rate, is_active) => {
+export const updateStaff = async (id, tenantId, isSelf, isManager, name, phone, email, password, role, commission_rate, is_active, service_ids) => {
   if (!isSelf && !isManager) {
     const error = new Error('Você não tem permissão para alterar este perfil.');
     error.statusCode = 403;
@@ -152,6 +167,17 @@ export const updateStaff = async (id, tenantId, isSelf, isManager, name, phone, 
     );
   }
 
+  if (isManager && service_ids !== undefined) {
+    await pool.query('DELETE FROM public.cap_staff_services WHERE staff_id = $1', [id]);
+    if (service_ids.length > 0) {
+      await pool.query(
+        `INSERT INTO public.cap_staff_services (staff_id, service_id) 
+         SELECT $1, unnest($2::uuid[])`,
+        [id, service_ids]
+      );
+    }
+  }
+
   return {
     currentStaff,
     updatedStaff: {
@@ -161,7 +187,8 @@ export const updateStaff = async (id, tenantId, isSelf, isManager, name, phone, 
       email,
       role: finalRole,
       commission_rate: finalCommissionRate || 0.00,
-      is_active: finalIsActive !== undefined ? finalIsActive : true
+      is_active: finalIsActive !== undefined ? finalIsActive : true,
+      service_ids: service_ids !== undefined ? service_ids : []
     }
   };
 };

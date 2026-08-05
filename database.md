@@ -166,6 +166,14 @@ CREATE TABLE public.cap_services (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 2.7.1 Relacionamento Profissional x Serviço (Limitação de Serviços)
+CREATE TABLE public.cap_staff_services (
+    staff_id UUID REFERENCES public.cap_staff(id) ON DELETE CASCADE,
+    service_id UUID REFERENCES public.cap_services(id) ON DELETE CASCADE,
+    PRIMARY KEY (staff_id, service_id)
+);
+
+
 -- 2.8 Horários de Funcionamento Padrão
 CREATE TABLE public.cap_business_hours (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

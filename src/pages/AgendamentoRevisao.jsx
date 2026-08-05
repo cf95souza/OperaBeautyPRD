@@ -59,13 +59,25 @@ const AgendamentoRevisao = () => {
     try {
       let assignedStaffId = bookingData.professional?.id;
       
-      // Se for "Sem preferência", busca um profissional aleatório do salão para assumir o serviço
+      // Se for "Sem preferência", busca um profissional aleatório do salão habilitado para o serviço
       if (!assignedStaffId) {
         const staffData = await api.staff.list(tenant.id);
           
         if (staffData && staffData.length > 0) {
-          const manager = staffData.find(s => s.role === 'manager');
-          assignedStaffId = manager ? manager.id : staffData[0].id;
+          // Filtra os que podem realizar o serviço
+          const capableStaff = staffData.filter(s => {
+            if (!s.is_active) return false;
+            if (!s.service_ids || s.service_ids.length === 0) return true;
+            return bookingData.service?.id && s.service_ids.includes(bookingData.service.id);
+          });
+          
+          if (capableStaff.length > 0) {
+            // Escolhe aleatoriamente entre os habilitados
+            const randomIndex = Math.floor(Math.random() * capableStaff.length);
+            assignedStaffId = capableStaff[randomIndex].id;
+          } else {
+            throw new Error("Nenhum profissional habilitado para este serviço.");
+          }
         } else {
           throw new Error("Nenhum profissional cadastrado encontrado para este serviço.");
         }

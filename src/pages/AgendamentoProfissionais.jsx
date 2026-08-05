@@ -36,7 +36,13 @@ const AgendamentoProfissionais = () => {
 
   // Filtros desativados, exibindo todos da base real
   const categories = ['Todos'];
-  const filteredStaff = dbStaff;
+  const filteredStaff = dbStaff.filter(staff => {
+    if (!staff.service_ids || staff.service_ids.length === 0) return true;
+    if (bookingData.service && bookingData.service.id) {
+      return staff.service_ids.includes(bookingData.service.id);
+    }
+    return true;
+  });
 
   useEffect(() => {
     console.log("=== [AgendamentoProfissionais] Montado/Atualizado ===");

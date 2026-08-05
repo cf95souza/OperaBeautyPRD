@@ -21,13 +21,24 @@ const GestaoEquipe = () => {
   // Modal states
   const [showModal, setShowModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
-  const [formData, setFormData] = useState({ name: '', phone: '', email: '', password: '', role: 'professional', is_active: true, commission_rate: 0 });
+  const [servicesList, setServicesList] = useState([]);
+  const [formData, setFormData] = useState({ name: '', phone: '', email: '', password: '', role: 'professional', is_active: true, commission_rate: 0, service_ids: [] });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!tenant) return;
     fetchStaff();
+    fetchServices();
   }, [tenant]);
+
+  const fetchServices = async () => {
+    try {
+      const data = await api.services.list(tenant.id);
+      if (data) setServicesList(data);
+    } catch (e) {
+      console.error("Erro ao carregar serviços", e);
+    }
+  };
 
   const fetchStaff = async () => {
     setLoading(true);
@@ -87,7 +98,7 @@ const GestaoEquipe = () => {
 
   const openNewModal = () => {
     setEditingStaff(null);
-    setFormData({ name: '', phone: '', email: '', password: '', role: 'professional', is_active: true, commission_rate: 0 });
+    setFormData({ name: '', phone: '', email: '', password: '', role: 'professional', is_active: true, commission_rate: 0, service_ids: [] });
     setShowModal(true);
   };
 
@@ -100,7 +111,8 @@ const GestaoEquipe = () => {
       password: '', // Senha vazia a menos que o gestor queira alterar
       role: staff.role, 
       is_active: staff.is_active,
-      commission_rate: staff.commission_rate || 0
+      commission_rate: staff.commission_rate || 0,
+      service_ids: staff.service_ids || []
     });
     setShowModal(true);
   };
@@ -119,7 +131,8 @@ const GestaoEquipe = () => {
         password: formData.password || undefined,
         role: formData.role,
         is_active: formData.is_active,
-        commission_rate: Number(formData.commission_rate) || 0
+        commission_rate: Number(formData.commission_rate) || 0,
+        service_ids: formData.service_ids
       };
 
       if (editingStaff) {
@@ -218,6 +231,31 @@ const GestaoEquipe = () => {
                     <div>
                       <label className="block text-sm text-on-surface-variant mb-1">Comissão (%)</label>
                       <input type="number" min="0" max="100" step="0.1" className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-transparent focus:border-primary outline-none" value={formData.commission_rate} onChange={e => setFormData({...formData, commission_rate: e.target.value})} placeholder="Ex: 50" />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-surface-variant">
+                    <label className="block text-sm text-on-surface-variant mb-1">
+                      Serviços Habilitados
+                    </label>
+                    <p className="text-xs text-secondary mb-2">Deixe vazio para permitir todos os serviços.</p>
+                    <div className="max-h-[120px] overflow-y-auto border border-outline-variant rounded-lg p-2 space-y-1">
+                      {servicesList.map(srv => (
+                        <label key={srv.id} className="flex items-center gap-2 text-sm text-on-surface cursor-pointer p-1 hover:bg-surface-variant rounded">
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 text-primary bg-surface border-outline-variant rounded focus:ring-primary"
+                            checked={formData.service_ids?.includes(srv.id)}
+                            onChange={(e) => {
+                              const newIds = e.target.checked 
+                                ? [...(formData.service_ids || []), srv.id] 
+                                : (formData.service_ids || []).filter(id => id !== srv.id);
+                              setFormData({...formData, service_ids: newIds});
+                            }}
+                          />
+                          {srv.name}
+                        </label>
+                      ))}
                     </div>
                   </div>
 
