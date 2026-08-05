@@ -324,6 +324,11 @@ export const api = {
     },
     async listSubscriptions() {
       return request('/memberships/subscriptions');
+    },
+    async renewSubscription(id) {
+      return request(`/memberships/subscriptions/${id}/renew`, {
+        method: 'POST',
+      });
     }
   },
 

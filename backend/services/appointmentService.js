@@ -149,11 +149,13 @@ export const createAppointment = async ({ finalClientId, staff_id, service_id, s
     }
   }
 
+  const final_price = appliedMembershipId ? 0 : total_price;
+
   const result = await pool.query(
     `INSERT INTO public.cap_appointments (tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7, $8, $9, NOW())
      RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, staff_commission_value, created_at`,
-    [tenantId, finalClientId, staff_id, service_id, startTime, endTime, total_price, appliedMembershipId, cashback_redeemed || 0]
+    [tenantId, finalClientId, staff_id, service_id, startTime, endTime, final_price, appliedMembershipId, cashback_redeemed || 0]
   );
 
   const clientRes = await pool.query('SELECT name FROM public.cap_clients WHERE id = $1 AND tenant_id = $2', [finalClientId, tenantId]);

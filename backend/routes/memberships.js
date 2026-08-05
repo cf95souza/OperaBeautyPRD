@@ -10,7 +10,8 @@ import {
   subscribeClientToMembership,
   listClientSubscriptions,
   listAllSubscriptionsForTenant,
-  cancelClientSubscription
+  cancelClientSubscription,
+  renewClientMembership
 } from '../services/membershipService.js';
 
 const router = express.Router();
@@ -155,6 +156,21 @@ router.get('/subscriptions', authMiddleware, requireFeature('clube'), requireRol
   } catch (error) {
     req.log.error(error, 'Erro ao listar assinaturas do salão');
     return res.status(500).json({ error: 'Erro interno ao listar assinaturas.' });
+  }
+});
+
+// Renovar ciclo da assinatura (Apenas gerente)
+router.post('/subscriptions/:id/renew', authMiddleware, requireFeature('clube'), requireRole(['manager']), async (req, res) => {
+  const { id } = req.params;
+  const tenantId = req.user.tenant_id;
+
+  try {
+    const renewed = await renewClientMembership(id, tenantId);
+    return res.json(renewed);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao renovar assinatura');
+    return res.status(500).json({ error: 'Erro interno ao renovar assinatura.' });
   }
 });
 

@@ -209,3 +209,43 @@ export const cancelClientSubscription = async (subscriptionId, clientId, tenantI
   
   return result.rows[0];
 };
+
+// 7.7 Renovar ciclo da assinatura do cliente
+export const renewClientMembership = async (subscriptionId, tenantId) => {
+  const getSub = await pool.query(
+    `SELECT cm.id, sm.usage_limit, sm.billing_cycle
+     FROM public.cap_client_memberships cm
+     JOIN public.cap_salon_memberships sm ON cm.membership_id = sm.id
+     WHERE cm.id = $1 AND cm.tenant_id = $2`,
+    [subscriptionId, tenantId]
+  );
+  
+  if (getSub.rows.length === 0) {
+    const error = new Error('Assinatura não encontrada.');
+    error.statusCode = 404;
+    throw error;
+  }
+  
+  const { usage_limit, billing_cycle } = getSub.rows[0];
+  
+  const now = new Date();
+  const nextPeriodEnd = new Date(now);
+  if (billing_cycle === 'yearly') {
+    nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1);
+  } else {
+    nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
+  }
+  
+  const result = await pool.query(
+    `UPDATE public.cap_client_memberships
+     SET current_period_start = $1,
+         current_period_end = $2,
+         remaining_sessions = $3,
+         status = 'active'
+     WHERE id = $4 AND tenant_id = $5
+     RETURNING *`,
+    [now, nextPeriodEnd, usage_limit, subscriptionId, tenantId]
+  );
+  
+  return result.rows[0];
+};

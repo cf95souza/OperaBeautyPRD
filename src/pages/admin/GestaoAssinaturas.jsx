@@ -131,6 +131,19 @@ const GestaoAssinaturas = () => {
     }
   };
 
+  const handleRenewSubscription = async (sub) => {
+    if (await confirm(`Deseja registrar o pagamento e renovar o ciclo da assinatura de ${sub.client_name}?`)) {
+      try {
+        await api.memberships.renewSubscription(sub.id);
+        showSuccess('Assinatura renovada com sucesso!');
+        fetchData();
+      } catch (err) {
+        console.error(err);
+        showError(err.message || 'Erro ao renovar assinatura.');
+      }
+    }
+  };
+
   return (
     <div className="p-gutter md:p-xl flex-1 flex flex-col gap-lg max-w-[1200px] mx-auto w-full animate-fade-in-up">
       {/* Header */}
@@ -139,13 +152,13 @@ const GestaoAssinaturas = () => {
           <h2 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background flex items-center gap-2">
             <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>card_membership</span> Clube de Assinaturas (Fidelidade)
           </h2>
-          <p className="font-body-md text-body-md text-secondary mt-1">Crie clubes de serviços recorrentes e monitore o engajamento das clientes.</p>
+          <p className="font-body-md text-secondary mt-1 max-w-[600px]">Crie planos recorrentes, garanta faturamento mensal e fidelize suas clientes.</p>
         </div>
         
         {activeTab === 'plans' && (
           <button 
             onClick={openNewModal}
-            className="bg-primary text-on-primary font-label-md text-label-md px-6 py-3 rounded-full hover:opacity-90 flex items-center gap-2 shadow-sm transition-all active:scale-95 duration-150"
+            className="bg-primary text-on-primary px-5 py-2.5 rounded-full font-label-md hover:bg-primary/90 hover:shadow-md transition-all flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-[20px]">add</span> Criar Novo Plano
           </button>
@@ -256,6 +269,7 @@ const GestaoAssinaturas = () => {
                     <th className="py-md px-lg font-label-md text-secondary">Ciclo Faturamento</th>
                     <th className="py-md px-lg font-label-md text-secondary">Próxima Renovação</th>
                     <th className="py-md px-lg font-label-md text-secondary">Status</th>
+                    <th className="py-md px-lg font-label-md text-secondary">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -280,6 +294,15 @@ const GestaoAssinaturas = () => {
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${sub.status === 'active' ? 'bg-[#ECFDF5] text-[#047857]' : 'bg-[#FEF2F2] text-[#B91C1C]'}`}>
                           {sub.status === 'active' ? 'Ativo' : 'Atrasado'}
                         </span>
+                      </td>
+                      <td className="py-md px-lg">
+                        <button 
+                          onClick={() => handleRenewSubscription(sub)}
+                          className="bg-primary/10 text-primary hover:bg-primary hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">payments</span>
+                          Renovar Pagamento
+                        </button>
                       </td>
                     </tr>
                   ))}

@@ -118,10 +118,15 @@ const ClubeFidelidade = () => {
                       <span className="font-headline-sm text-primary font-bold">{sub.remaining_sessions} sessões</span>
                     </div>
                     <button 
-                      onClick={() => navigate(`/${tenant_slug}/agendar/servicos`)}
-                      className="bg-primary text-on-primary text-xs font-semibold px-4 py-2.5 rounded-full hover:opacity-90 shadow-sm transition-all"
+                      onClick={() => sub.remaining_sessions > 0 && navigate(`/${tenant_slug}/agendar/servicos`)}
+                      disabled={sub.remaining_sessions === 0}
+                      className={`text-xs font-semibold px-4 py-2.5 rounded-full shadow-sm transition-all ${
+                        sub.remaining_sessions === 0 
+                          ? 'bg-surface-variant text-on-surface-variant opacity-50 cursor-not-allowed'
+                          : 'bg-primary text-on-primary hover:opacity-90'
+                      }`}
                     >
-                      Agendar
+                      {sub.remaining_sessions === 0 ? 'Esgotado' : 'Agendar'}
                     </button>
                   </div>
 
