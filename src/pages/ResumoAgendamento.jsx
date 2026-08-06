@@ -10,7 +10,7 @@ import RemanejarModal from '../components/admin/RemanejarModal';
 const ResumoAgendamento = () => {
   const { tenant_slug, id } = useParams();
   const navigate = useNavigate();
-  const { tenant } = useTenant();
+  const { tenant, session } = useTenant();
   const { showError } = useNotification();
 
   const [agendamento, setAgendamento] = useState(null);
@@ -21,7 +21,7 @@ const ResumoAgendamento = () => {
   const [isFinalizarModalOpen, setIsFinalizarModalOpen] = useState(false);
   const [discountValue, setDiscountValue] = useState(0);
 
-  const session = JSON.parse(localStorage.getItem('operabeauty_user') || '{}');
+
 
   const fetchAppointment = async () => {
     try {
