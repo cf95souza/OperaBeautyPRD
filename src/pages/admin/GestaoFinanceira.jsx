@@ -12,6 +12,7 @@ const GestaoFinanceira = () => {
 
   const [loading, setLoading] = useState(true);
   const [entradasMes, setEntradasMes] = useState(0);
+  const [descontosMes, setDescontosMes] = useState(0);
   const [ticketMedio, setTicketMedio] = useState(0);
   const [comissoesPagar, setComissoesPagar] = useState(0);
   const [servicoMaisRentavel, setServicoMaisRentavel] = useState({ name: '-', value: 0 });
@@ -41,6 +42,9 @@ const GestaoFinanceira = () => {
       if (appointments.length > 0) {
         const totalEntradas = appointments.reduce((sum, appt) => sum + Number(appt.total_price), 0);
         setEntradasMes(totalEntradas);
+
+        const totalDescontos = appointments.reduce((sum, appt) => sum + Number(appt.discount_applied || 0), 0);
+        setDescontosMes(totalDescontos);
 
         setTicketMedio(totalEntradas / appointments.length);
 
@@ -82,6 +86,7 @@ const GestaoFinanceira = () => {
         setTransacoes(appointmentsSorted);
       } else {
         setEntradasMes(0);
+        setDescontosMes(0);
         setTicketMedio(0);
         setComissoesPagar(0);
         setServicoMaisRentavel({ name: '-', value: 0 });
@@ -165,7 +170,7 @@ const GestaoFinanceira = () => {
           </div>
 
           {/* KPIs Bento Grid */}
-          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-md">
+          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-md">
             
             {/* Entradas Mês */}
             <div className="bg-surface-container-lowest rounded-xl p-md shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between h-32 relative overflow-hidden group hover:shadow-[0px_10px_30px_rgba(0,0,0,0.08)] transition-shadow">
@@ -212,6 +217,18 @@ const GestaoFinanceira = () => {
               <div>
                 <h3 className="font-headline-md text-headline-md text-on-surface">{formatCurrency(comissoesPagar)}</h3>
                 <p className="text-sm text-error mt-xs">Para a equipe neste mês</p>
+              </div>
+            </div>
+
+            {/* Descontos Concedidos */}
+            <div className="bg-surface-container-lowest rounded-xl p-md shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between h-32 relative overflow-hidden group hover:shadow-[0px_10px_30px_rgba(0,0,0,0.08)] transition-shadow">
+              <div className="absolute top-0 right-0 p-sm opacity-20 group-hover:opacity-40 transition-opacity">
+                <span className="material-symbols-outlined text-[48px] text-[#f59e0b]">local_offer</span>
+              </div>
+              <p className="font-label-md text-label-md text-secondary">Descontos Concedidos</p>
+              <div>
+                <h3 className="font-headline-md text-headline-md text-on-surface">{formatCurrency(descontosMes)}</h3>
+                <p className="text-sm text-[#f59e0b] mt-xs">Descontos no fechamento</p>
               </div>
             </div>
 
