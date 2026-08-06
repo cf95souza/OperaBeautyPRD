@@ -116,7 +116,7 @@ const AnamneseTemplate = () => {
 
   return (
     <div className="max-w-4xl mx-auto py-lg px-container-margin md:px-0 animate-fade-in-up">
-      <div className="flex justify-between items-center mb-xl">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-xl">
         <div>
           <h1 className="font-headline-md text-headline-md text-primary">Ficha de Anamnese</h1>
           <p className="font-body-md text-body-md text-secondary">Crie e personalize as perguntas que seus clientes devem responder.</p>
@@ -131,7 +131,7 @@ const AnamneseTemplate = () => {
         </button>
       </div>
 
-      <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-xl shadow-sm mb-lg">
+      <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-md md:p-xl shadow-sm mb-lg overflow-hidden">
         {fields.length === 0 ? (
           <div className="text-center py-xl text-secondary">
             <span className="material-symbols-outlined text-5xl mb-4">description</span>
@@ -141,7 +141,7 @@ const AnamneseTemplate = () => {
         ) : (
           <div className="space-y-lg mb-xl">
             {fields.map((field, i) => (
-              <div key={field.id} className="bg-surface-container border border-outline-variant p-md rounded-xl relative group">
+              <div key={field.id} className="bg-surface-container border border-outline-variant p-sm md:p-md rounded-xl relative group">
                 <button 
                   onClick={() => removeField(i)}
                   className="absolute top-4 right-4 text-error opacity-0 group-hover:opacity-100 transition-opacity"
@@ -160,8 +160,8 @@ const AnamneseTemplate = () => {
                       className="w-full bg-surface border border-outline-variant rounded-lg p-3 font-body-md focus:outline-none focus:border-primary"
                     />
                   </div>
-                  <div className="flex gap-4">
-                    <div className="flex-1">
+                  <div className="flex gap-2 md:gap-4">
+                    <div className="flex-1 min-w-0">
                       <label className="block font-label-sm text-secondary mb-1">Tipo de Resposta</label>
                       <select
                         value={field.type}
@@ -175,7 +175,7 @@ const AnamneseTemplate = () => {
                         <option value="checkbox">Múltipla Escolha (Checkboxes)</option>
                       </select>
                     </div>
-                    <div className="flex items-center pt-6">
+                    <div className="flex items-center pt-6 shrink-0">
                       <label className="flex items-center gap-2 cursor-pointer font-label-md">
                         <input 
                           type="checkbox" 
@@ -190,7 +190,7 @@ const AnamneseTemplate = () => {
                 </div>
 
                 {['radio', 'checkbox', 'select'].includes(field.type) && (
-                  <div className="bg-surface-variant/30 p-md rounded-lg mt-4">
+                  <div className="bg-surface-variant/30 p-sm md:p-md rounded-lg mt-4">
                     <p className="font-label-sm text-secondary mb-3">Opções de Resposta:</p>
                     <div className="space-y-2 mb-4">
                       {field.options?.map((opt, optIdx) => (
@@ -199,9 +199,9 @@ const AnamneseTemplate = () => {
                             type="text"
                             value={opt}
                             onChange={(e) => updateOption(i, optIdx, e.target.value)}
-                            className="flex-1 bg-surface border border-outline-variant rounded-lg p-2 text-sm focus:outline-none focus:border-primary"
+                            className="flex-1 min-w-0 bg-surface border border-outline-variant rounded-lg p-2 text-sm focus:outline-none focus:border-primary"
                           />
-                          <button onClick={() => removeOption(i, optIdx)} className="text-error px-2 hover:bg-error/10 rounded-lg">
+                          <button onClick={() => removeOption(i, optIdx)} className="text-error px-2 hover:bg-error/10 rounded-lg shrink-0">
                             <span className="material-symbols-outlined text-lg">close</span>
                           </button>
                         </div>

@@ -11,9 +11,12 @@ const ComissoesProfissional = () => {
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState([]);
   const [periodo, setPeriodo] = useState('mes_atual'); // mes_atual, mes_anterior, todos
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   useEffect(() => {
     if (tenant?.id && session?.id) {
+      setCurrentPage(1);
       fetchComissoes();
     }
   }, [tenant, session, periodo]);
@@ -94,6 +97,12 @@ const ComissoesProfissional = () => {
       return dateStr;
     }
   };
+
+  const totalPages = Math.ceil(appointments.length / ITEMS_PER_PAGE);
+  const currentAppointments = useMemo(() => {
+    const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+    return appointments.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  }, [appointments, currentPage]);
 
   return (
     <div className="max-w-[1100px] mx-auto py-lg px-container-margin md:px-0 animate-fade-in-up">
@@ -236,7 +245,7 @@ const ComissoesProfissional = () => {
           <>
             {/* Visualização Mobile (Cards) - Otimizado para Celulares */}
             <div className="p-4 md:hidden space-y-3.5">
-              {appointments.map((appt) => {
+              {currentAppointments.map((appt) => {
                 const isPaid = appt.commission_status === 'paid';
                 const valorServico = Number(appt.total_price || 0);
                 const valorComissao = Number(appt.staff_commission_value || 0);
@@ -324,7 +333,7 @@ const ComissoesProfissional = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-variant/10 font-body-md text-sm">
-                  {appointments.map((appt) => {
+                  {currentAppointments.map((appt) => {
                     const isPaid = appt.commission_status === 'paid';
                     const valorServico = Number(appt.total_price || 0);
                     const valorComissao = Number(appt.staff_commission_value || 0);
@@ -387,6 +396,34 @@ const ComissoesProfissional = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-surface-variant/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <span className="text-sm text-on-surface-variant">
+                  Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} a {Math.min(currentPage * ITEMS_PER_PAGE, appointments.length)} de {appointments.length} registros
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg border border-surface-variant text-on-surface hover:bg-surface-variant/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                  </button>
+                  <span className="text-sm font-semibold px-2">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg border border-surface-variant text-on-surface hover:bg-surface-variant/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

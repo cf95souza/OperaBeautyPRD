@@ -239,7 +239,7 @@ const AgendaProfissional = () => {
                       </span>
                     </div>
                     
-                    <div className="flex-1 relative py-sm flex flex-col gap-2">
+                    <div className="flex-1 relative py-sm flex flex-col gap-2 min-w-0">
                       {hourAppointments.length === 0 ? (
                         <div className="w-full h-full min-h-[40px] border border-dashed border-surface-variant rounded-lg flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
                           <span className="material-symbols-outlined text-surface-variant">add</span>
@@ -257,7 +257,7 @@ const AgendaProfissional = () => {
                               to={`/${tenant_slug}/staff/agendamento/${appt.id}`} 
                               className="w-full bg-secondary-container bg-opacity-40 border-l-4 border-secondary rounded-r-lg p-sm flex justify-between items-start cursor-pointer hover:bg-opacity-60 transition-colors"
                             >
-                              <div className="flex-1 overflow-hidden pr-2">
+                              <div className="flex-1 overflow-hidden pr-2 min-w-0">
                                 <div className="flex flex-wrap items-center gap-2 mb-1">
                                   <h3 className="font-label-md text-label-md text-on-surface truncate">{appt.service_name || 'Serviço'}</h3>
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 ${getStatusColor(appt.status)}`}>

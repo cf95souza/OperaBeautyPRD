@@ -238,7 +238,7 @@ const ConfiguracoesOperacionais = () => {
               <span className="material-symbols-outlined text-primary">schedule</span>
               Jornada de Funcionamento (Padrão)
             </h2>
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg flex flex-col gap-md">
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg flex flex-col gap-md">
               
               {DAYS_OF_WEEK.map((day) => {
                 const dayData = businessHours.find(h => h.day_of_week === day.value) || {};
@@ -291,7 +291,7 @@ const ConfiguracoesOperacionais = () => {
               <span className="material-symbols-outlined text-primary">distance</span>
               Contato & Localização
             </h2>
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg flex flex-col gap-lg">
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg flex flex-col gap-lg">
               <p className="font-body-sm text-body-sm text-secondary -mt-sm">Essas informações alimentam os menus da tela de login do seu salão. Se deixadas em branco, os respectivos menus não aparecerão.</p>
               
               <div className="flex flex-col gap-sm">
@@ -347,7 +347,7 @@ const ConfiguracoesOperacionais = () => {
             </div>
 
             {/* Seção Bento: Fidelização e Cashback */}
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg flex flex-col gap-md mt-lg">
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg flex flex-col gap-md mt-lg">
               <h3 className="font-headline-md text-[20px] text-on-surface mb-xs flex items-center gap-sm">
                 <span className="material-symbols-outlined text-primary">stars</span>
                 Regras de Cashback (Clube Fidelidade)
@@ -370,7 +370,7 @@ const ConfiguracoesOperacionais = () => {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-md mt-base">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-md mt-base min-w-0">
                   <div className="flex flex-col gap-xs">
                     <label className="font-label-md text-label-md text-on-surface">Porcentagem de Cashback (%)</label>
                     <input
@@ -403,7 +403,7 @@ const ConfiguracoesOperacionais = () => {
             </div>
 
             {/* Experiência do Cliente */}
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg flex flex-col gap-md mt-lg border-l-4 border-l-accent">
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg flex flex-col gap-md mt-lg border-l-4 border-l-accent">
               <div className="flex justify-between items-center mb-xs">
                 <h3 className="font-headline-md text-[20px] text-on-surface flex items-center gap-sm">
                   <span className="material-symbols-outlined text-primary">concierge</span>
@@ -457,7 +457,7 @@ const ConfiguracoesOperacionais = () => {
                       }
                     }}
                     placeholder="Ex: Chá gelado (pressione Enter)"
-                    className="flex-1 p-3 bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                    className="flex-1 min-w-0 p-3 bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
                   />
                   <button 
                     onClick={() => {
@@ -466,7 +466,7 @@ const ConfiguracoesOperacionais = () => {
                         setNewItemInput('');
                       }
                     }}
-                    className="bg-secondary-container text-on-secondary-container px-4 py-2 rounded-xl font-bold hover:bg-secondary-container/80 transition-colors"
+                    className="bg-secondary-container text-on-secondary-container px-4 py-2 rounded-xl font-bold hover:bg-secondary-container/80 transition-colors shrink-0"
                   >
                     Adicionar
                   </button>
@@ -477,7 +477,7 @@ const ConfiguracoesOperacionais = () => {
           
           {/* Sidebar Info/Settings */}
           <section className="lg:col-span-4 space-y-xl">
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg">
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg">
               <h3 className="font-headline-md text-[20px] text-on-surface mb-md flex items-center gap-sm">
                 <span className="material-symbols-outlined text-primary text-[20px]">calendar_add_on</span>
                 Exceções de Horário
@@ -510,7 +510,7 @@ const ConfiguracoesOperacionais = () => {
             </div>
             
             {/* Coupons Section */}
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg">
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg">
               <h3 className="font-headline-md text-[20px] text-on-surface mb-md flex items-center gap-sm">
                 <span className="material-symbols-outlined text-primary text-[20px]">local_activity</span>
                 Cupons de Desconto
@@ -551,7 +551,7 @@ const ConfiguracoesOperacionais = () => {
               </button>
             </div>
             
-            <div className="bg-primary-container rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg">
+            <div className="bg-primary-container rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg">
               <h3 className="font-headline-md text-[20px] text-on-primary-container mb-sm flex items-center gap-sm">
                 <span className="material-symbols-outlined text-on-primary-container text-[20px]">info</span>
                 Aviso
