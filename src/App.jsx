@@ -6,6 +6,7 @@ import { api } from './lib/api';
 // --- Context ---
 import { NotificationProvider } from './context/NotificationProvider';
 import { Crown } from 'lucide-react';
+import PwaUpdatePrompt from './components/PwaUpdatePrompt';
 
 // --- Páginas Novas do Design System ---
 import AcessoProfissional from './pages/AcessoProfissional';
@@ -162,6 +163,7 @@ function App() {
 
   return (
     <NotificationProvider>
+      <PwaUpdatePrompt />
       <BrowserRouter>
         <Routes>
           {/* Rota Raiz (SaaS Global) */}
