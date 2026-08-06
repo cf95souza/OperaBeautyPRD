@@ -48,7 +48,8 @@ export const TenantProvider = ({ children }) => {
           localStorage.setItem('operabeauty_last_tenant', tenant_slug);
           
           // --- Injeção Dinâmica de PWA (Especial para iOS e Multi-Tenant) ---
-          // 1. Altera o título da página e da home screen do iOS
+          // Atualiza título e apple meta tags com o nome real do salão
+          // O manifest é servido pelo backend via /api/manifest/:slug (URL real)
           const isStaff = window.location.pathname.includes('/staff');
           const pwaDisplayName = isStaff 
             ? (tenantData.name || 'OperaBeauty') + ' - Staff' 
@@ -59,41 +60,8 @@ export const TenantProvider = ({ children }) => {
           if (appleTitle) {
             appleTitle.content = pwaDisplayName;
           }
-
-          // 2. Atualiza o manifest dinâmico com o nome REAL do salão
-          // (o script inline do index.html já criou um manifest provisório com o slug,
-          //  agora substituímos pelo nome real vindo da API)
-          const startUrl = isStaff ? `/${tenant_slug}/staff/login` : `/${tenant_slug}/home`;
-          const scope = `/${tenant_slug}/`;
-          
-          const manifest = {
-            name: pwaDisplayName,
-            short_name: pwaDisplayName,
-            display: 'standalone',
-            start_url: startUrl,
-            scope: scope,
-            theme_color: tenantData.primary_color || '#be185d',
-            background_color: '#ffffff',
-            orientation: 'portrait',
-            lang: 'pt-BR',
-            icons: [
-              { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-              { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-              { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
-            ]
-          };
-
-          const manifestString = JSON.stringify(manifest);
-          const manifestURL = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(manifestString);
-
-          let manifestLink = document.querySelector('link[rel="manifest"]');
-          if (!manifestLink) {
-            manifestLink = document.createElement('link');
-            manifestLink.rel = 'manifest';
-            document.head.appendChild(manifestLink);
-          }
-          manifestLink.href = manifestURL;
         }
+
 
         // 2. Aplica as cores do Salão (White Label)
         if (tenantData.primary_color) {

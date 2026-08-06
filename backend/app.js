@@ -42,6 +42,7 @@ import waitlistRoutes from './routes/waitlist.js';
 import termsRoutes from './routes/terms.js';
 import consentsRoutes from './routes/consents.js';
 import anamnesisRoutes from './routes/anamnesis.js';
+import manifestRoutes from './routes/manifest.js';
 import { initCronJobs } from './cron/reminders.js';
 
 import './workers/notificationWorker.js';
@@ -155,6 +156,7 @@ app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/terms', termsRoutes);
 app.use('/api/consents', consentsRoutes);
 app.use('/api/anamnesis', anamnesisRoutes);
+app.use('/api/manifest', manifestRoutes);
 
 // Middleware de tratamento global de erros
 app.use((err, req, res, next) => {

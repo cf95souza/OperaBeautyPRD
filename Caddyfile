@@ -14,9 +14,14 @@
         reverse_proxy api:5000
     }
 
+    # Manifest dinâmico por tenant - proxy para API backend
+    # Cada salão recebe um manifest com start_url e scope corretos
+    # Isso resolve o problema do iOS sair do modo standalone
+    handle /api/manifest/* {
+        reverse_proxy api:5000
+    }
+
     # BLOQUEIO: Impede o manifest.webmanifest estático de ser servido
-    # O manifest é gerado DINAMICAMENTE via script inline no index.html
-    # para suportar multi-tenant PWA (cada salão tem seu próprio start_url)
     handle /manifest.webmanifest {
         respond 404
     }

@@ -15,15 +15,14 @@
     
     <script>
       // ============================================================
-      // PWA DINÂMICO MULTI-TENANT — Manifest + Apple Meta Tags
-      // Este script DEVE executar ANTES do React carregar.
-      // Ele detecta a rota atual e injeta o manifest correto
-      // para que ao "Adicionar à Tela Inicial" o PWA abra
-      // na página correta (staff/login ou tenant/home).
+      // PWA DINÂMICO MULTI-TENANT — Manifest via URL Real
+      // O iOS Safari só mantém o modo standalone com manifests
+      // servidos via URL HTTP real (não data: URI).
+      // Este script detecta a rota atual e injeta o <link rel="manifest">
+      // apontando para /api/manifest/:slug que retorna JSON dinâmico.
       // ============================================================
       (function() {
         var path = window.location.pathname;
-        var hostname = window.location.origin;
         
         // Rotas globais que NÃO pertencem a um tenant
         var globalRoutes = ['/', '/privacidade', '/termos'];
@@ -36,42 +35,16 @@
             var slug = segments[0];
             var isStaff = path.indexOf('/staff') !== -1;
             
-            // Define start_url baseado no contexto:
-            // Staff → /{slug}/staff/login (gestores/profissionais)
-            // Client → /{slug}/home (clientes do salão)
-            var startUrl = isStaff ? '/' + slug + '/staff/login' : '/' + slug + '/home';
-            
-            // Define scope como o slug do tenant para isolar o PWA
-            var scope = '/' + slug + '/';
-            
-            // Nome exibido no PWA
+            // Nome exibido no PWA (provisório até o React carregar os dados reais)
             var pwaName = slug.charAt(0).toUpperCase() + slug.slice(1);
             if (isStaff) {
               pwaName = pwaName + ' - Staff';
             }
             
-            var m = {
-              name: pwaName,
-              short_name: pwaName,
-              display: 'standalone',
-              start_url: startUrl,
-              scope: scope,
-              theme_color: '#be185d',
-              background_color: '#ffffff',
-              orientation: 'portrait',
-              lang: 'pt-BR',
-              icons: [
-                { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-                { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-                { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
-              ]
-            };
+            // Manifest servido pelo backend via URL real
+            var manifestUrl = '/api/manifest/' + slug + (isStaff ? '?mode=staff' : '');
             
-            var encoded = encodeURIComponent(JSON.stringify(m));
-            var manifestUrl = 'data:application/manifest+json;charset=utf-8,' + encoded;
-            
-            // Força injeção síncrona do manifest ANTES do parse do DOM terminar
-            // Isso é CRÍTICO para iOS Safari que lê o manifest durante o parse
+            // Injeção síncrona do link rel="manifest" com URL real
             document.write('<link rel="manifest" id="dynamic-manifest" href="' + manifestUrl + '">');
             
             // Atualiza Apple-specific meta tags para iOS
@@ -86,29 +59,28 @@
           }
         } else {
           // --- PWA GLOBAL (Landing Page) ---
-          // Se o usuário está na landing page mas já visitou um tenant antes,
-          // redireciona para o último tenant (melhora UX do PWA)
           var lastTenant = null;
           try { lastTenant = localStorage.getItem('operabeauty_last_tenant'); } catch(e) {}
           
-          var globalStartUrl = '/';
           if (lastTenant && path === '/') {
             // Se está em standalone mode (já instalou como PWA), redireciona para o último tenant
             if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
               var lastMode = null;
               try { lastMode = localStorage.getItem('operabeauty_pwa_mode'); } catch(e) {}
-              globalStartUrl = lastMode === 'staff' 
+              var redirectUrl = lastMode === 'staff' 
                 ? '/' + lastTenant + '/staff/login' 
                 : '/' + lastTenant + '/home';
+              window.location.replace(redirectUrl);
             }
           }
           
+          // Manifest global genérico
           var globalM = {
             name: 'OperaBeauty',
             short_name: 'OperaBeauty',
             description: 'Sistema de Gestão para Salões de Beleza e Barbearias',
             display: 'standalone',
-            start_url: globalStartUrl,
+            start_url: '/',
             scope: '/',
             theme_color: '#be185d',
             background_color: '#ffffff',
@@ -126,6 +98,7 @@
         }
       })();
     </script>
+
   </head>
   <body>
     <div id="root"></div>
