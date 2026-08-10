@@ -268,7 +268,7 @@ export const redeemGiftCard = async (tenantId, redemptionCode, amountToRedeem) =
     const amount = parseFloat(amountToRedeem);
     
     if (amount <= 0) throw new Error('O valor de resgate deve ser maior que zero.');
-    if (amount > balance) throw new Error(\`Saldo insuficiente. Saldo disponível: R$ \${balance.toFixed(2)}\`);
+    if (amount > balance) throw new Error(`Saldo insuficiente. Saldo disponível: R$ ${balance.toFixed(2)}`);
     
     const newBalance = balance - amount;
     const newStatus = newBalance === 0 ? 'REDEEMED' : 'PARTIALLY_REDEEMED';
@@ -291,3 +291,4 @@ export const redeemGiftCard = async (tenantId, redemptionCode, amountToRedeem) =
     client.release();
   }
 };
+
