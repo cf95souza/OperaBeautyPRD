@@ -41,6 +41,12 @@ const ConfiguracoesOperacionais = () => {
   const [waitingMenuItems, setWaitingMenuItems] = useState([]);
   const [newItemInput, setNewItemInput] = useState('');
 
+  // Estados para PIX (Vales-Presente e Recebimentos)
+  const [pixKey, setPixKey] = useState('');
+  const [pixKeyType, setPixKeyType] = useState('cpf');
+  const [pixHolderName, setPixHolderName] = useState('');
+  const [pixHolderDocument, setPixHolderDocument] = useState('');
+
   // Modal Exception State
   const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [newException, setNewException] = useState({ date: '', is_closed: true, open_time: '09:00', close_time: '18:00', reason: '' });
@@ -98,6 +104,19 @@ const ConfiguracoesOperacionais = () => {
       // Fetch Services for Coupon binding
       const servicesData = await api.services.list(tenant.id);
       setServices((servicesData || []).filter(s => s.is_active));
+
+      // Fetch PIX
+      try {
+        const pixData = await api.request('/giftcards/payment-methods');
+        if (pixData && pixData.length > 0) {
+          setPixKey(pixData[0].pix_key || '');
+          setPixKeyType(pixData[0].pix_key_type || 'cpf');
+          setPixHolderName(pixData[0].holder_name || '');
+          setPixHolderDocument(pixData[0].holder_document || '');
+        }
+      } catch (err) {
+        console.error("Erro ao carregar PIX:", err);
+      }
     } catch (err) {
       console.error("Erro ao carregar dados operacionais:", err);
     }
@@ -128,7 +147,20 @@ const ConfiguracoesOperacionais = () => {
         waiting_menu_items: waitingMenuItems
       });
 
-      // 2. Upsert Business Hours
+      // 2. Salvar PIX se estiver preenchido
+      if (pixKey && pixHolderName) {
+        await api.request('/giftcards/payment-methods', {
+          method: 'POST',
+          body: JSON.stringify({
+            pix_key: pixKey,
+            pix_key_type: pixKeyType,
+            holder_name: pixHolderName,
+            holder_document: pixHolderDocument
+          })
+        });
+      }
+
+      // 3. Upsert Business Hours
       const cleanBusinessHours = businessHours.map(({ id, ...rest }) => rest);
       await api.settings.updateBusinessHours(cleanBusinessHours);
       showSuccess('Configurações salvas com sucesso!');
@@ -341,6 +373,63 @@ const ConfiguracoesOperacionais = () => {
                     placeholder="https://wa.me/5511999999999"
                     className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
                     type="url"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Seção Bento: Métodos de Recebimento (PIX) */}
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg flex flex-col gap-md mt-lg">
+              <h3 className="font-headline-md text-[20px] text-on-surface mb-xs flex items-center gap-sm">
+                <span className="material-symbols-outlined text-primary">account_balance_wallet</span>
+                Métodos de Recebimento (PIX)
+              </h3>
+              <p className="font-body-md text-body-md text-secondary">
+                Configure a chave PIX do estabelecimento. Esta chave será exibida aos clientes para o pagamento de Vales-Presente e outros serviços digitais.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-md mt-sm">
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-md text-label-md text-on-surface">Tipo de Chave PIX *</label>
+                  <select
+                    value={pixKeyType}
+                    onChange={(e) => setPixKeyType(e.target.value)}
+                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                  >
+                    <option value="cpf">CPF / CNPJ</option>
+                    <option value="email">E-mail</option>
+                    <option value="phone">Telefone</option>
+                    <option value="random">Chave Aleatória</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-md text-label-md text-on-surface">Chave PIX *</label>
+                  <input
+                    value={pixKey}
+                    onChange={(e) => setPixKey(e.target.value)}
+                    placeholder="Sua chave..."
+                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-md text-label-md text-on-surface">Nome do Titular *</label>
+                  <input
+                    value={pixHolderName}
+                    onChange={(e) => setPixHolderName(e.target.value)}
+                    placeholder="Ex: Maria da Silva"
+                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-xs">
+                  <label className="font-label-md text-label-md text-on-surface">CPF/CNPJ do Titular</label>
+                  <input
+                    value={pixHolderDocument}
+                    onChange={(e) => setPixHolderDocument(e.target.value)}
+                    placeholder="Opcional"
+                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
                   />
                 </div>
               </div>

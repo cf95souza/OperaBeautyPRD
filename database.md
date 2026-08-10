@@ -733,24 +733,57 @@ CREATE INDEX IF NOT EXISTS idx_cap_lookbook_tenant ON public.cap_lookbook(tenant
 
 ---
 
-## 13. Vales-Presente (Gift Cards)
+## 13. Vales-Presente (Gift Cards) e Pagamentos
 
-Esta tabela armazena os cartões presente emitidos pelo salão.
+Estas tabelas gerenciam as solicitações de vale-presente e os métodos de pagamento (PIX) do salão.
 
 ```sql
+-- 13.1 Métodos de Pagamento do Salão (PIX)
+CREATE TABLE public.cap_tenant_payment_methods (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    type TEXT NOT NULL DEFAULT 'PIX',
+    pix_key TEXT NOT NULL,
+    pix_key_type TEXT NOT NULL, -- cpf, cnpj, email, phone, random
+    holder_name TEXT NOT NULL,
+    holder_document TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cap_tenant_payment_methods_tenant ON public.cap_tenant_payment_methods(tenant_id);
+
+-- 13.2 Vales-Presente
 CREATE TABLE public.cap_giftcards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
     purchaser_id UUID REFERENCES public.cap_clients(id) ON DELETE SET NULL,
     service_id UUID REFERENCES public.cap_services(id) ON DELETE CASCADE,
+    
+    -- Identificadores separados por segurança
+    request_id VARCHAR(20) UNIQUE NOT NULL, -- ID público da solicitação para o comprador (VP-XXXX)
+    redemption_code VARCHAR(20) UNIQUE,     -- Código secreto para o presenteado usar (VG-XXXX)
+
+    -- Dados do Presenteado
     recipient_name TEXT,
-    code VARCHAR(20) UNIQUE NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'redeemed', 'expired')),
+    recipient_phone TEXT,
+    message TEXT,
+    
+    -- Valores e Saldos
+    original_value NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    available_balance NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+
+    -- Status de Pagamento e do Vale
+    payment_status TEXT NOT NULL DEFAULT 'PENDING' CHECK (payment_status IN ('PENDING', 'CONFIRMED', 'REJECTED')),
+    status TEXT NOT NULL DEFAULT 'PENDING_PAYMENT' CHECK (status IN ('PENDING_PAYMENT', 'ACTIVE', 'PARTIALLY_REDEEMED', 'REDEEMED', 'EXPIRED', 'CANCELLED')),
+    
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Índices
 CREATE INDEX IF NOT EXISTS idx_cap_giftcards_tenant ON public.cap_giftcards(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_cap_giftcards_code ON public.cap_giftcards(code);
+CREATE INDEX IF NOT EXISTS idx_cap_giftcards_request_id ON public.cap_giftcards(request_id);
+CREATE INDEX IF NOT EXISTS idx_cap_giftcards_redemption_code ON public.cap_giftcards(redemption_code);
 ```

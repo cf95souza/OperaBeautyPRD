@@ -261,6 +261,7 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
 ### 4. Financeiro e Estoque
 - **Dashboard e Financeiro:** Fluxo de caixa e histórico de receitas e despesas.
 - **Estoque Atrelado a Serviços:** Ao cadastrar um serviço, o gestor pode escolher se ele consome estoque. Se ativado, ele seleciona um ou mais itens da lista de insumos e define a quantidade exata consumida por serviço. A baixa é automática assim que o procedimento for concluído no aplicativo.
+- **Vales-Presente (Gift Cards):** Sistema seguro com separação entre ID de Solicitação (para pagamento via PIX direto ao salão) e Código de Resgate (gerado apenas após confirmação do pagamento). Suporta resgates parciais e controle de validade e saldo.
 
 ### 5. Multi Tenant, Roteamento e Assinaturas (SaaS)
 - **Criação de Salão (Onboarding):** Feita exclusivamente de forma manual pelo Super Admin (Você).
