@@ -195,6 +195,12 @@ export const confirmGiftCardPayment = async (tenantId, requestId) => {
 
 // Valida código do Gift Card (Para resgate)
 export const validateGiftCardCode = async (tenantId, redemptionCode) => {
+  if (redemptionCode && redemptionCode.toUpperCase().startsWith('VP-')) {
+    const err = new Error('Você inseriu um ID de Solicitação (VP-). Para resgatar, utilize o Código de Resgate (VG-).');
+    err.statusCode = 400;
+    throw err;
+  }
+
   const query = `
     SELECT g.id, g.redemption_code, g.status, g.payment_status, g.original_value, g.available_balance, g.recipient_name, g.expires_at, s.name as service_name
     FROM public.cap_giftcards g

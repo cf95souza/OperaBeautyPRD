@@ -148,6 +148,23 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
 1. Use o WinSCP ou terminal para colocar o script de criação dentro da VPS ou simplesmente copie-o.
 2. Acesse o container do Postgres via terminal:
    ```bash
+cd /home/seu-usuario/OperaBeauty
+
+# Para inicializar a API e o PostgreSQL em segundo plano:
+docker compose up -d
+
+# Para verificar se estão rodando:
+docker compose ps
+
+# Para ver os logs da API (se houver algum erro):
+docker compose logs api
+```
+
+### 4. Inicializando o Banco de Dados pela Primeira Vez
+Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) da documentação `database.md`:
+1. Use o WinSCP ou terminal para colocar o script de criação dentro da VPS ou simplesmente copie-o.
+2. Acesse o container do Postgres via terminal:
+   ```bash
    docker exec -it operabeauty-db psql -U postgres -d operabeauty
    ```
 3. Cole o conteúdo de `database.md` no console e dê enter para estruturar as tabelas SaaS Multi-Tenant.
@@ -155,6 +172,12 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
 ---
 
 ## Histórico de Alterações
+
+- **10/08/2026 - Novo Fluxo de Vale-Presente (Segurança e SaaS):**
+  - **Banco de Dados**: Refatoração da tabela `cap_giftcards` removendo a obrigatoriedade do `redemption_code` inicial, adicionando colunas de `request_id` (VP-XXXX), `original_value`, `available_balance` e `payment_status`. Criação da tabela `cap_tenant_payment_methods` para armazenar chaves PIX dos salões.
+  - **Backend (API)**: Alteração da lógica de criação de vales-presente, separando a solicitação (PENDING_PAYMENT) da confirmação (ACTIVE). Criação de rotas para consultar solicitações, confirmar pagamentos (gerando o código de resgate), e validar/resgatar códigos de forma parcial.
+  - **Frontend (Cliente)**: Tela de compra ajustada para não gerar mais o código final imediatamente. Agora o cliente recebe um `request_id` e os dados PIX do salão para realizar o pagamento externo, com atalho para enviar comprovante via WhatsApp.
+  - **Frontend (Gestor)**: Gestão de Gift Cards totalmente reconstruída com abas de validação de pagamento (para gerar o código após PIX) e validação de código (para debitar saldo). Regra clara de que quem envia o código ao presenteado é o comprador.
 
 - **19/07/2026 - Conclusão Parcial da Fase 8 (Módulos Avançados do Super Admin):**
   - **Mural de Avisos (Broadcast):** Adicionada a funcionalidade para o Super Admin enviar comunicados globais que aparecem no painel de todos os studios ativos através da tabela `cap_platform_announcements`.
@@ -261,6 +284,7 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
 ### 4. Financeiro e Estoque
 - **Dashboard e Financeiro:** Fluxo de caixa e histórico de receitas e despesas.
 - **Estoque Atrelado a Serviços:** Ao cadastrar um serviço, o gestor pode escolher se ele consome estoque. Se ativado, ele seleciona um ou mais itens da lista de insumos e define a quantidade exata consumida por serviço. A baixa é automática assim que o procedimento for concluído no aplicativo.
+- **Vales-Presente (Gift Cards):** Sistema seguro com separação entre ID de Solicitação (para pagamento via PIX direto ao salão) e Código de Resgate (gerado apenas após confirmação do pagamento). Suporta resgates parciais e controle de validade e saldo.
 - **Vales-Presente (Gift Cards):** Sistema seguro com separação entre ID de Solicitação (para pagamento via PIX direto ao salão) e Código de Resgate (gerado apenas após confirmação do pagamento). Suporta resgates parciais e controle de validade e saldo.
 
 ### 5. Multi Tenant, Roteamento e Assinaturas (SaaS)

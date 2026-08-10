@@ -314,6 +314,30 @@ const PerfilCliente = () => {
             </div>
           </section>
 
+          {/* Meus Vales-Presente Section */}
+          <section>
+            <div className="flex items-center gap-2 mb-md">
+              <span className="material-symbols-outlined text-primary text-[20px]">card_giftcard</span>
+              <h3 className="font-label-md text-label-md text-primary uppercase tracking-widest">Meus Presentes</h3>
+            </div>
+            
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] overflow-hidden border border-outline-variant/30 mb-xl">
+              <button 
+                type="button"
+                onClick={() => navigate(`/${tenant_slug}/meus-vales`)}
+                className="w-full relative flex items-center justify-between p-lg group active:scale-[0.99] transition-all bg-surface hover:bg-surface-variant/30"
+              >
+                <div className="flex flex-col items-start text-left">
+                  <span className="font-headline-sm text-on-surface mb-1 font-bold">Meus Vales-Presente</span>
+                  <span className="text-sm text-secondary">Acompanhe e envie seus presentes</span>
+                </div>
+                <div className="w-10 h-10 bg-primary/10 text-primary rounded-full shadow-sm flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                  <span className="material-symbols-outlined">arrow_forward</span>
+                </div>
+              </button>
+            </div>
+          </section>
+
           {/* Indique e Ganhe Section */}
           {tenant?.features?.referral && (
             <section>

@@ -36,6 +36,7 @@ import ComissoesProfissional from './pages/ComissoesProfissional';
 import ComprarGiftCard from './pages/ComprarGiftCard';
 import IndiqueGanhe from './pages/IndiqueGanhe';
 import NotificacoesCliente from './pages/NotificacoesCliente';
+import MeusValesPresente from './pages/MeusValesPresente';
 
 // --- Contexto Multi-Tenant ---
 import { TenantProvider, useTenant } from './context/TenantContext';
@@ -205,6 +206,7 @@ function App() {
             <Route path="clube" element={<ClubeFidelidade />} />
             <Route path="carteira" element={<FidelidadeCarteira />} />
             <Route path="presentear" element={<ComprarGiftCard />} />
+            <Route path="meus-vales" element={<MeusValesPresente />} />
             <Route path="indique-e-ganhe" element={<IndiqueGanhe />} />
             <Route path="notificacoes" element={<NotificacoesCliente />} />
             {/* Jornada de Login (Cliente e Staff) */}

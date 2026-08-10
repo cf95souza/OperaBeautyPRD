@@ -264,27 +264,16 @@ const GestaoGiftCards = () => {
                       </button>
                     </div>
 
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 md:p-4 mb-4 text-left">
-                      <p className="text-amber-800 text-xs md:text-sm font-bold flex items-center gap-1.5 mb-2">
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 md:p-4 mb-4 text-left">
+                      <p className="text-primary text-xs md:text-sm font-bold flex items-center gap-1.5 mb-2">
                         <span className="material-symbols-outlined text-[18px]">info</span>
-                        Importante
+                        Tudo Certo!
                       </p>
-                      <p className="text-amber-700 text-xs md:text-sm">
-                        Informe este código ao <strong>comprador</strong> para que ele mesmo envie ao presenteado. 
-                        O salão não deve enviar diretamente ao presenteado.
+                      <p className="text-secondary text-xs md:text-sm">
+                        O código de resgate foi gerado com sucesso e já está disponível no painel do <strong>cliente</strong> (comprador). 
+                        A partir de agora, é ele quem visualiza o código e envia ao presenteado. Nenhuma ação adicional é necessária.
                       </p>
                     </div>
-
-                    <button 
-                      onClick={() => {
-                        const msg = `Pagamento confirmado! Aqui está o código de resgate do Vale-Presente:\n\n🎟️ Código: *${requestDetails.redemption_code}*\n💰 Valor: R$ ${parseFloat(requestDetails.original_value).toFixed(2).replace('.', ',')}\n\nVocê pode enviar este código para o presenteado(a) utilizar no nosso estabelecimento.`;
-                        copyToClipboard(msg);
-                      }}
-                      className="w-full py-3 md:py-4 bg-primary text-on-primary font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 text-sm md:text-base"
-                    >
-                      <span className="material-symbols-outlined">content_copy</span>
-                      Copiar Mensagem para o Comprador
-                    </button>
                   </div>
                 )}
               </div>
