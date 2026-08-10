@@ -79,7 +79,7 @@ export const listGiftCardsByTenant = async (tenantId) => {
 // Lista Vales-Presente comprados pelo cliente
 export const listGiftCardsByClient = async (tenantId, clientId) => {
   const query = `
-    SELECT g.id, g.request_id, g.recipient_name, g.status, g.payment_status, g.original_value, g.available_balance, g.created_at, g.expires_at, s.name as service_name
+    SELECT g.id, g.request_id, g.redemption_code, g.recipient_name, g.status, g.payment_status, g.original_value, g.available_balance, g.created_at, g.expires_at, s.name as service_name
     FROM public.cap_giftcards g
     LEFT JOIN public.cap_services s ON g.service_id = s.id
     WHERE g.tenant_id = $1 AND g.purchaser_id = $2
@@ -281,11 +281,11 @@ export const redeemGiftCard = async (tenantId, redemptionCode, amountToRedeem) =
     
     const updateQuery = `
       UPDATE public.cap_giftcards
-      SET available_balance = $3, status = $4
+      SET available_balance = $2, status = $3
       WHERE id = $1
       RETURNING id, available_balance, status
     `;
-    const updateResult = await client.query(updateQuery, [gift.id, amount, newBalance, newStatus]);
+    const updateResult = await client.query(updateQuery, [gift.id, newBalance, newStatus]);
     
     await client.query('COMMIT');
     return updateResult.rows[0];

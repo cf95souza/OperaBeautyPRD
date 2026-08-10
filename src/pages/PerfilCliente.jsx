@@ -324,7 +324,7 @@ const PerfilCliente = () => {
             <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] overflow-hidden border border-outline-variant/30 mb-xl">
               <button 
                 type="button"
-                onClick={() => navigate(`/${tenant_slug}/meus-vales`)}
+                onClick={() => navigate(`/${tenant_slug}/presentear`)}
                 className="w-full relative flex items-center justify-between p-lg group active:scale-[0.99] transition-all bg-surface hover:bg-surface-variant/30"
               >
                 <div className="flex flex-col items-start text-left">

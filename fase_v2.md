@@ -49,15 +49,16 @@ Reestrutura toda a lógica de negócio dos vales-presente no backend, incluindo:
 
 ---
 
-### ✅ ETAPA 3 — Frontend: Tela do Cliente (Compra)
+### ✅ ETAPA 3 — Frontend: Tela do Cliente (Compra & Meus Vales)
 
 **O que faz:**
-Reformula a tela `ComprarGiftCard.jsx` para o novo fluxo:
+Reformula a tela `ComprarGiftCard.jsx` para o novo fluxo unificado:
 
-1. Cliente seleciona serviço, preenche nome/WhatsApp do presenteado (opcionais) e gera a solicitação.
+1. **Aba Comprar:** Cliente seleciona serviço, preenche nome/WhatsApp do presenteado (opcionais) e gera a solicitação.
 2. Após gerar, recebe o **ID da Solicitação (VP-XXXX)** — que NÃO é o código de resgate.
 3. Exibe os dados do PIX do salão para o cliente copiar e pagar.
 4. Botão "Copiar Mensagem" para o cliente enviar ao WhatsApp do salão com o comprovante.
+5. **Aba Meus Vales:** Cliente pode visualizar os Vales-Presentes comprados. Caso o PIX ainda não tenha sido aprovado, vê o status pendente e o PIX do salão. Caso o salão já tenha aprovado e o código de resgate (VG-XXXX) tenha sido gerado, o cliente pode enviar a mensagem do vale presenteado via WhatsApp. **(Isso corrige a regra de que é o comprador que envia o vale, e não o salão)**.
 
 **Arquivos envolvidos:**
 - `src/pages/ComprarGiftCard.jsx`
@@ -160,3 +161,5 @@ Após os testes e homologação:
 | Erro 500 parâmetros undefined | Campos opcionais chegavam como `undefined` no INSERT | Conversão para `null` com fallback |
 | Erro 400 ao validar código | Rota `/validate/:code` exigia `tenant_id` na query | Adicionado `authMiddleware` usando `req.user.tenant_id` |
 | Erro ao carregar PIX | Faltava `tenant_id` na chamada de `payment-methods` | Adicionado `?tenant_id=${tenant.id}` na URL |
+| Gestor enviando msg WhatsApp | O painel do gestor tinha botão para enviar msg ao presenteado, mas a regra é que o comprador quem envia | Removido botão de WhatsApp do painel do gestor (Aba 1) |
+| Erro 400 ao resgatar (redeem) | Query SQL omitia o parâmetro $2 (redemption_code) causando falha do Postgres e o backend convertia para erro 400 | Corrigida a query `UPDATE` do resgate para alinhar com o array de parâmetros |
