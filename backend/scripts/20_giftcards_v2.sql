@@ -23,6 +23,9 @@ CREATE INDEX IF NOT EXISTS idx_cap_tenant_payment_methods_tenant ON public.cap_t
 -- O código antigo (code) será mapeado para redemption_code
 ALTER TABLE public.cap_giftcards RENAME COLUMN code TO redemption_code;
 
+-- Permitir NULL no redemption_code (só é gerado após confirmação de pagamento)
+ALTER TABLE public.cap_giftcards ALTER COLUMN redemption_code DROP NOT NULL;
+
 -- Adicionar novas colunas
 ALTER TABLE public.cap_giftcards 
 ADD COLUMN IF NOT EXISTS request_id VARCHAR(20),
