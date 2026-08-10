@@ -40,16 +40,18 @@ UPDATE public.cap_giftcards SET original_value = 0.00, available_balance = 0.00 
 ALTER TABLE public.cap_giftcards ALTER COLUMN request_id SET NOT NULL;
 ALTER TABLE public.cap_giftcards ADD CONSTRAINT cap_giftcards_request_id_key UNIQUE (request_id);
 
--- Normalizar status legados antes de aplicar a constraint
+-- Remover a restrição antiga antes de atualizar os dados
+ALTER TABLE public.cap_giftcards DROP CONSTRAINT IF EXISTS cap_giftcards_status_check;
+
+-- Normalizar status legados antes de aplicar a constraint nova
 UPDATE public.cap_giftcards SET status = 'ACTIVE' WHERE LOWER(status) = 'active';
 UPDATE public.cap_giftcards SET status = 'REDEEMED' WHERE LOWER(status) IN ('used', 'redeemed');
 UPDATE public.cap_giftcards SET status = 'EXPIRED' WHERE LOWER(status) = 'expired';
 UPDATE public.cap_giftcards SET status = 'CANCELLED' WHERE LOWER(status) IN ('cancelled', 'canceled');
 UPDATE public.cap_giftcards SET status = 'PENDING_PAYMENT' WHERE LOWER(status) = 'pending';
-UPDATE public.cap_giftcards SET status = UPPER(status);
+UPDATE public.cap_giftcards SET status = UPPER(TRIM(status));
 
--- Modificar a restrição de status
-ALTER TABLE public.cap_giftcards DROP CONSTRAINT IF EXISTS cap_giftcards_status_check;
+-- Aplicar a restrição de status nova
 ALTER TABLE public.cap_giftcards ADD CONSTRAINT cap_giftcards_status_check CHECK (status IN ('PENDING_PAYMENT', 'ACTIVE', 'PARTIALLY_REDEEMED', 'REDEEMED', 'EXPIRED', 'CANCELLED'));
 
 -- Modificar a restrição de payment_status
