@@ -47,7 +47,7 @@ const GestaoGiftCards = () => {
     setLoading(true);
     setRequestDetails(null);
     try {
-      const data = await api.request(\`/giftcards/admin/request/\${requestIdInput}\`);
+      const data = await api.request(`/giftcards/admin/request/${requestIdInput}`);
       setRequestDetails(data);
     } catch (err) {
       showError(err.message || "Solicitação não encontrada.");
@@ -57,10 +57,10 @@ const GestaoGiftCards = () => {
   };
 
   const handleConfirmPayment = async () => {
-    if (await confirm(\`Confirmar o recebimento de R$ \${parseFloat(requestDetails.original_value).toFixed(2)} para a solicitação \${requestDetails.request_id}?\`)) {
+    if (await confirm(`Confirmar o recebimento de R$ ${parseFloat(requestDetails.original_value).toFixed(2)} para a solicitação ${requestDetails.request_id}?`)) {
       setLoading(true);
       try {
-        const response = await api.request(\`/giftcards/admin/confirm-payment/\${requestDetails.request_id}\`, { method: 'POST' });
+        const response = await api.request(`/giftcards/admin/confirm-payment/${requestDetails.request_id}`, { method: 'POST' });
         showSuccess(response.message);
         // Atualiza a view com o código gerado
         setRequestDetails({
@@ -89,7 +89,7 @@ const GestaoGiftCards = () => {
     setLoading(true);
     setRedemptionDetails(null);
     try {
-      const data = await api.request(\`/giftcards/validate/\${redemptionCodeInput}\`);
+      const data = await api.request(`/giftcards/validate/${redemptionCodeInput}`);
       setRedemptionDetails(data);
       setRedeemAmount(data.available_balance); // Default to total balance
     } catch (err) {
@@ -112,10 +112,10 @@ const GestaoGiftCards = () => {
       return;
     }
 
-    if (await confirm(\`Confirmar resgate de R$ \${amount.toFixed(2)} deste Vale-Presente?\`)) {
+    if (await confirm(`Confirmar resgate de R$ ${amount.toFixed(2)} deste Vale-Presente?`)) {
       setLoading(true);
       try {
-        const response = await api.request(\`/giftcards/redeem/\${redemptionDetails.redemption_code}\`, { 
+        const response = await api.request(`/giftcards/redeem/${redemptionDetails.redemption_code}`, { 
           method: 'POST',
           body: JSON.stringify({ amount })
         });
@@ -144,19 +144,19 @@ const GestaoGiftCards = () => {
       <div className="flex gap-2 mb-8 bg-surface-variant/30 p-2 rounded-xl overflow-x-auto">
         <button 
           onClick={() => setActiveTab('pagamentos')}
-          className={\`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap \${activeTab === 'pagamentos' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:bg-surface-variant/50'}\`}
+          className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'pagamentos' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:bg-surface-variant/50'}`}
         >
           Validar Pagamento
         </button>
         <button 
           onClick={() => setActiveTab('resgate')}
-          className={\`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap \${activeTab === 'resgate' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:bg-surface-variant/50'}\`}
+          className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'resgate' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:bg-surface-variant/50'}`}
         >
           Validar Código (Resgate)
         </button>
         <button 
           onClick={() => setActiveTab('lista')}
-          className={\`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap \${activeTab === 'lista' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:bg-surface-variant/50'}\`}
+          className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${activeTab === 'lista' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:bg-surface-variant/50'}`}
         >
           Todos os Vales
         </button>
@@ -210,7 +210,7 @@ const GestaoGiftCards = () => {
                   </div>
                   <div className="flex justify-between border-b border-outline-variant pb-2">
                     <span className="text-secondary">Status de Pagamento</span>
-                    <span className={\`font-bold \${requestDetails.payment_status === 'CONFIRMED' ? 'text-success' : 'text-error'}\`}>
+                    <span className={`font-bold ${requestDetails.payment_status === 'CONFIRMED' ? 'text-success' : 'text-error'}`}>
                       {requestDetails.payment_status === 'CONFIRMED' ? 'CONFIRMADO' : 'PENDENTE'}
                     </span>
                   </div>
@@ -243,7 +243,7 @@ const GestaoGiftCards = () => {
                     </div>
                     
                     <a 
-                      href={\`https://wa.me/\${requestDetails.recipient_phone ? requestDetails.recipient_phone.replace(/\D/g, '') : ''}?text=🎁 Você recebeu um Vale-Presente!%0A%0AO estabelecimento \${tenant.name} preparou um presente para você.%0A%0A💰 Valor: R$ \${parseFloat(requestDetails.original_value).toFixed(2).replace('.', ',')}%0A🎟️ Código de resgate: *\${requestDetails.redemption_code}*%0A%0AApresente este código no estabelecimento para utilizar seu vale!\`}
+                      href={`https://wa.me/${requestDetails.recipient_phone ? requestDetails.recipient_phone.replace(/\D/g, '') : ''}?text=🎁 Você recebeu um Vale-Presente!%0A%0AO estabelecimento ${tenant.name} preparou um presente para você.%0A%0A💰 Valor: R$ ${parseFloat(requestDetails.original_value).toFixed(2).replace('.', ',')}%0A🎟️ Código de resgate: *${requestDetails.redemption_code}*%0A%0AApresente este código no estabelecimento para utilizar seu vale!`}
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="w-full py-4 bg-[#25D366] text-white font-bold rounded-xl hover:bg-[#20bd5a] transition-colors flex items-center justify-center gap-2"
@@ -398,3 +398,4 @@ const GestaoGiftCards = () => {
 };
 
 export default GestaoGiftCards;
+

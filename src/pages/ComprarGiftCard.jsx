@@ -227,7 +227,7 @@ const ComprarGiftCard = () => {
               <p className="text-sm text-secondary mb-3">Após pagar, envie o comprovante e o ID da Solicitação para o WhatsApp do Salão.</p>
               <button 
                 onClick={() => {
-                  const msg = \`Olá! Realizei o pagamento do meu Vale-Presente.\n\nID da solicitação: *${purchasedRequest.request_id}*\nValor: R$ ${parseFloat(purchasedRequest.original_value).toFixed(2).replace('.', ',')}\n\nSegue o comprovante do Pix.\`;
+                  const msg = `Olá! Realizei o pagamento do meu Vale-Presente.\n\nID da solicitação: *${purchasedRequest.request_id}*\nValor: R$ ${parseFloat(purchasedRequest.original_value).toFixed(2).replace('.', ',')}\n\nSegue o comprovante do Pix.`;
                   copyToClipboard(msg);
                 }}
                 className="w-full py-3 bg-surface border border-outline text-on-surface font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2"
