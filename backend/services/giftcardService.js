@@ -121,7 +121,7 @@ export const createGiftCard = async (tenantId, purchaserId, data) => {
   
   const result = await pool.query(query, [
     tenantId, purchaserId, service_id || null, requestId, 
-    recipient_name, recipient_phone, message, original_value, expiresAt
+    recipient_name || null, recipient_phone || null, message || null, original_value, expiresAt
   ]);
   
   return result.rows[0];
