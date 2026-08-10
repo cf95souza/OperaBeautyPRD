@@ -31,7 +31,7 @@ const ComprarGiftCard = () => {
       try {
         const [servicesData, paymentData] = await Promise.all([
           api.services.list(tenant.id),
-          api.request('/giftcards/payment-methods', { method: 'GET' })
+          api.request(`/giftcards/payment-methods?tenant_id=${tenant.id}`, { method: 'GET' })
         ]);
         if (servicesData) {
           setServices(servicesData.filter(s => s.is_active));

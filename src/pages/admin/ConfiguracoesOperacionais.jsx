@@ -107,7 +107,7 @@ const ConfiguracoesOperacionais = () => {
 
       // Fetch PIX
       try {
-        const pixData = await api.request('/giftcards/payment-methods');
+        const pixData = await api.request(`/giftcards/payment-methods?tenant_id=${tenant.id}`);
         if (pixData && pixData.length > 0) {
           setPixKey(pixData[0].pix_key || '');
           setPixKeyType(pixData[0].pix_key_type || 'cpf');
