@@ -6,7 +6,8 @@ import { useNotification } from '../../context/NotificationProvider';
 const PlanosAdmin = () => {
   const SYSTEM_MODULES = [
     { id: 'clube', label: 'Clube de Fidelidade' },
-    { id: 'pdv', label: 'Ponto de Venda (PDV)' }
+    { id: 'pdv', label: 'Ponto de Venda (PDV)' },
+    { id: 'giftcards', label: 'Vales-Presente' }
   ];
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);

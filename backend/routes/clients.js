@@ -7,12 +7,14 @@ import { authMiddleware, requireRole } from '../middlewares/auth.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import crypto from 'crypto';
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, path.join(__dirname, '../public/uploads'))
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    const uniqueSuffix = Date.now() + '-' + crypto.randomInt(1000000000);
     cb(null, uniqueSuffix + path.extname(file.originalname))
   }
 });

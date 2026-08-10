@@ -372,6 +372,7 @@ export default function LandingPage() {
                                                 let displayFeature = feature;
                                                 if (feature === 'clube') displayFeature = 'Clube de Fidelidade';
                                                 if (feature === 'pdv') displayFeature = 'Ponto de Venda (PDV)';
+                                                if (feature === 'giftcards') displayFeature = 'Vales-Presente (Gift Cards)';
                                                 
                                                 return (
                                                     <li key={i} className={`flex items-center gap-2 text-label-md ${isFeatured ? 'text-surface-variant' : 'text-secondary'}`}>

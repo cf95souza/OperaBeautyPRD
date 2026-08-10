@@ -56,7 +56,11 @@ app.set('trust proxy', 1);
 
 // Middlewares
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"]
+    }
+  },
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
@@ -173,8 +177,7 @@ app.use((err, req, res, next) => {
 
   const isDev = process.env.NODE_ENV !== 'production';
   res.status(500).json({ 
-    error: 'Ocorreu um erro interno de servidor. Por favor, tente novamente mais tarde.',
-    ...(isDev && { detail: err.message, stack: err.stack })
+    error: 'Ocorreu um erro interno de servidor. Por favor, tente novamente mais tarde.'
   });
 });
 

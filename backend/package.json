@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "brace-expansion": "^5.0.9",
     "bullmq": "^5.80.10",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

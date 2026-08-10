@@ -1,12 +1,14 @@
 import pool from '../config/db.js';
 
+import crypto from 'crypto';
+
 // Função auxiliar para gerar um código seguro e legível
 function generateCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = 'GIFT-';
   for (let i = 0; i < 8; i++) {
     if (i === 4) code += '-';
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(crypto.randomInt(chars.length));
   }
   return code; // Ex: GIFT-A1B2-C3D4
 }
