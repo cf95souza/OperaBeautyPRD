@@ -27,7 +27,16 @@ export default defineConfig({
         importScripts: ['/custom-sw.js'],
         // Garantir que navegação sempre retorna o index.html (SPA)
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//]
+        navigateFallbackDenylist: [/^\/api\//],
+        runtimeCaching: [
+          {
+            urlPattern: /^https?.*/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'fallback-cache',
+            }
+          }
+        ]
       },
       // CRÍTICO: false desabilita a geração de manifest estático.
       // O manifest é injetado dinamicamente pelo script no index.html
