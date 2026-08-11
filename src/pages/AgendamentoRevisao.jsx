@@ -20,9 +20,15 @@ const AgendamentoRevisao = () => {
   const [discount, setDiscount] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
   const [useCashback, setUseCashback] = useState(false);
+  const [giftCard, setGiftCard] = useState('');
+  const [giftCardApplied, setGiftCardApplied] = useState(null);
+  
   const tax = 0;
-  const cashbackRedeemed = useCashback ? Math.min(walletBalance, servicePrice - discount) : 0;
-  const total = servicePrice - discount - cashbackRedeemed + tax;
+  
+  const giftCardDiscount = giftCardApplied ? Math.min(parseFloat(giftCardApplied.available_balance), servicePrice - discount) : 0;
+  const cashbackRedeemed = useCashback ? Math.min(walletBalance, servicePrice - discount - giftCardDiscount) : 0;
+  
+  const total = Math.max(0, servicePrice - discount - giftCardDiscount - cashbackRedeemed + tax);
 
   React.useEffect(() => {
     console.log("=== [AgendamentoRevisao] Montado ===");
@@ -88,7 +94,8 @@ const AgendamentoRevisao = () => {
         service_id: bookingData.service.id,
         start_time: startDateTime.toISOString(),
         total_price: total,
-        cashback_redeemed: cashbackRedeemed
+        cashback_redeemed: cashbackRedeemed,
+        gift_card_code: giftCardApplied ? giftCardApplied.redemption_code : undefined
       });
       
       // Se usou cupom e tem id, incrementa o uso
@@ -150,6 +157,34 @@ const AgendamentoRevisao = () => {
     } catch (err) {
       console.error(err);
       showError("Erro ao validar cupom.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApplyGiftCard = async () => {
+    if (!giftCard.trim()) return;
+    setLoading(true);
+    
+    try {
+      const data = await api.request(`/giftcards/validate/${giftCard.toUpperCase().trim()}`);
+      if (!data || !data.redemption_code) {
+        showError("Vale-Presente inválido ou não encontrado.");
+        setGiftCardApplied(null);
+        return;
+      }
+      
+      if (data.service_id && bookingData?.service?.id && data.service_id !== bookingData.service.id) {
+        showError("Este Vale-Presente não é válido para o serviço selecionado.");
+        return;
+      }
+      
+      setGiftCardApplied(data);
+      showSuccess("Vale-Presente aplicado com sucesso!");
+    } catch (err) {
+      console.error(err);
+      showError(err.message || "Erro ao validar Vale-Presente.");
+      setGiftCardApplied(null);
     } finally {
       setLoading(false);
     }
@@ -241,6 +276,30 @@ const AgendamentoRevisao = () => {
           </div>
         </section>
 
+        <section className="animate-fade-in-up space-y-[8px]" style={{ animationDelay: '0.22s' }}>
+          <label className="font-semibold text-[14px] text-on-surface px-[4px]" htmlFor="giftcard">Vale-Presente</label>
+          <div className="flex gap-[8px]">
+            <input 
+              id="giftcard" 
+              type="text"
+              value={giftCard}
+              onChange={(e) => setGiftCard(e.target.value)}
+              disabled={!!giftCardApplied}
+              placeholder="Código VG-..."
+              className="flex-1 bg-[#f3f3f4] border-0 border-b border-[#d4c2c3] focus:border-primary focus:ring-0 px-[16px] py-[8px] rounded-t-lg font-sans transition-colors outline-none uppercase"
+            />
+            <button 
+              onClick={handleApplyGiftCard}
+              disabled={!!giftCardApplied}
+              className={`px-[24px] py-[8px] rounded-xl font-semibold text-[14px] transition-colors ${
+                giftCardApplied ? 'bg-primary text-white opacity-80' : 'bg-[#5f5e5e] text-white hover:opacity-90'
+              }`}
+            >
+              {giftCardApplied ? 'Aplicado!' : 'Validar'}
+            </button>
+          </div>
+        </section>
+
         {/* Usar Cashback */}
         {session && session.role === 'client' && walletBalance > 0 && (
           <section className="animate-fade-in-up bg-surface border border-outline-variant/30 rounded-xl p-[16px] flex items-center justify-between shadow-sm" style={{ animationDelay: '0.25s' }}>
@@ -273,6 +332,12 @@ const AgendamentoRevisao = () => {
             <span className="font-sans text-[16px]">Desconto (Cupom)</span>
             <span className="font-sans text-[16px]">- R$ {discount.toFixed(2)}</span>
           </div>
+          {giftCardApplied && giftCardDiscount > 0 && (
+            <div className="flex justify-between items-center text-primary">
+              <span className="font-sans text-[16px]">Vale-Presente</span>
+              <span className="font-sans text-[16px]">- R$ {giftCardDiscount.toFixed(2)}</span>
+            </div>
+          )}
           {useCashback && cashbackRedeemed > 0 && (
             <div className="flex justify-between items-center text-primary">
               <span className="font-sans text-[16px]">Desconto (Cashback)</span>

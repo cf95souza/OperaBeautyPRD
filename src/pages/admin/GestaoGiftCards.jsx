@@ -81,53 +81,7 @@ const GestaoGiftCards = () => {
     showSuccess("Copiado!");
   };
 
-  // ----- RESGATE -----
-  const handleConsultCode = async (e) => {
-    e.preventDefault();
-    if (!redemptionCodeInput) return;
-    setLoading(true);
-    setRedemptionDetails(null);
-    try {
-      const data = await api.request(`/giftcards/validate/${redemptionCodeInput}`);
-      setRedemptionDetails(data);
-      setRedeemAmount(data.available_balance);
-    } catch (err) {
-      showError(err.message || "Código inválido.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRedeem = async (e) => {
-    e.preventDefault();
-    const amount = parseFloat(redeemAmount);
-    if (isNaN(amount) || amount <= 0) {
-      showError("Informe um valor válido para o resgate.");
-      return;
-    }
-
-    if (amount > parseFloat(redemptionDetails.available_balance)) {
-      showError("Valor excede o saldo disponível.");
-      return;
-    }
-
-    if (await confirm(`Confirmar resgate de R$ ${amount.toFixed(2)} deste Vale-Presente?`)) {
-      setLoading(true);
-      try {
-        const response = await api.request(`/giftcards/redeem/${redemptionDetails.redemption_code}`, { 
-          method: 'POST',
-          body: JSON.stringify({ amount })
-        });
-        showSuccess(response.message);
-        setRedemptionDetails(null);
-        setRedemptionCodeInput('');
-      } catch (err) {
-        showError(err.message || "Erro ao resgatar.");
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
+  // O resgate foi movido para o checkout do cliente final (AgendamentoRevisao.jsx)
 
   const statusLabel = (status) => {
     const map = {
@@ -168,7 +122,6 @@ const GestaoGiftCards = () => {
       <div className="flex gap-1 md:gap-2 mb-6 md:mb-8 bg-surface-variant/30 p-1.5 md:p-2 rounded-xl overflow-x-auto">
         {[
           { key: 'pagamentos', label: 'Validar Pagamento', icon: 'payments' },
-          { key: 'resgate', label: 'Validar Código', icon: 'qr_code_scanner' },
           { key: 'lista', label: 'Todos os Vales', icon: 'list_alt' }
         ].map(tab => (
           <button 
@@ -246,7 +199,7 @@ const GestaoGiftCards = () => {
                     <button 
                       onClick={handleConfirmPayment}
                       disabled={loading}
-                      className="w-full py-3 md:py-4 bg-success text-white font-bold rounded-xl hover:bg-success/90 transition-colors disabled:opacity-50 text-sm md:text-base"
+                      className="w-full py-3 md:py-4 bg-primary text-on-primary font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm md:text-base"
                     >
                       Confirmar Pagamento
                     </button>
@@ -281,82 +234,6 @@ const GestaoGiftCards = () => {
           </div>
         )}
 
-        {/* TABA: RESGATE */}
-        {activeTab === 'resgate' && (
-          <div className="p-4 md:p-xl max-w-2xl mx-auto">
-            <h2 className="font-headline-sm text-primary mb-4 md:mb-6">Validar Código e Resgatar</h2>
-            <form onSubmit={handleConsultCode} className="flex flex-col sm:flex-row gap-3 md:gap-4 mb-6 md:mb-8">
-              <input 
-                type="text" 
-                placeholder="Código (Ex: VG-XXXX-XXXX-XXXX)" 
-                className="flex-1 p-3 md:p-4 border border-outline-variant rounded-xl outline-none focus:border-primary uppercase font-mono text-sm md:text-base"
-                value={redemptionCodeInput}
-                onChange={e => setRedemptionCodeInput(e.target.value)}
-                required
-              />
-              <button type="submit" disabled={loading} className="px-6 py-3 md:py-4 bg-primary text-on-primary font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm md:text-base">
-                Validar
-              </button>
-            </form>
-
-            {redemptionDetails && (
-              <div className="bg-surface-container p-4 md:p-6 rounded-2xl border border-outline-variant animate-in fade-in">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-6 border-b border-outline-variant pb-4">
-                  <div className="flex items-center gap-3 text-success">
-                    <span className="material-symbols-outlined text-2xl md:text-3xl">check_circle</span>
-                    <h3 className="font-headline-sm text-base md:text-lg">Código Válido</h3>
-                  </div>
-                  <span className="bg-success/20 text-success px-3 py-1 rounded-full text-xs font-bold uppercase">
-                    {statusLabel(redemptionDetails.status)}
-                  </span>
-                </div>
-
-                <div className="space-y-3 md:space-y-4 mb-6 md:mb-8">
-                  <div className="flex justify-between border-b border-outline-variant pb-2">
-                    <span className="text-secondary text-sm">Presenteado</span>
-                    <span className="font-bold text-sm">{redemptionDetails.recipient_name || '-'}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-outline-variant pb-2">
-                    <span className="text-secondary text-sm">Serviço Referência</span>
-                    <span className="font-bold text-sm">{redemptionDetails.service_name || '-'}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-outline-variant pb-2">
-                    <span className="text-secondary text-sm">Valor Original</span>
-                    <span className="font-bold text-on-surface text-sm">R$ {parseFloat(redemptionDetails.original_value).toFixed(2).replace('.', ',')}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-outline-variant pb-2 bg-primary/5 p-2 rounded">
-                    <span className="text-primary font-bold text-sm">Saldo Disponível</span>
-                    <span className="font-bold text-primary text-base md:text-lg">R$ {parseFloat(redemptionDetails.available_balance).toFixed(2).replace('.', ',')}</span>
-                  </div>
-                </div>
-
-                <form onSubmit={handleRedeem} className="space-y-4">
-                  <div>
-                    <label className="block font-bold text-sm text-secondary mb-2">Valor a resgatar (R$)</label>
-                    <input 
-                      type="number"
-                      step="0.01"
-                      max={redemptionDetails.available_balance}
-                      className="w-full p-3 md:p-4 border border-outline-variant rounded-xl outline-none focus:border-primary text-lg md:text-xl font-bold text-primary"
-                      value={redeemAmount}
-                      onChange={e => setRedeemAmount(e.target.value)}
-                      required
-                    />
-                  </div>
-                  
-                  <button 
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3 md:py-4 bg-primary text-on-primary font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm md:text-base"
-                  >
-                    <span className="material-symbols-outlined">shopping_bag</span>
-                    Confirmar Resgate
-                  </button>
-                </form>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* TABA: LISTA */}
         {activeTab === 'lista' && (

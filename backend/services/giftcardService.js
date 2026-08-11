@@ -202,7 +202,7 @@ export const validateGiftCardCode = async (tenantId, redemptionCode) => {
   }
 
   const query = `
-    SELECT g.id, g.redemption_code, g.status, g.payment_status, g.original_value, g.available_balance, g.recipient_name, g.expires_at, s.name as service_name
+    SELECT g.id, g.redemption_code, g.status, g.payment_status, g.original_value, g.available_balance, g.recipient_name, g.expires_at, g.service_id, s.name as service_name
     FROM public.cap_giftcards g
     LEFT JOIN public.cap_services s ON g.service_id = s.id
     WHERE g.tenant_id = $1 AND g.redemption_code = $2

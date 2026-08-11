@@ -400,7 +400,8 @@ const ComprarGiftCard = () => {
                       {gc.status === 'ACTIVE' && gc.redemption_code ? (
                         <button 
                           onClick={() => {
-                            const msg = `🎁 Você ganhou um Vale-Presente!\n\nEstou te presenteando com um vale no valor de *R$ ${parseFloat(gc.original_value).toFixed(2).replace('.', ',')}*${gc.service_name ? ` para o serviço de *${gc.service_name}*` : ''}!\n\n🎟️ Seu código de resgate é: *${gc.redemption_code}*\n\nBasta apresentar este código no ${tenant.name} na hora do pagamento.\n\nCom carinho! ❤️`;
+                            const linkAgenda = `${window.location.origin}/${tenant_slug}/agendar`;
+                            const msg = `🎁 Você ganhou um Vale-Presente!\n\nEstou te presenteando com um vale no valor de *R$ ${parseFloat(gc.original_value).toFixed(2).replace('.', ',')}*${gc.service_name ? ` para o serviço de *${gc.service_name}*` : ''}!\n\n🎟️ Seu código de resgate é: *${gc.redemption_code}*\n\nPara utilizar, acesse a nossa agenda online pelo link abaixo, escolha o seu horário e insira este código na tela final de confirmação:\n${linkAgenda}\n\nCom carinho! ❤️`;
                             const encodedMsg = encodeURIComponent(msg);
                             window.open(`https://wa.me/?text=${encodedMsg}`, '_blank');
                           }}

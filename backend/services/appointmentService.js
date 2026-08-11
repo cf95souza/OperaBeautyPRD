@@ -1,6 +1,7 @@
 import pool from '../config/db.js';
 import { applyMembershipSession, refundMembershipSession } from './membershipService.js';
 import { processCashbackEarnings, processCashbackRedemption, processCashbackRefund } from './walletService.js';
+import { validateGiftCardCode, redeemGiftCard } from './giftcardService.js';
 
 export const listAppointments = async ({ role, id, userTenantId, targetTenantId, start_date, end_date, staff_id, client_id, limit, offset }) => {
   let queryText = '';
@@ -127,7 +128,7 @@ export const getAppointmentById = async ({ id, tenant_id, role, userId }) => {
 
 import { notifyStaff } from './notificationService.js';
 
-export const createAppointment = async ({ finalClientId, staff_id, service_id, start_time, total_price, tenantId, client_membership_id, cashback_redeemed }) => {
+export const createAppointment = async ({ finalClientId, staff_id, service_id, start_time, total_price, tenantId, client_membership_id, cashback_redeemed, gift_card_code }) => {
   const clientConnection = await pool.connect();
   
   try {
@@ -145,16 +146,37 @@ export const createAppointment = async ({ finalClientId, staff_id, service_id, s
     const startTime = new Date(start_time);
     const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
 
-    // Aplica e consome a sessão do clube automaticamente no agendamento (se houver)
+    // Validação de Vale-Presente (se houver)
+    let giftCardAmountRedeemed = 0;
+    if (gift_card_code) {
+      const giftCard = await validateGiftCardCode(tenantId, gift_card_code);
+      if (giftCard.service_id && giftCard.service_id !== service_id) {
+         const error = new Error('Este Vale-Presente não é válido para o serviço selecionado.');
+         error.statusCode = 400;
+         throw error;
+      }
+      giftCardAmountRedeemed = parseFloat(giftCard.available_balance);
+      if (giftCardAmountRedeemed > total_price) {
+         giftCardAmountRedeemed = total_price;
+      }
+      
+      // Dá a baixa no vale-presente
+      await redeemGiftCard(tenantId, gift_card_code, giftCardAmountRedeemed);
+    }
+
+    // Aplica e consome a sessão do clube automaticamente no agendamento (se houver e não usar vale)
     let appliedMembershipId = client_membership_id || null;
-    if (!appliedMembershipId) {
+    if (!appliedMembershipId && !gift_card_code) {
       const memResult = await applyMembershipSession(finalClientId, tenantId, service_id);
       if (memResult) {
         appliedMembershipId = memResult.id;
       }
     }
 
-    const final_price = appliedMembershipId ? 0 : total_price;
+    let final_price = appliedMembershipId ? 0 : total_price;
+    if (gift_card_code) {
+       final_price = Math.max(0, final_price - giftCardAmountRedeemed);
+    }
 
     const result = await clientConnection.query(
       `INSERT INTO public.cap_appointments (tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, created_at)
