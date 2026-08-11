@@ -9,7 +9,7 @@ export const listAppointments = async ({ role, id, userTenantId, targetTenantId,
 
   if (role === 'client') {
     queryText = `
-      SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.discount_applied,
+      SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.discount_applied, a.gift_card_redeemed,
              s.name as service_name, s.duration_minutes,
              st.name as staff_name,
              t.name as tenant_name, t.slug as tenant_slug
@@ -23,7 +23,7 @@ export const listAppointments = async ({ role, id, userTenantId, targetTenantId,
     queryParams = [id, targetTenantId, limit, offset];
   } else {
     queryText = `
-      SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.discount_applied, a.staff_commission_value, a.commission_status, a.commission_paid_at,
+      SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.discount_applied, a.staff_commission_value, a.commission_status, a.commission_paid_at, a.gift_card_redeemed,
              s.name as service_name, s.duration_minutes, s.id as service_id, s.maintenance_days,
              st.name as staff_name, st.id as staff_id,
              c.name as client_name, c.phone as client_phone, c.id as client_id
@@ -90,7 +90,7 @@ export const getOccupiedSlots = async ({ tenant_id, date, staff_id }) => {
 
 export const getAppointmentById = async ({ id, tenant_id, role, userId }) => {
   const queryText = `
-    SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.discount_applied, a.staff_commission_value, a.commission_status, a.commission_paid_at,
+    SELECT a.id, a.start_time, a.end_time, a.status, a.total_price, a.discount_applied, a.staff_commission_value, a.commission_status, a.commission_paid_at, a.gift_card_redeemed,
            s.name as service_name, s.duration_minutes, s.id as service_id,
            st.name as staff_name, st.id as staff_id,
            c.name as client_name, c.phone as client_phone, c.id as client_id
@@ -179,10 +179,10 @@ export const createAppointment = async ({ finalClientId, staff_id, service_id, s
     }
 
     const result = await clientConnection.query(
-      `INSERT INTO public.cap_appointments (tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7, $8, $9, NOW())
-       RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, staff_commission_value, created_at`,
-      [tenantId, finalClientId, staff_id, service_id, startTime, endTime, final_price, appliedMembershipId, cashback_redeemed || 0]
+      `INSERT INTO public.cap_appointments (tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, gift_card_redeemed, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'scheduled', $7, $8, $9, $10, NOW())
+       RETURNING id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, client_membership_id, cashback_redeemed, gift_card_redeemed, staff_commission_value, created_at`,
+      [tenantId, finalClientId, staff_id, service_id, startTime, endTime, final_price, appliedMembershipId, cashback_redeemed || 0, giftCardAmountRedeemed]
     );
     
     const appointment = result.rows[0];
@@ -224,7 +224,7 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
     await clientConnection.query('BEGIN');
 
     const appQuery = await clientConnection.query(
-      'SELECT id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, discount_applied, client_membership_id, cashback_redeemed, staff_commission_value, checkin_status, created_at FROM public.cap_appointments WHERE id = $1 AND tenant_id = $2',
+      'SELECT id, tenant_id, client_id, staff_id, service_id, start_time, end_time, status, total_price, discount_applied, client_membership_id, cashback_redeemed, gift_card_redeemed, staff_commission_value, checkin_status, created_at FROM public.cap_appointments WHERE id = $1 AND tenant_id = $2',
       [id, tenantId]
     );
 

@@ -178,6 +178,12 @@ const ResumoAgendamento = () => {
                 </span>
               )}
             </p>
+            {Number(agendamento.gift_card_redeemed) > 0 && (
+              <div className="mt-2 inline-flex items-center gap-1 bg-[#e8b4b8]/20 text-[#6b4448] px-2 py-1 rounded-md border border-[#e8b4b8]/50 text-xs font-semibold">
+                <span className="material-symbols-outlined text-[14px]">card_giftcard</span>
+                Pago com Vale-Presente (R$ {Number(agendamento.gift_card_redeemed).toFixed(2).replace('.', ',')})
+              </div>
+            )}
           </div>
         </div>
 
