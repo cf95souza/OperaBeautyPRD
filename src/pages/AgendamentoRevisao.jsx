@@ -31,10 +31,6 @@ const AgendamentoRevisao = () => {
   const total = Math.max(0, servicePrice - discount - giftCardDiscount - cashbackRedeemed + tax);
 
   React.useEffect(() => {
-    console.log("=== [AgendamentoRevisao] Montado ===");
-    console.log("bookingData lido do useBooking():", bookingData);
-    console.log("sessionStorage bruto:", sessionStorage.getItem('operabeauty_booking_data'));
-    
     const fetchWallet = async () => {
       try {
         const wallet = await api.wallets.getMyWallet();

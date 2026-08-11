@@ -40,8 +40,7 @@ const AgendamentoServicos = () => {
   const filteredServices = dbServices;
 
   useEffect(() => {
-    console.log("=== [AgendamentoServicos] Montado/Atualizado ===");
-    console.log("bookingData atual:", bookingData);
+    // Removed console.log
   }, [bookingData]);
 
   useEffect(() => {
@@ -67,12 +66,12 @@ const AgendamentoServicos = () => {
   }, [dbServices, location.state, autoProcessed, navigate, tenant_slug, updateBooking]);
 
   const handleSelectService = (service) => {
-    console.log("=== [AgendamentoServicos] handleSelectService chamado ===", service);
+    // Removed console.log
     updateBooking('service', service);
   };
 
   const handleContinue = () => {
-    console.log("=== [AgendamentoServicos] handleContinue chamado ===", bookingData.service);
+    // Removed console.log
     if (bookingData.service) {
       navigate(`/${tenant_slug}/agendar/profissionais`);
     }

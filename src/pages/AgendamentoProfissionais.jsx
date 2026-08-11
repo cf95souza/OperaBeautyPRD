@@ -45,8 +45,7 @@ const AgendamentoProfissionais = () => {
   });
 
   useEffect(() => {
-    console.log("=== [AgendamentoProfissionais] Montado/Atualizado ===");
-    console.log("bookingData atual:", bookingData);
+    // Removed console.log
   }, [bookingData]);
 
   useEffect(() => {
@@ -61,13 +60,13 @@ const AgendamentoProfissionais = () => {
   }, [dbStaff, location.state, autoProcessed, navigate, tenant_slug, updateBooking]);
 
   const handleSelectStaff = (staff) => {
-    console.log("=== [AgendamentoProfissionais] handleSelectStaff chamado ===", staff);
+    // Removed console.log
     updateBooking('professional', staff);
     navigate(`/${tenant_slug}/agendar/horarios`);
   };
 
   const handleAnyStaff = () => {
-    console.log("=== [AgendamentoProfissionais] handleAnyStaff chamado ===");
+    // Removed console.log
     updateBooking('professional', null);
     navigate(`/${tenant_slug}/agendar/horarios`);
   };

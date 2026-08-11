@@ -119,7 +119,7 @@ const AgendamentoHorarios = () => {
   }, [tenant, selectedDate, bookingData.professional]);
 
   useEffect(() => {
-    console.log("=== [AgendamentoHorarios] Montado/Atualizado ===");
+    // Removed console.log
     console.log("bookingData atual:", bookingData);
   }, [bookingData]);
 

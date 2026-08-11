@@ -7,7 +7,7 @@ export const useBooking = () => useContext(BookingContext);
 export const BookingProvider = ({ children }) => {
   const [bookingData, setBookingData] = useState(() => {
     const saved = sessionStorage.getItem('operabeauty_booking_data');
-    console.log("=== [BookingContext] Inicializando estado ===", saved ? JSON.parse(saved) : "vazio");
+    // Removed console.log
     return saved ? JSON.parse(saved) : {
       service: null, // { id, name, price, duration, image }
       professional: null, // { id, name, role, image } ou null para "Sem Preferência"
@@ -17,7 +17,7 @@ export const BookingProvider = ({ children }) => {
   });
 
   const updateBooking = (keyOrObj, value) => {
-    console.log("=== [BookingContext] updateBooking chamado ===", { keyOrObj, value });
+    // Removed console.log
     setBookingData((prev) => {
       let updated;
       if (typeof keyOrObj === 'object' && keyOrObj !== null) {
@@ -25,7 +25,7 @@ export const BookingProvider = ({ children }) => {
       } else {
         updated = { ...prev, [keyOrObj]: value };
       }
-      console.log("=== [BookingContext] Gravando sessionStorage ===", updated);
+      // Removed console.log
       sessionStorage.setItem('operabeauty_booking_data', JSON.stringify(updated));
       return updated;
     });
