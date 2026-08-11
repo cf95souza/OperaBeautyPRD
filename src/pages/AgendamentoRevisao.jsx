@@ -93,7 +93,7 @@ const AgendamentoRevisao = () => {
         staff_id: assignedStaffId,
         service_id: bookingData.service.id,
         start_time: startDateTime.toISOString(),
-        total_price: total,
+        total_price: total + giftCardDiscount,
         cashback_redeemed: cashbackRedeemed,
         gift_card_code: giftCardApplied ? giftCardApplied.redemption_code : undefined
       });
