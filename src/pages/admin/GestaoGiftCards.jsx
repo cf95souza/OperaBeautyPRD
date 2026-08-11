@@ -263,12 +263,12 @@ const GestaoGiftCards = () => {
                   </tr>
                 </thead>
                 <tbody>
-                    giftCards.length === 0 ? (
-                      <tr>
-                        <td colSpan="7" className="p-8 text-center text-secondary">Nenhum vale-presente encontrado.</td>
-                      </tr>
-                    ) : (
-                      currentGiftCards.map((gc) => (
+                  {giftCards.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="p-8 text-center text-secondary">Nenhum vale-presente encontrado.</td>
+                    </tr>
+                  ) : (
+                    currentGiftCards.map((gc) => (
                       <tr key={gc.id} className="border-b border-surface-variant/50 hover:bg-surface-variant/10 transition-colors">
                         <td className="p-4">
                           <span className="font-mono bg-surface-variant text-on-surface-variant px-2 py-1 rounded text-xs font-bold tracking-wider">
