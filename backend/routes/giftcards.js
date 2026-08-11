@@ -129,8 +129,8 @@ router.post('/admin/confirm-payment/:request_id', authMiddleware, requireRole(['
   }
 });
 
-// Validar código do Gift Card de resgate (Admin/Manager)
-router.get('/validate/:code', authMiddleware, requireRole(['manager', 'admin']), async (req, res) => {
+// Validar código do Gift Card de resgate (Admin/Manager/Client)
+router.get('/validate/:code', authMiddleware, async (req, res) => {
   const tenantId = req.user.tenant_id;
 
   try {
