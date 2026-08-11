@@ -15,6 +15,10 @@ const HistoricoAgendamentos = () => {
   const { showSuccess, showError, confirm } = useNotification();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  // Pagination states for Concluídos
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+
   // Self Check-in
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [selectedAppointmentForCheckin, setSelectedAppointmentForCheckin] = useState(null);
@@ -228,25 +232,80 @@ const HistoricoAgendamentos = () => {
               <div className="flex justify-center py-10"><span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span></div>
             ) : appointments.concluidos.length === 0 ? (
               <div className="text-center py-10 text-secondary">Nenhum agendamento concluído encontrado.</div>
-            ) : appointments.concluidos.map(item => (
-              <div key={item.id} className="bg-white rounded-xl p-[16px] shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center group cursor-pointer hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-[#e8b4b8]">
-                <div className="flex gap-[16px] items-center">
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center text-secondary">
-                    <span className="material-symbols-outlined text-[24px]">done_all</span>
-                  </div>
-                  <div>
-                    <h4 className="font-serif text-[24px] font-semibold text-on-surface line-clamp-1">{item.service_name || 'Serviço'}</h4>
-                    <p className="font-semibold text-[14px] text-secondary capitalize">{formatDate(item.start_time)}</p>
-                  </div>
-                </div>
-                <div className="text-right flex flex-col items-end shrink-0 pl-2">
-                  <span className="block font-serif text-[20px] font-semibold text-primary mb-1">R$ {parseFloat(item.total_price).toFixed(2).replace('.', ',')}</span>
-                  <span className={`font-medium text-[12px] px-2 py-[2px] rounded-full ${item.status === 'cancelled' ? 'bg-error-container text-on-error-container' : 'bg-surface-variant text-on-surface-variant'}`}>
-                    {item.status === 'cancelled' ? 'Cancelado' : 'Concluído'}
-                  </span>
-                </div>
-              </div>
-            ))}
+            ) : (
+              (() => {
+                const totalPages = itemsPerPage === 'todos' ? 1 : Math.ceil(appointments.concluidos.length / itemsPerPage);
+                const currentConcluidos = itemsPerPage === 'todos' 
+                  ? appointments.concluidos 
+                  : appointments.concluidos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+                return (
+                  <>
+                    {currentConcluidos.map(item => (
+                      <div key={item.id} className="bg-white rounded-xl p-[16px] shadow-[0px_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center group cursor-pointer hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-[#e8b4b8]">
+                        <div className="flex gap-[16px] items-center">
+                          <div className="w-12 h-12 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center text-secondary">
+                            <span className="material-symbols-outlined text-[24px]">done_all</span>
+                          </div>
+                          <div>
+                            <h4 className="font-serif text-[24px] font-semibold text-on-surface line-clamp-1">{item.service_name || 'Serviço'}</h4>
+                            <p className="font-semibold text-[14px] text-secondary capitalize">{formatDate(item.start_time)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end shrink-0 pl-2">
+                          <span className="block font-serif text-[20px] font-semibold text-primary mb-1">R$ {parseFloat(item.total_price).toFixed(2).replace('.', ',')}</span>
+                          <span className={`font-medium text-[12px] px-2 py-[2px] rounded-full ${item.status === 'cancelled' ? 'bg-error-container text-on-error-container' : 'bg-surface-variant text-on-surface-variant'}`}>
+                            {item.status === 'cancelled' ? 'Cancelado' : 'Concluído'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+
+                    <div className="flex flex-col sm:flex-row items-center justify-between mt-4 pt-2 border-t border-[#d4c2c3]/50 gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-secondary">Itens por página:</span>
+                        <select 
+                          value={itemsPerPage} 
+                          onChange={(e) => {
+                            setItemsPerPage(e.target.value === 'todos' ? 'todos' : Number(e.target.value));
+                            setCurrentPage(1);
+                          }}
+                          className="bg-surface-variant/50 p-1.5 rounded-lg text-sm border border-[#d4c2c3]/30 outline-none text-on-surface focus:ring-2 focus:ring-primary/50"
+                        >
+                          <option value={5}>5</option>
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                          <option value={30}>30</option>
+                          <option value="todos">Todos</option>
+                        </select>
+                      </div>
+                      
+                      {itemsPerPage !== 'todos' && totalPages > 1 && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="p-1.5 rounded-lg border border-[#d4c2c3]/50 text-on-surface hover:bg-[#d4c2c3]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                          </button>
+                          <span className="text-sm font-semibold px-2 text-on-surface">
+                            {currentPage} de {totalPages}
+                          </span>
+                          <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="p-1.5 rounded-lg border border-[#d4c2c3]/50 text-on-surface hover:bg-[#d4c2c3]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()
+            )}
           </section>
         )}
         {/* Espaçador de segurança para a BottomNavBar móvel */}

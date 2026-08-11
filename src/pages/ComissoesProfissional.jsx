@@ -12,7 +12,7 @@ const ComissoesProfissional = () => {
   const [appointments, setAppointments] = useState([]);
   const [periodo, setPeriodo] = useState('mes_atual'); // mes_atual, mes_anterior, todos
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(5);
 
   useEffect(() => {
     if (tenant?.id && session?.id) {
@@ -98,11 +98,12 @@ const ComissoesProfissional = () => {
     }
   };
 
-  const totalPages = Math.ceil(appointments.length / ITEMS_PER_PAGE);
+  const totalPages = itemsPerPage === 'todos' ? 1 : Math.ceil(appointments.length / itemsPerPage);
   const currentAppointments = useMemo(() => {
-    const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
-    return appointments.slice(startIdx, startIdx + ITEMS_PER_PAGE);
-  }, [appointments, currentPage]);
+    if (itemsPerPage === 'todos') return appointments;
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    return appointments.slice(startIdx, startIdx + itemsPerPage);
+  }, [appointments, currentPage, itemsPerPage]);
 
   return (
     <div className="max-w-[1100px] mx-auto py-lg px-container-margin md:px-0 animate-fade-in-up">
@@ -398,32 +399,52 @@ const ComissoesProfissional = () => {
             </div>
 
             {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="p-4 border-t border-surface-variant/20 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <span className="text-sm text-on-surface-variant">
-                  Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} a {Math.min(currentPage * ITEMS_PER_PAGE, appointments.length)} de {appointments.length} registros
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="p-2 rounded-lg border border-surface-variant text-on-surface hover:bg-surface-variant/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[20px]">chevron_left</span>
-                  </button>
-                  <span className="text-sm font-semibold px-2">
-                    Página {currentPage} de {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="p-2 rounded-lg border border-surface-variant text-on-surface hover:bg-surface-variant/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[20px]">chevron_right</span>
-                  </button>
-                </div>
+            <div className="p-4 border-t border-surface-variant/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-on-surface-variant">Itens por página:</span>
+                <select 
+                  value={itemsPerPage} 
+                  onChange={(e) => {
+                    setItemsPerPage(e.target.value === 'todos' ? 'todos' : Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-surface-variant p-1.5 rounded-lg text-sm border-none outline-none text-on-surface focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={30}>30</option>
+                  <option value="todos">Todos</option>
+                </select>
               </div>
-            )}
+
+              {itemsPerPage !== 'todos' && totalPages > 1 && (
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-on-surface-variant hidden sm:inline">
+                    Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, appointments.length)} de {appointments.length} registros
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg border border-surface-variant text-on-surface hover:bg-surface-variant/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                    </button>
+                    <span className="text-sm font-semibold px-2">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-2 rounded-lg border border-surface-variant text-on-surface hover:bg-surface-variant/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

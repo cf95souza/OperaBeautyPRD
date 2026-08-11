@@ -12,6 +12,10 @@ const GestaoGiftCards = () => {
   const [giftCards, setGiftCards] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Pagination states for Gift Cards List
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+
   // Pagamentos state
   const [requestIdInput, setRequestIdInput] = useState('');
   const [requestDetails, setRequestDetails] = useState(null);
@@ -106,6 +110,12 @@ const GestaoGiftCards = () => {
     };
     return map[status] || 'bg-surface-variant text-on-surface';
   };
+
+  // Pagination logic
+  const totalPages = itemsPerPage === 'todos' ? 1 : Math.ceil(giftCards.length / itemsPerPage);
+  const currentGiftCards = itemsPerPage === 'todos' 
+    ? giftCards 
+    : giftCards.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="flex-1 w-full max-w-7xl mx-auto pb-xl animate-fade-in-up px-4 md:px-0">
@@ -253,12 +263,12 @@ const GestaoGiftCards = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {giftCards.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" className="p-8 text-center text-secondary">Nenhum vale-presente encontrado.</td>
-                    </tr>
-                  ) : (
-                    giftCards.map((gc) => (
+                    giftCards.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="p-8 text-center text-secondary">Nenhum vale-presente encontrado.</td>
+                      </tr>
+                    ) : (
+                      currentGiftCards.map((gc) => (
                       <tr key={gc.id} className="border-b border-surface-variant/50 hover:bg-surface-variant/10 transition-colors">
                         <td className="p-4">
                           <span className="font-mono bg-surface-variant text-on-surface-variant px-2 py-1 rounded text-xs font-bold tracking-wider">
@@ -299,7 +309,7 @@ const GestaoGiftCards = () => {
               {giftCards.length === 0 ? (
                 <p className="text-center text-secondary py-8">Nenhum vale-presente encontrado.</p>
               ) : (
-                giftCards.map((gc) => (
+                currentGiftCards.map((gc) => (
                   <div key={gc.id} className="bg-surface-container p-4 rounded-xl border border-outline-variant/50">
                     <div className="flex justify-between items-start mb-3">
                       <span className="font-mono bg-surface-variant text-on-surface-variant px-2 py-1 rounded text-xs font-bold">
@@ -339,6 +349,51 @@ const GestaoGiftCards = () => {
                 ))
               )}
             </div>
+
+            {/* Pagination Controls */}
+            {giftCards.length > 0 && (
+              <div className="p-4 border-t border-surface-variant/50 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-secondary">Itens por página:</span>
+                  <select 
+                    value={itemsPerPage} 
+                    onChange={(e) => {
+                      setItemsPerPage(e.target.value === 'todos' ? 'todos' : Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-surface-variant p-1.5 rounded-lg text-sm border-none outline-none text-on-surface focus:ring-2 focus:ring-primary/50"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={30}>30</option>
+                    <option value="todos">Todos</option>
+                  </select>
+                </div>
+                
+                {itemsPerPage !== 'todos' && totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="p-1.5 rounded-lg border border-surface-variant text-on-surface hover:bg-surface-variant/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                    </button>
+                    <span className="text-sm font-semibold px-2 text-on-surface">
+                      {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-1.5 rounded-lg border border-surface-variant text-on-surface hover:bg-surface-variant/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

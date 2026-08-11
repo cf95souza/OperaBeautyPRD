@@ -29,6 +29,8 @@ const ComprarGiftCard = () => {
   // States for Meus Vales
   const [myGiftCards, setMyGiftCards] = useState([]);
   const [loadingMyGifts, setLoadingMyGifts] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
 
   useEffect(() => {
     if (!tenant) return;
@@ -341,8 +343,16 @@ const ComprarGiftCard = () => {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                {myGiftCards.map(gc => (
+              (() => {
+                const totalPages = itemsPerPage === 'todos' ? 1 : Math.ceil(myGiftCards.length / itemsPerPage);
+                const currentMyGiftCards = itemsPerPage === 'todos' 
+                  ? myGiftCards 
+                  : myGiftCards.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+                return (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                      {currentMyGiftCards.map(gc => (
                   <div key={gc.id} className="bg-surface-container rounded-2xl overflow-hidden border border-outline-variant/50 flex flex-col shadow-sm">
                     <div className="p-5 flex-1 border-b border-outline-variant/30">
                       <div className="flex justify-between items-start mb-4">
@@ -422,7 +432,53 @@ const ComprarGiftCard = () => {
                   </div>
                 ))}
               </div>
-            )}
+
+              {/* Pagination Controls */}
+              <div className="flex flex-col sm:flex-row items-center justify-between mt-6 pt-4 border-t border-outline-variant/30 gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-secondary">Itens por página:</span>
+                  <select 
+                    value={itemsPerPage} 
+                    onChange={(e) => {
+                      setItemsPerPage(e.target.value === 'todos' ? 'todos' : Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-surface-variant/50 p-1.5 rounded-lg text-sm border border-outline-variant/30 outline-none text-on-surface focus:ring-2 focus:ring-primary/50"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={30}>30</option>
+                    <option value="todos">Todos</option>
+                  </select>
+                </div>
+                
+                {itemsPerPage !== 'todos' && totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="p-1.5 rounded-lg border border-outline-variant/50 text-on-surface hover:bg-surface-variant disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                    </button>
+                    <span className="text-sm font-semibold px-2 text-on-surface">
+                      {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-1.5 rounded-lg border border-outline-variant/50 text-on-surface hover:bg-surface-variant disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          );
+        })()
+      )}
           </div>
         )}
 

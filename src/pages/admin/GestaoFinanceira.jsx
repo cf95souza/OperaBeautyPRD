@@ -19,6 +19,10 @@ const GestaoFinanceira = () => {
   const [transacoes, setTransacoes] = useState([]);
   const [comissoesPorProfissional, setComissoesPorProfissional] = useState([]);
 
+  // Pagination states for Transações
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+
   useEffect(() => {
     if (tenant?.id) {
       fetchFinanceData();
@@ -250,23 +254,76 @@ const GestaoFinanceira = () => {
                 {transacoes.length === 0 ? (
                    <p className="text-center text-secondary py-md">Nenhuma transação registrada no mês.</p>
                 ) : (
-                  transacoes.slice(0, 15).map((t, index) => (
-                    <div key={index} className="flex items-center justify-between py-3 border-b border-surface-variant/50 last:border-0 hover:bg-surface-container-low transition-colors rounded-lg px-2 -mx-2">
-                      <div className="flex items-center gap-md">
-                        <div className="w-10 h-10 rounded-full bg-primary-container/30 flex items-center justify-center text-primary">
-                          <span className="material-symbols-outlined">point_of_sale</span>
+                  (() => {
+                    const totalPages = itemsPerPage === 'todos' ? 1 : Math.ceil(transacoes.length / itemsPerPage);
+                    const currentTransacoes = itemsPerPage === 'todos' 
+                      ? transacoes 
+                      : transacoes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+                    
+                    return (
+                      <>
+                        {currentTransacoes.map((t, index) => (
+                          <div key={index} className="flex items-center justify-between py-3 border-b border-surface-variant/50 last:border-0 hover:bg-surface-container-low transition-colors rounded-lg px-2 -mx-2">
+                            <div className="flex items-center gap-md">
+                              <div className="w-10 h-10 rounded-full bg-primary-container/30 flex items-center justify-center text-primary">
+                                <span className="material-symbols-outlined">point_of_sale</span>
+                              </div>
+                              <div>
+                                <p className="font-label-md text-label-md text-on-surface">{t.client_name || 'Cliente Avulso'}</p>
+                                <p className="text-xs text-secondary truncate max-w-[150px] md:max-w-[250px]">{t.service_name || 'Serviço'}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-label-md text-label-md text-[#2e7d32]">+{formatCurrency(t.total_price)}</p>
+                              <p className="text-xs text-secondary">{format(parseISO(t.end_time || t.start_time), "dd MMM, HH:mm", { locale: ptBR })}</p>
+                            </div>
+                          </div>
+                        ))}
+                        
+                        <div className="flex flex-col sm:flex-row items-center justify-between mt-4 pt-2 border-t border-surface-variant/50 gap-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-secondary">Itens por página:</span>
+                            <select 
+                              value={itemsPerPage} 
+                              onChange={(e) => {
+                                setItemsPerPage(e.target.value === 'todos' ? 'todos' : Number(e.target.value));
+                                setCurrentPage(1);
+                              }}
+                              className="bg-surface-variant p-1.5 rounded-lg text-sm border-none outline-none text-on-surface focus:ring-2 focus:ring-primary/50"
+                            >
+                              <option value={5}>5</option>
+                              <option value={10}>10</option>
+                              <option value={20}>20</option>
+                              <option value={30}>30</option>
+                              <option value="todos">Todos</option>
+                            </select>
+                          </div>
+                          
+                          {itemsPerPage !== 'todos' && totalPages > 1 && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="p-1.5 rounded-lg border border-surface-variant text-on-surface hover:bg-surface-variant/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                              </button>
+                              <span className="text-sm font-semibold px-2 text-on-surface">
+                                {currentPage} de {totalPages}
+                              </span>
+                              <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="p-1.5 rounded-lg border border-surface-variant text-on-surface hover:bg-surface-variant/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <p className="font-label-md text-label-md text-on-surface">{t.client_name || 'Cliente Avulso'}</p>
-                          <p className="text-xs text-secondary truncate max-w-[150px] md:max-w-[250px]">{t.service_name || 'Serviço'}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-label-md text-label-md text-[#2e7d32]">+{formatCurrency(t.total_price)}</p>
-                        <p className="text-xs text-secondary">{format(parseISO(t.end_time || t.start_time), "dd MMM, HH:mm", { locale: ptBR })}</p>
-                      </div>
-                    </div>
-                  ))
+                      </>
+                    );
+                  })()
                 )}
               </div>
             </div>
