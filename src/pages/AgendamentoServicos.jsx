@@ -51,6 +51,7 @@ const AgendamentoServicos = () => {
           id: service.id,
           name: service.name,
           price: service.price,
+          is_starting_price: service.is_starting_price,
           duration: service.duration_minutes
         });
         
@@ -126,6 +127,7 @@ const AgendamentoServicos = () => {
                     id: service.id,
                     name: service.name,
                     price: service.price,
+                    is_starting_price: service.is_starting_price,
                     duration: service.duration_minutes
                   })}
                   className={`group relative bg-white rounded-xl p-[24px] shadow-[0px_4px_20px_rgba(0,0,0,0.04)] transition-all duration-300 cursor-pointer border ${
@@ -141,7 +143,10 @@ const AgendamentoServicos = () => {
                   <div className="flex justify-between items-center border-t border-[#d4c2c3]/30 pt-4 mt-6">
                     <div className="flex flex-col">
                       <span className="font-medium text-[12px] text-outline uppercase tracking-wider">Investimento</span>
-                      <span className="font-serif text-[24px] font-semibold text-primary">R$ {parseFloat(service.price).toFixed(2).replace('.', ',')}</span>
+                      <span className="font-serif text-[24px] font-semibold text-primary">
+                        {service.is_starting_price && <span className="text-[14px] font-sans font-normal text-secondary mr-1">A partir de</span>}
+                        R$ {parseFloat(service.price).toFixed(2).replace('.', ',')}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1 text-secondary">
                       <span className="material-symbols-outlined text-sm">schedule</span>

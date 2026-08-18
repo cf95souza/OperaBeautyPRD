@@ -160,6 +160,7 @@ CREATE TABLE public.cap_services (
     name TEXT NOT NULL,
     duration_minutes INT NOT NULL,
     price NUMERIC NOT NULL,
+    is_starting_price BOOLEAN DEFAULT FALSE,
     reduces_stock BOOLEAN DEFAULT FALSE, -- Flag se exige baixa de estoque
     maintenance_days INT DEFAULT 0, -- Dias para retorno (0 se não houver)
     is_active BOOLEAN DEFAULT TRUE,

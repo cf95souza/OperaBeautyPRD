@@ -26,6 +26,7 @@ const createServiceSchema = z.object({
     name: z.string().min(1, 'Nome do serviço é obrigatório.'),
     duration_minutes: z.number().int().positive('A duração deve ser maior que zero.'),
     price: z.number().positive('O preço deve ser maior que zero.'),
+    is_starting_price: z.boolean().optional(),
     reduces_stock: z.boolean().optional(),
     maintenance_days: z.number().int().nonnegative().optional(),
     inputs: z.array(z.object({
@@ -44,6 +45,7 @@ const updateServiceSchema = z.object({
     name: z.string().min(1, 'Nome do serviço é obrigatório.'),
     duration_minutes: z.number().int().positive('A duração deve ser maior que zero.'),
     price: z.number().positive('O preço deve ser maior que zero.'),
+    is_starting_price: z.boolean().optional(),
     reduces_stock: z.boolean().optional(),
     maintenance_days: z.number().int().nonnegative().optional(),
     is_active: z.boolean().optional(),
@@ -93,11 +95,11 @@ router.get('/:id/inputs', authMiddleware, validate(getServiceInputsSchema), asyn
 });
 
 router.post('/', authMiddleware, requireRole(['manager']), validate(createServiceSchema), async (req, res) => {
-  const { name, duration_minutes, price, reduces_stock, maintenance_days, inputs } = req.body;
+  const { name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, inputs } = req.body;
   const tenantId = req.user.tenant_id;
 
   try {
-    const { newService, inputs: savedInputs } = await createService(tenantId, name, duration_minutes, price, reduces_stock, maintenance_days, inputs);
+    const { newService, inputs: savedInputs } = await createService(tenantId, name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, inputs);
 
     await logAudit({
       req,
@@ -116,11 +118,11 @@ router.post('/', authMiddleware, requireRole(['manager']), validate(createServic
 
 router.put('/:id', authMiddleware, requireRole(['manager']), validate(updateServiceSchema), async (req, res) => {
   const { id } = req.params;
-  const { name, duration_minutes, price, reduces_stock, maintenance_days, is_active, inputs } = req.body;
+  const { name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active, inputs } = req.body;
   const tenantId = req.user.tenant_id;
 
   try {
-    const { oldService, updatedService, inputs: savedInputs } = await updateService(id, tenantId, name, duration_minutes, price, reduces_stock, maintenance_days, is_active, inputs);
+    const { oldService, updatedService, inputs: savedInputs } = await updateService(id, tenantId, name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active, inputs);
 
     await logAudit({
       req,

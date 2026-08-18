@@ -20,6 +20,7 @@ const GestaoServicos = () => {
     name: '', 
     duration_minutes: 60, 
     price: '', 
+    is_starting_price: false,
     maintenance_days: 0,
     use_inventory: false,
     inputs: []
@@ -50,6 +51,7 @@ const GestaoServicos = () => {
       name: service.name,
       duration_minutes: service.duration_minutes,
       price: service.price,
+      is_starting_price: service.is_starting_price || false,
       maintenance_days: service.maintenance_days || 0,
       use_inventory: service.reduces_stock || false,
       inputs: service.inputs && service.inputs.length > 0 ? [...service.inputs] : []
@@ -67,6 +69,7 @@ const GestaoServicos = () => {
         name: service.name,
         duration_minutes: service.duration_minutes,
         price: service.price,
+        is_starting_price: service.is_starting_price,
         maintenance_days: service.maintenance_days || 0,
         reduces_stock: service.reduces_stock || false,
         is_active: newStatus,
@@ -96,7 +99,7 @@ const GestaoServicos = () => {
   const openNewModal = () => {
     setEditingId(null);
     setNewService({ 
-      name: '', duration_minutes: 60, price: '', maintenance_days: 0,
+      name: '', duration_minutes: 60, price: '', is_starting_price: false, maintenance_days: 0,
       use_inventory: false, inputs: []
     });
     setShowModal(true);
@@ -142,6 +145,7 @@ const GestaoServicos = () => {
         name: newService.name,
         duration_minutes: parseInt(newService.duration_minutes),
         price: parseFloat(newService.price),
+        is_starting_price: newService.is_starting_price,
         maintenance_days: parseInt(newService.maintenance_days) || 0,
         reduces_stock: newService.use_inventory,
         is_active: true,
@@ -215,7 +219,13 @@ const GestaoServicos = () => {
                   </div>
                   <div>
                     <label className="block font-label-sm text-secondary mb-1">Preço (R$)</label>
-                    <input required type="number" step="0.01" min="0" className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} placeholder="0.00" />
+                    <div className="flex items-center gap-2">
+                      <input required type="number" step="0.01" min="0" className="w-full border border-outline-variant rounded-lg px-3 py-2 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} placeholder="0.00" />
+                      <label className="flex items-center gap-1 whitespace-nowrap text-xs text-secondary cursor-pointer">
+                        <input type="checkbox" checked={newService.is_starting_price} onChange={e => setNewService({...newService, is_starting_price: e.target.checked})} className="rounded text-primary focus:ring-primary" />
+                        A partir de
+                      </label>
+                    </div>
                   </div>
                   <div className="md:col-span-2 bg-primary/5 p-4 rounded-lg border border-primary/20">
                     <label className="block font-label-sm text-primary mb-1 flex items-center gap-1">
@@ -365,7 +375,10 @@ const GestaoServicos = () => {
                           )}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <span className="font-label-md text-label-md text-on-surface">R$ {parseFloat(service.price).toFixed(2).replace('.', ',')}</span>
+                          <span className="font-label-md text-label-md text-on-surface">
+                            {service.is_starting_price && <span className="text-xs text-secondary mr-1 font-normal">A partir de</span>}
+                            R$ {parseFloat(service.price).toFixed(2).replace('.', ',')}
+                          </span>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">

@@ -11,7 +11,7 @@ export const listServices = async (tenantId) => {
 
   const result = await pool.query(
     `SELECT 
-      s.id, s.name, s.duration_minutes, s.price, s.reduces_stock, s.maintenance_days, s.is_active,
+      s.id, s.name, s.duration_minutes, s.price, s.is_starting_price, s.reduces_stock, s.maintenance_days, s.is_active,
       COALESCE(
         json_agg(
           json_build_object('inventory_id', si.inventory_id, 'quantity_consumed', si.quantity_consumed)
@@ -39,17 +39,17 @@ export const getServiceInputs = async (id, tenantId) => {
   return result.rows;
 };
 
-export const createService = async (tenantId, name, duration_minutes, price, reduces_stock, maintenance_days, inputs) => {
+export const createService = async (tenantId, name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, inputs) => {
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
     const serviceResult = await client.query(
-      `INSERT INTO public.cap_services (tenant_id, name, duration_minutes, price, reduces_stock, maintenance_days, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, TRUE)
-       RETURNING id, tenant_id, name, duration_minutes, price, reduces_stock, maintenance_days, is_active, created_at`,
-      [tenantId, name, duration_minutes, price, reduces_stock || false, maintenance_days || 0]
+      `INSERT INTO public.cap_services (tenant_id, name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)
+       RETURNING id, tenant_id, name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active, created_at`,
+      [tenantId, name, duration_minutes, price, is_starting_price || false, reduces_stock || false, maintenance_days || 0]
     );
 
     const newService = serviceResult.rows[0];
@@ -79,14 +79,14 @@ export const createService = async (tenantId, name, duration_minutes, price, red
   }
 };
 
-export const updateService = async (id, tenantId, name, duration_minutes, price, reduces_stock, maintenance_days, is_active, inputs) => {
+export const updateService = async (id, tenantId, name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active, inputs) => {
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
     const oldServiceResult = await client.query(
-      'SELECT id, tenant_id, name, duration_minutes, price, reduces_stock, maintenance_days, is_active, created_at FROM public.cap_services WHERE id = $1 AND tenant_id = $2',
+      'SELECT id, tenant_id, name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active, created_at FROM public.cap_services WHERE id = $1 AND tenant_id = $2',
       [id, tenantId]
     );
     const oldService = oldServiceResult.rows[0];
@@ -96,12 +96,13 @@ export const updateService = async (id, tenantId, name, duration_minutes, price,
        SET name = $1, 
            duration_minutes = $2, 
            price = $3, 
-           reduces_stock = $4, 
-           maintenance_days = $5,
-           is_active = COALESCE($6, is_active)
-       WHERE id = $7 AND tenant_id = $8
-       RETURNING id, tenant_id, name, duration_minutes, price, reduces_stock, maintenance_days, is_active, created_at`,
-      [name, duration_minutes, price, reduces_stock, maintenance_days, is_active, id, tenantId]
+           is_starting_price = $4,
+           reduces_stock = $5, 
+           maintenance_days = $6,
+           is_active = COALESCE($7, is_active)
+       WHERE id = $8 AND tenant_id = $9
+       RETURNING id, tenant_id, name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active, created_at`,
+      [name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active, id, tenantId]
     );
 
     if (serviceResult.rows.length === 0) {
@@ -144,7 +145,7 @@ export const updateService = async (id, tenantId, name, duration_minutes, price,
 
 export const deleteService = async (id, tenantId) => {
   const result = await pool.query(
-    'UPDATE public.cap_services SET is_active = FALSE WHERE id = $1 AND tenant_id = $2 RETURNING id, tenant_id, name, duration_minutes, price, reduces_stock, maintenance_days, is_active, created_at',
+    'UPDATE public.cap_services SET is_active = FALSE WHERE id = $1 AND tenant_id = $2 RETURNING id, tenant_id, name, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active, created_at',
     [id, tenantId]
   );
 

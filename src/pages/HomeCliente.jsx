@@ -430,7 +430,10 @@ const HomeCliente = () => {
                   </div>
                   <div className="p-md space-y-xs">
                     <h4 className="font-label-md text-label-md text-on-surface line-clamp-1">{service.name}</h4>
-                    <p className="text-secondary text-sm">R$ {parseFloat(service.price).toFixed(2).replace('.', ',')} • {service.duration_minutes} min</p>
+                    <p className="text-secondary text-sm">
+                      {service.is_starting_price && "A partir de "}
+                      R$ {parseFloat(service.price).toFixed(2).replace('.', ',')} • {service.duration_minutes} min
+                    </p>
                   </div>
                 </div>
               ))
