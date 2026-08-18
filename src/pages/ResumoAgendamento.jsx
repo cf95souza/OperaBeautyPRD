@@ -19,7 +19,7 @@ const ResumoAgendamento = () => {
   const [saving, setSaving] = useState(false);
   const [isRemanejarModalOpen, setIsRemanejarModalOpen] = useState(false);
   const [isFinalizarModalOpen, setIsFinalizarModalOpen] = useState(false);
-  const [discountValue, setDiscountValue] = useState(0);
+  const [finalPrice, setFinalPrice] = useState(0);
 
 
 
@@ -41,14 +41,20 @@ const ResumoAgendamento = () => {
     }
   }, [id]);
 
-  const handleUpdateStatus = async (newStatus, appliedDiscount = 0) => {
+  const handleUpdateStatus = async (newStatus, customFinalPrice = null) => {
     if (!id) return;
     setSaving(true);
     try {
       const payload = { status: newStatus };
-      if (newStatus === 'completed' && appliedDiscount > 0) {
-        payload.discount_applied = appliedDiscount;
-        payload.total_price = Math.max(0, Number(agendamento.total_price) - appliedDiscount);
+      if (newStatus === 'completed' && customFinalPrice !== null) {
+        const originalPrice = Number(agendamento.total_price);
+        if (customFinalPrice < originalPrice) {
+          payload.discount_applied = originalPrice - customFinalPrice;
+          payload.total_price = customFinalPrice;
+        } else {
+          payload.discount_applied = 0;
+          payload.total_price = customFinalPrice;
+        }
       }
       await api.appointments.update(id, payload);
       await fetchAppointment();
@@ -215,7 +221,7 @@ const ResumoAgendamento = () => {
               disabled={saving}
               onClick={() => {
                 if (session?.role === 'manager' || session?.role === 'superadmin') {
-                  setDiscountValue(0);
+                  setFinalPrice(Number(agendamento.total_price));
                   setIsFinalizarModalOpen(true);
                 } else {
                   handleUpdateStatus('completed');
@@ -269,22 +275,18 @@ const ResumoAgendamento = () => {
               </div>
               
               <div>
-                <label className="block font-label-md text-label-md text-on-surface mb-2">Desconto Aplicado (R$)</label>
+                <label className="block font-label-md text-label-md text-on-surface mb-2">Valor Final a Pagar (R$)</label>
                 <input 
                   type="number"
                   min="0"
-                  max={agendamento.total_price}
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(Number(e.target.value))}
-                  className="w-full bg-surface-container border border-outline-variant rounded-xl p-4 font-body-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                  step="0.01"
+                  value={finalPrice}
+                  onChange={(e) => setFinalPrice(Number(e.target.value))}
+                  className="w-full bg-surface-container border border-outline-variant rounded-xl p-4 font-body-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all text-primary font-bold"
                 />
-              </div>
-
-              <div className="flex justify-between items-center bg-primary-container/30 p-4 rounded-xl">
-                <span className="font-label-lg text-primary">Valor Final a Pagar:</span>
-                <span className="font-headline-sm text-primary font-bold">
-                  {Math.max(0, Number(agendamento.total_price) - discountValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </span>
+                <p className="text-xs text-secondary mt-2">
+                  Você pode aplicar um desconto ou adicionar acréscimos alterando o valor final diretamente.
+                </p>
               </div>
             </div>
             
@@ -298,7 +300,7 @@ const ResumoAgendamento = () => {
               <button 
                 onClick={() => {
                   setIsFinalizarModalOpen(false);
-                  handleUpdateStatus('completed', discountValue);
+                  handleUpdateStatus('completed', finalPrice);
                 }}
                 className="flex-1 bg-primary text-on-primary px-6 py-3 rounded-xl font-label-lg hover:opacity-90 transition-opacity"
               >
