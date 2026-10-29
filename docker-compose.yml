@@ -155,8 +155,8 @@ services:
       timeout: 5s
       retries: 3
     ports:
-      - "${PORT_HTTP:-8080}:80"
-      - "${PORT_HTTPS:-8443}:443"
+      - "${PORT_HTTP:-80}:80"
+      - "${PORT_HTTPS:-443}:443"
     environment:
       DOMAIN: ${DOMAIN:-:80}
       TZ: America/Sao_Paulo
