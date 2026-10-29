@@ -26,11 +26,10 @@ arquivados/
 security-auditor/
 stitch_telas/
 
-# DB e Scripts de Desenvolvimento
-migrations/
-scripts/
+# DB e Scripts de Desenvolvimento (temporários)
 seed.sql
 database.sql
+backend/src/
 
 # Agentes e Skills
 skills/

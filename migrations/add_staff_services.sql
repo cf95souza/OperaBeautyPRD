@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS public.cap_staff_services ( staff_id UUID REFERENCES public.cap_staff(id) ON DELETE CASCADE, service_id UUID REFERENCES public.cap_services(id) ON DELETE CASCADE, PRIMARY KEY (staff_id, service_id) );
