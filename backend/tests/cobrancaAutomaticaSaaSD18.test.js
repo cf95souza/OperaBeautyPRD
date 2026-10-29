@@ -84,7 +84,9 @@ describe('D18 (P1) — Cobrança Automática do SaaS, Carência e Bloqueio Gradu
 
   describe('3. Governança de DDL e Menor Privilégio no PostgreSQL (C5)', () => {
     test('Arquivo de migração phase26_automated_saas_billing.sql deve existir e conter estrutura D18', () => {
-      const migrationPath = path.resolve(__dirname, '../migrations/phase26_automated_saas_billing.sql');
+      const migrationPath = fs.existsSync(path.resolve(__dirname, '../migrations/phase26_automated_saas_billing.sql'))
+        ? path.resolve(__dirname, '../migrations/phase26_automated_saas_billing.sql')
+        : path.resolve(__dirname, '../../migrations/phase26_automated_saas_billing.sql');
       expect(fs.existsSync(migrationPath)).toBe(true);
 
       const content = fs.readFileSync(migrationPath, 'utf-8');

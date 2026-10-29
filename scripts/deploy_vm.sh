@@ -28,6 +28,9 @@ docker compose up -d --build
 echo "⏳ Aguardando serviços inicializarem..."
 sleep 10
 
+echo "📦 Executando migrações pendentes no banco de dados..."
+docker compose exec api node scripts/migrate.js up
+
 echo "✅ Status atual dos containers:"
 docker compose ps
 

@@ -10,7 +10,9 @@ describe('D19 (P2) — Programa Indique e Ganhe (Sistema de Indicação de Amiga
 
   describe('1. Integridade de DDL, Migração e Governança C5', () => {
     test('Arquivo de migração phase33_referral_program.sql deve existir e conter estrutura completa', () => {
-      const migrationPath = path.resolve(__dirname, '../migrations/phase33_referral_program.sql');
+      const migrationPath = fs.existsSync(path.resolve(__dirname, '../migrations/phase33_referral_program.sql'))
+        ? path.resolve(__dirname, '../migrations/phase33_referral_program.sql')
+        : path.resolve(__dirname, '../../migrations/phase33_referral_program.sql');
       expect(fs.existsSync(migrationPath)).toBe(true);
 
       const content = fs.readFileSync(migrationPath, 'utf8');

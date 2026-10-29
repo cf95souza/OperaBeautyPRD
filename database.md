@@ -2497,3 +2497,97 @@ BEGIN
     END IF;
 END $$;
 ```
+
+---
+
+## 31. FASE 46: REPARO CONSOLIDADO DE PARIDADE DE SCHEMA PARA PRODUÇÃO (VPS)
+
+### 31.1 Contexto e Justificativa
+Em ambientes existentes de produção (onde o volume do PostgreSQL já foi inicializado anteriormente), novas colunas e tabelas introduzidas em fases anteriores não foram executadas automaticamente, gerando erros HTTP 500 em cascata em rotas essenciais (`/api/services`, `/api/referral/admin/dashboard`, `/api/invoices/status`, `/api/addons`).
+
+A migração `phase46_production_schema_repair.sql` consolida todas as colunas e tabelas de forma estritamente idempotente (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`), permitindo restaurar 100% da paridade sem qualquer perda de dados.
+
+### 31.2 Estrutura DDL Consolidada
+```sql
+-- 1. cap_tenants (Branding, White-Label, Tolerância, Módulos e Referral)
+ALTER TABLE public.cap_tenants 
+    ADD COLUMN IF NOT EXISTS theme_id VARCHAR(50) DEFAULT 'rose',
+    ADD COLUMN IF NOT EXISTS brand_hex VARCHAR(7) DEFAULT '#8E3B4E',
+    ADD COLUMN IF NOT EXISTS min_cancellation_hours INT DEFAULT 2,
+    ADD COLUMN IF NOT EXISTS no_show_penalty_action VARCHAR(30) DEFAULT 'warn',
+    ADD COLUMN IF NOT EXISTS no_show_tolerance_count INT DEFAULT 2,
+    ADD COLUMN IF NOT EXISTS is_founder BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS frozen_price NUMERIC(10,2),
+    ADD COLUMN IF NOT EXISTS price_frozen_until TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS founder_badge_label VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS onboarding_dismissed BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS qr_code_generated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS custom_domain VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS custom_domain_verified BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS extra_whatsapp_messages INT DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS nfse_enabled BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS google_review_url TEXT,
+    ADD COLUMN IF NOT EXISTS google_review_auto_invite BOOLEAN DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS google_review_min_stars INT DEFAULT 4,
+    ADD COLUMN IF NOT EXISTS google_maps_url TEXT,
+    ADD COLUMN IF NOT EXISTS headline TEXT,
+    ADD COLUMN IF NOT EXISTS about_text TEXT,
+    ADD COLUMN IF NOT EXISTS minisite_gallery JSONB DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS meta_title TEXT,
+    ADD COLUMN IF NOT EXISTS meta_description TEXT,
+    ADD COLUMN IF NOT EXISTS meta_image_url TEXT,
+    ADD COLUMN IF NOT EXISTS minisite_enabled BOOLEAN DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS grace_period_days INT DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS overdue_since DATE,
+    ADD COLUMN IF NOT EXISTS billing_locked_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS suspension_reason TEXT,
+    ADD COLUMN IF NOT EXISTS referral_program_active BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS referral_reward_type VARCHAR(20) NOT NULL DEFAULT 'wallet',
+    ADD COLUMN IF NOT EXISTS referral_referrer_reward NUMERIC(10,2) NOT NULL DEFAULT 15.00,
+    ADD COLUMN IF NOT EXISTS referral_referee_reward NUMERIC(10,2) NOT NULL DEFAULT 15.00,
+    ADD COLUMN IF NOT EXISTS referral_trigger VARCHAR(50) NOT NULL DEFAULT 'on_first_completed_appointment',
+    ADD COLUMN IF NOT EXISTS referral_custom_message TEXT;
+
+-- 2. cap_services (Descrição Curta, Sinal e Variações)
+ALTER TABLE public.cap_services 
+    ADD COLUMN IF NOT EXISTS short_description TEXT,
+    ADD COLUMN IF NOT EXISTS is_starting_price BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS requires_deposit BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS deposit_type VARCHAR(20) DEFAULT 'percentage',
+    ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(10,2) DEFAULT 0.00;
+
+-- 3. cap_invoices (PIX SaaS, Faturas e Carência)
+ALTER TABLE public.cap_invoices 
+    ADD COLUMN IF NOT EXISTS pix_copy_paste TEXT,
+    ADD COLUMN IF NOT EXISTS pix_qr_code TEXT,
+    ADD COLUMN IF NOT EXISTS gateway_transaction_id VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS gateway_invoice_url TEXT,
+    ADD COLUMN IF NOT EXISTS grace_period_days INT DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS warnings_sent JSONB DEFAULT '[]'::jsonb;
+
+-- 4. cap_appointments
+ALTER TABLE public.cap_appointments 
+    ADD COLUMN IF NOT EXISTS deposit_status VARCHAR(30) NOT NULL DEFAULT 'none',
+    ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS deposit_provider VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS deposit_payment_id VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS deposit_pix_code TEXT,
+    ADD COLUMN IF NOT EXISTS deposit_pix_qr TEXT,
+    ADD COLUMN IF NOT EXISTS deposit_expires_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS deposit_paid_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS no_show_marked_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS no_show_marked_by UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS cancellation_reason TEXT,
+    ADD COLUMN IF NOT EXISTS variation_id UUID REFERENCES public.cap_service_variations(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS variation_name TEXT,
+    ADD COLUMN IF NOT EXISTS selected_extras JSONB DEFAULT '[]'::jsonb;
+
+-- 5. cap_clients
+ALTER TABLE public.cap_clients 
+    ADD COLUMN IF NOT EXISTS referral_code VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES public.cap_clients(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS no_show_count INT DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS blocked_reason TEXT;
+```
+

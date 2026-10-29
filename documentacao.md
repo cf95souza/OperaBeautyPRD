@@ -2437,6 +2437,22 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
       - Aplica o tema visual oficial configurado do salão via CSS Variables antes da renderização.
   - **4. Eliminação dos Fallbacks Fixos no Frontend**:
     * `HomeCliente.jsx`, `AcessoProfissional.jsx`, `AcessoTelefone.jsx`, `AcessoSenha.jsx`, `CadastroCliente.jsx` e `HistoricoAgendamentos.jsx` agora utilizam monogramas e nomes dinâmicos (ex: letra "A" para "Atelie Toda Bonita") derivados diretamente da identidade do salão ou do slug.
+- **29/10/2026 - Resolução de Erros 500 em Produção (VPS) e Paridade Estrutural de Schema (G11) [Concluída]:**
+  - **1. Diagnóstico do Incidente em Produção (`erro.md`)**:
+    * A aplicação em produção na VPS (`https://operabeauty.tech`) passou a apresentar erros HTTP 500 em quase todas as telas logo após deploy.
+    * A causa raiz identificada foi a ausência de execução automática de migrações em bancos de dados PostgreSQL cujo volume persistente (`operabeauty-pgdata`) já havia sido inicializado. O arquivo `init.sql` só roda na primeira inicialização de volume vazio.
+    * Consequentemente, endpoints vitais falhavam com exceções de banco:
+      - `GET /api/services`: `ERROR: column s.short_description does not exist`.
+      - `GET /api/invoices/status`: `ERROR: column pix_copy_paste does not exist`.
+      - `GET /api/referral/admin/dashboard`: `ERROR: column referral_program_active does not exist` e `relation cap_referrals does not exist`.
+      - `GET /api/addons`: falha na consulta por falta de sincronização.
+  - **2. Ações Corretivas e Migração Consolidada de Reparo**:
+    * Criação dos arquivos de migração individuais faltantes: `migrations/phase26_automated_saas_billing.sql` e `migrations/phase33_referral_program.sql`.
+    * Criação da migração consolidada `migrations/phase46_production_schema_repair.sql`, 100% idempotente (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`, RLS e grants para `opera_app`), capaz de ser executada com segurança máxima em qualquer banco de dados existente sem perda de dados.
+    * Atualização do script de deploy na VPS (`scripts/deploy_vm.sh`) para incluir `docker compose exec api node scripts/migrate.js up` automaticamente após a subida dos containers.
+    * Regeneração integral do `init.sql` a partir do `database.md`.
+    * Aplicação com sucesso local no container `operabeauty-db`, zerando todos os erros de 500.
+
 
 
 
