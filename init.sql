@@ -1011,13 +1011,28 @@ CREATE TABLE public.cap_giftcards (
     -- Valores e Saldos
     original_value NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     available_balance NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    idempotency_key VARCHAR(100),
 
     -- Status de Pagamento e do Vale
     payment_status TEXT NOT NULL DEFAULT 'PENDING' CHECK (payment_status IN ('PENDING', 'CONFIRMED', 'REJECTED')),
     status TEXT NOT NULL DEFAULT 'PENDING_PAYMENT' CHECK (status IN ('PENDING_PAYMENT', 'ACTIVE', 'PARTIALLY_REDEEMED', 'REDEEMED', 'EXPIRED', 'CANCELLED')),
     
     expires_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT chk_giftcard_balance_non_negative CHECK (available_balance >= 0),
+    CONSTRAINT uq_giftcard_idempotency UNIQUE (tenant_id, idempotency_key)
+);
+
+-- 13.3 Livro-Razão Imutável de Resgates de Vales-Presente
+CREATE TABLE IF NOT EXISTS public.cap_giftcard_redemptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    giftcard_id UUID NOT NULL REFERENCES public.cap_giftcards(id) ON DELETE CASCADE,
+    appointment_id UUID REFERENCES public.cap_appointments(id) ON DELETE SET NULL,
+    amount NUMERIC(10,2) NOT NULL CHECK (amount > 0),
+    idempotency_key VARCHAR(100),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_giftcard_redemption_idempotency UNIQUE (tenant_id, idempotency_key)
 );
 
 -- Índices

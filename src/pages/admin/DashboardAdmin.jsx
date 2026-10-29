@@ -289,32 +289,40 @@ const DashboardAdmin = () => {
       }
 
       // 1. Agenda e Faturamento de Hoje
-      const apptHoje = await api.appointments.list({
-        start_date: startOfToday,
-        end_date: endOfToday
-      });
+      try {
+        const apptHoje = await api.appointments.list({
+          start_date: startOfToday,
+          end_date: endOfToday
+        });
 
-      const concluidosHoje = (apptHoje || []).filter(appt => appt.status === 'completed');
-      const faturamentoHojeVal = concluidosHoje.reduce((sum, appt) => sum + Number(appt.total_price || 0), 0);
-      
-      setFaturamentoHoje(faturamentoHojeVal);
-      setTotalConcluidosHoje(concluidosHoje.length);
-      setTotalAtendimentosHoje((apptHoje || []).length);
-      
-      // Ordena os atendimentos de hoje por horário
-      const apptsOrdenados = (apptHoje || []).slice().sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-      setAtendimentosHoje(apptsOrdenados);
+        const concluidosHoje = (apptHoje || []).filter(appt => appt.status === 'completed');
+        const faturamentoHojeVal = concluidosHoje.reduce((sum, appt) => sum + Number(appt.total_price || 0), 0);
+        
+        setFaturamentoHoje(faturamentoHojeVal);
+        setTotalConcluidosHoje(concluidosHoje.length);
+        setTotalAtendimentosHoje((apptHoje || []).length);
+        
+        // Ordena os atendimentos de hoje por horário
+        const apptsOrdenados = (apptHoje || []).slice().sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+        setAtendimentosHoje(apptsOrdenados);
+      } catch (errHoje) {
+        console.error('Erro ao buscar atendimentos de hoje:', errHoje);
+      }
 
       // 2. Financeiro: Faturamento Mês
-      const apptMes = await api.appointments.list({
-        start_date: startOfMonth,
-        end_date: endOfMonth
-      });
+      try {
+        const apptMes = await api.appointments.list({
+          start_date: startOfMonth,
+          end_date: endOfMonth
+        });
 
-      const concluidosMes = (apptMes || []).filter(appt => appt.status === 'completed');
-      const faturamentoMesVal = concluidosMes.reduce((sum, appt) => sum + Number(appt.total_price || 0), 0);
-      setFaturamentoMes(faturamentoMesVal);
-      setTotalConcluidosMes(concluidosMes.length);
+        const concluidosMes = (apptMes || []).filter(appt => appt.status === 'completed');
+        const faturamentoMesVal = concluidosMes.reduce((sum, appt) => sum + Number(appt.total_price || 0), 0);
+        setFaturamentoMes(faturamentoMesVal);
+        setTotalConcluidosMes(concluidosMes.length);
+      } catch (errMes) {
+        console.error('Erro ao buscar faturamento do mês:', errMes);
+      }
 
       // 3. Estoque Baixo: quantity <= min_quantity
       try {

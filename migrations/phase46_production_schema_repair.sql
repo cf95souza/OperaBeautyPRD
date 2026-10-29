@@ -100,8 +100,68 @@ ALTER TABLE public.cap_clients
 CREATE INDEX IF NOT EXISTS idx_cap_clients_referral_code ON public.cap_clients(referral_code);
 CREATE INDEX IF NOT EXISTS idx_cap_clients_referred_by ON public.cap_clients(referred_by);
 
--- 6. AJUSTES EM cap_appointments
+-- 5.1 PACOTES DE SESSÕES E CRÉDITOS DE TRATAMENTO (cap_packages e cap_client_packages)
+CREATE TABLE IF NOT EXISTS public.cap_packages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    service_id UUID NOT NULL REFERENCES public.cap_services(id) ON DELETE CASCADE,
+    total_sessions INTEGER NOT NULL CHECK (total_sessions > 0),
+    price NUMERIC(10,2) NOT NULL CHECK (price >= 0),
+    validity_days INTEGER NOT NULL DEFAULT 90 CHECK (validity_days > 0),
+    min_interval_days INTEGER NOT NULL DEFAULT 0 CHECK (min_interval_days >= 0),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cap_packages_tenant ON public.cap_packages(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_cap_packages_service ON public.cap_packages(service_id);
+
+CREATE TABLE IF NOT EXISTS public.cap_client_packages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    client_id UUID NOT NULL REFERENCES public.cap_clients(id) ON DELETE CASCADE,
+    package_id UUID NOT NULL REFERENCES public.cap_packages(id) ON DELETE RESTRICT,
+    service_id UUID NOT NULL REFERENCES public.cap_services(id) ON DELETE RESTRICT,
+    total_sessions INTEGER NOT NULL CHECK (total_sessions > 0),
+    used_sessions INTEGER NOT NULL DEFAULT 0 CHECK (used_sessions >= 0),
+    remaining_sessions INTEGER NOT NULL CHECK (remaining_sessions >= 0),
+    price_paid NUMERIC(10,2) NOT NULL CHECK (price_paid >= 0),
+    payment_method TEXT NOT NULL DEFAULT 'pix',
+    installments INTEGER NOT NULL DEFAULT 1 CHECK (installments >= 1),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'expired', 'cancelled')),
+    purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    last_session_at TIMESTAMPTZ,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cap_client_packages_tenant ON public.cap_client_packages(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_cap_client_packages_client ON public.cap_client_packages(client_id);
+CREATE INDEX IF NOT EXISTS idx_cap_client_packages_service ON public.cap_client_packages(service_id);
+CREATE INDEX IF NOT EXISTS idx_cap_client_packages_status ON public.cap_client_packages(status);
+
+CREATE TABLE IF NOT EXISTS public.cap_package_usages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    client_package_id UUID NOT NULL REFERENCES public.cap_client_packages(id) ON DELETE CASCADE,
+    appointment_id UUID REFERENCES public.cap_appointments(id) ON DELETE SET NULL,
+    session_number INTEGER NOT NULL,
+    action TEXT NOT NULL DEFAULT 'consume' CHECK (action IN ('consume', 'refund', 'adjustment')),
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cap_package_usages_tenant ON public.cap_package_usages(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_cap_package_usages_pkg ON public.cap_package_usages(client_package_id);
+CREATE INDEX IF NOT EXISTS idx_cap_package_usages_appt ON public.cap_package_usages(appointment_id);
+
+-- 6. AJUSTES EM cap_appointments (Descontos, Pagamento, Pacotes e Sinal)
 ALTER TABLE public.cap_appointments 
+    ADD COLUMN IF NOT EXISTS discount_applied NUMERIC(10, 2) DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'credit_card',
+    ADD COLUMN IF NOT EXISTS gift_card_redeemed NUMERIC(10, 2) DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS client_package_id UUID REFERENCES public.cap_client_packages(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS is_package_session BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS deposit_status VARCHAR(30) NOT NULL DEFAULT 'none',
     ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     ADD COLUMN IF NOT EXISTS deposit_provider VARCHAR(50),
@@ -304,6 +364,9 @@ BEGIN
         GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_services TO opera_app;
         GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_service_variations TO opera_app;
         GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_service_extras TO opera_app;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_packages TO opera_app;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_client_packages TO opera_app;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_package_usages TO opera_app;
         GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_appointment_services TO opera_app;
         GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_appointments TO opera_app;
         GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_invoices TO opera_app;

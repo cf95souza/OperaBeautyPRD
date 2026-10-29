@@ -447,6 +447,7 @@ CREATE TABLE public.cap_appointments (
     checkin_request TEXT, -- Ex: Café sem açúcar
     discount_applied NUMERIC(10, 2) DEFAULT 0.00,
     payment_method TEXT DEFAULT 'credit_card', -- credit_card, debit_card, cash, pix, gift_card, membership, package
+    gift_card_redeemed NUMERIC(10, 2) DEFAULT 0.00,
     client_package_id UUID REFERENCES public.cap_client_packages(id) ON DELETE SET NULL, -- Referência ao pacote de sessões (D13)
     is_package_session BOOLEAN NOT NULL DEFAULT FALSE, -- Flag de abatimento de sessão de pacote (D13)
     deposit_status VARCHAR(30) NOT NULL DEFAULT 'none', -- none, pending, paid, expired, refunded (D3)
@@ -2567,6 +2568,11 @@ ALTER TABLE public.cap_invoices
 
 -- 4. cap_appointments
 ALTER TABLE public.cap_appointments 
+    ADD COLUMN IF NOT EXISTS discount_applied NUMERIC(10, 2) DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'credit_card',
+    ADD COLUMN IF NOT EXISTS gift_card_redeemed NUMERIC(10, 2) DEFAULT 0.00,
+    ADD COLUMN IF NOT EXISTS client_package_id UUID REFERENCES public.cap_client_packages(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS is_package_session BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS deposit_status VARCHAR(30) NOT NULL DEFAULT 'none',
     ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     ADD COLUMN IF NOT EXISTS deposit_provider VARCHAR(50),

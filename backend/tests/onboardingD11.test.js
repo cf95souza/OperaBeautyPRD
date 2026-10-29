@@ -161,7 +161,10 @@ describe('D11 (P1) — Onboarding Guiado do Salão & Display de Balcão com QR C
 
   describe('4. Migração SQL e Schema de Banco (phase25_onboarding_schema.sql)', () => {
     test('Arquivo de migração deve conter colunas de onboarding e concessão para opera_app', () => {
-      const sqlPath = path.join(__dirname, '../migrations/phase25_onboarding_schema.sql');
+      let sqlPath = path.join(__dirname, '../migrations/phase25_onboarding_schema.sql');
+      if (!fs.existsSync(sqlPath)) {
+        sqlPath = path.join(__dirname, '../../migrations/phase25_onboarding_schema.sql');
+      }
       const content = fs.readFileSync(sqlPath, 'utf8');
 
       expect(content).toContain('onboarding_dismissed');

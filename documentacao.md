@@ -2453,7 +2453,19 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Regeneração integral do `init.sql` a partir do `database.md`.
     * Aplicação com sucesso local no container `operabeauty-db`, zerando todos os erros de 500.
 
-
-
-
-
+- **29/10/2026 - Resolução de Erro 500 em /api/appointments e Restauração do Card de Onboarding no Dashboard [Concluída]:**
+  - **1. Causa Raiz e Interdependência Diagnosticada**:
+    * Ao acessar o Dashboard do Gestor (`/admin`), a tela disparava requisição para `GET /api/appointments?start_date=...&end_date=...` que retornava **HTTP 500** (`Erro interno ao obter agendamentos`).
+    * No PostgreSQL, a tabela `cap_appointments` não possuía as colunas `discount_applied`, `payment_method`, `gift_card_redeemed`, `client_package_id` e `is_package_session`.
+    * No frontend (`DashboardAdmin.jsx`), a chamada `api.appointments.list` era executada sequencialmente antes da chamada de status de onboarding (`api.onboarding.getStatus()`) sem encapsulamento individual de `try...catch`. Com o estouro do erro 500, a execução do carregamento do dashboard era abortada, pulando diretamente para o `catch` geral (`Erro ao carregar dashboard`).
+    * Consequentemente, o estado `onboardingStatus` permanecia `null` e o card de "Etapas para novos salões" (`CardOnboarding`) nunca chegava a ser renderizado na tela.
+  - **2. Ações Corretivas Executadas**:
+    * **Migração e DDL (`phase46_production_schema_repair.sql` e `database.md`)**:
+      - Adicionadas as colunas ausentes de `cap_appointments` (`discount_applied`, `payment_method`, `gift_card_redeemed`, `client_package_id`, `is_package_session`) e as tabelas de pacotes (`cap_packages`, `cap_client_packages`, `cap_package_usages`) com índices, RLS e permissões ao usuário `opera_app`.
+      - Criada a migração `migrations/phase25_onboarding_schema.sql` e ajustada a paridade no `init.sql`.
+      - Executada a migração com sucesso no PostgreSQL local (`operabeauty-db`).
+    * **Resiliência e Blindagem no Frontend (`DashboardAdmin.jsx`)**:
+      - As chamadas de busca de agendamentos de hoje e do mês foram encapsuladas em blocos `try...catch` dedicados, garantindo que mesmo se houver falha pontual em métricas de agenda, o restante dos cards (incluindo Onboarding, Estoque, Avisos da Plataforma e Cobrança SaaS) carreguem normalmente sem travar a interface.
+    * **Testes e Build**:
+      - Suítes de testes `onboardingD11.test.js`, `cobrancaAutomaticaSaaSD18.test.js`, `indiqueGanheD19.test.js` e `operacoesAtomicasC10.test.js` aprovadas com 100% de sucesso.
+      - Build Vite de produção gerado com sucesso em 2.74s sem erros.
