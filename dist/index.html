@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>OperaBeauty — O Aplicativo e Sistema com a Marca do Seu Salão</title>
+    <meta name="description" content="Software de gestão e aplicativo White-Label para salões de beleza, clínicas de estética e manicures. Agendamento online 24h, lembretes por WhatsApp e fidelização." />
+    <meta name="keywords" content="sistema para salão de beleza, software para clínica de estética, app para salão, agendamento online salão, gestão de salão de beleza, aplicativo manicure, white-label salão" />
+    <meta name="author" content="OperaBeauty SaaS" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://operabeauty.com.br/" />
+
+    <!-- Open Graph / Redes Sociais (WhatsApp, Facebook, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OperaBeauty" />
+    <meta property="og:title" content="OperaBeauty — O Aplicativo e Sistema com a Marca do Seu Salão" />
+    <meta property="og:description" content="Suas clientes agendam sozinhas 24h, recebem lembretes e voltam mais vezes. Você organiza agenda, caixa, estoque e comissões." />
+    <meta property="og:url" content="https://operabeauty.com.br/" />
+    <meta property="og:image" content="https://operabeauty.com.br/pwa-512x512.png" />
+    <meta property="og:locale" content="pt_BR" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="OperaBeauty — O Aplicativo e Sistema com a Marca do Seu Salão" />
+    <meta name="twitter:description" content="Suas clientes agendam sozinhas 24h, recebem lembretes e voltam mais vezes. Você organiza agenda, caixa, estoque e comissões." />
+    <meta name="twitter:image" content="https://operabeauty.com.br/pwa-512x512.png" />
+
+    <!-- Dados Estruturados Schema.org (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://operabeauty.com.br/#software",
+            "name": "OperaBeauty",
+            "url": "https://operabeauty.com.br",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web, iOS, Android (PWA)",
+            "description": "Software de gestão e aplicativo White-Label para salões de beleza, barbearias e clínicas de estética com agendamento online 24h e lembretes automáticos.",
+            "offers": {
+              "@type": "AggregateOffer",
+              "priceCurrency": "BRL",
+              "lowPrice": "49.90",
+              "highPrice": "199.90",
+              "offerCount": "4"
+            },
+            "aggregateRating": {
+              "@type": "AggregateRating",
+              "ratingValue": "4.9",
+              "reviewCount": "128"
+            }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://operabeauty.com.br/#organization",
+            "name": "OperaBeauty SaaS",
+            "url": "https://operabeauty.com.br",
+            "logo": "https://operabeauty.com.br/favicon.png",
+            "sameAs": [
+              "https://instagram.com/operabeautyapp"
+            ],
+            "contactPoint": {
+              "@type": "ContactPoint",
+              "telephone": "+55-11-92292-8343",
+              "contactType": "sales",
+              "areaServed": "BR",
+              "availableLanguage": "Portuguese"
+            }
+          }
+        ]
+      }
+    </script>
+
+    <!-- Pré-carregamento de Fontes do Design System (Playfair Display + Plus Jakarta Sans) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet" />
+    <!-- PWA & Mobile Optimization -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" id="apple-title" content="OperaBeauty" />
+    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+    <meta name="theme-color" content="#8E3B4E" />
+    
+    <script>
+      // ============================================================
+      // PWA DINÂMICO MULTI-TENANT — Manifest via URL Real
+      // O iOS Safari só mantém o modo standalone com manifests
+      // servidos via URL HTTP real (não data: URI).
+      // Este script detecta a rota atual e injeta o <link rel="manifest">
+      // apontando para /api/manifest/:slug que retorna JSON dinâmico.
+      // ============================================================
+      (function() {
+        var path = window.location.pathname;
+        
+        // Rotas globais que NÃO pertencem a um tenant
+        var globalRoutes = ['/', '/privacidade', '/termos'];
+        var isGlobalRoute = globalRoutes.indexOf(path) !== -1 || path.indexOf('/superadmin') === 0;
+        
+        if (!isGlobalRoute) {
+          // --- PWA TENANT-SPECIFIC ---
+          var segments = path.split('/').filter(Boolean);
+          if (segments.length > 0) {
+            var slug = segments[0];
+            var isStaff = path.indexOf('/staff') !== -1;
+            
+            // Nome exibido no PWA (provisório até o React carregar os dados reais)
+            var pwaName = slug.charAt(0).toUpperCase() + slug.slice(1);
+            if (isStaff) {
+              pwaName = pwaName + ' - Staff';
+            }
+            
+            // Manifest servido pelo backend via URL real
+            var manifestUrl = '/api/manifest/' + slug + (isStaff ? '?mode=staff' : '');
+            
+            // Injeção síncrona do link rel="manifest" com URL real
+            document.write('<link rel="manifest" id="dynamic-manifest" href="' + manifestUrl + '">');
+            
+            // Atualiza Apple-specific meta tags para iOS
+            var appleMeta = document.getElementById('apple-title');
+            if (appleMeta) { appleMeta.content = pwaName; }
+            
+            // Salva informações no localStorage para que o React possa recuperar
+            try {
+              localStorage.setItem('operabeauty_last_tenant', slug);
+              localStorage.setItem('operabeauty_pwa_mode', isStaff ? 'staff' : 'client');
+            } catch(e) {}
+          }
+        } else {
+          // --- PWA GLOBAL (Landing Page) ---
+          var lastTenant = null;
+          try { lastTenant = localStorage.getItem('operabeauty_last_tenant'); } catch(e) {}
+          
+          if (lastTenant && path === '/') {
+            // Se está em standalone mode (já instalou como PWA), redireciona para o último tenant
+            if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+              var lastMode = null;
+              try { lastMode = localStorage.getItem('operabeauty_pwa_mode'); } catch(e) {}
+              var redirectUrl = lastMode === 'staff' 
+                ? '/' + lastTenant + '/staff/login' 
+                : '/' + lastTenant + '/home';
+              window.location.replace(redirectUrl);
+            }
+          }
+          
+          // Manifest global genérico
+          var globalM = {
+            name: 'OperaBeauty',
+            short_name: 'OperaBeauty',
+            description: 'Sistema de Gestão para Salões de Beleza e Barbearias',
+            display: 'standalone',
+            start_url: '/',
+            scope: '/',
+            theme_color: '#be185d',
+            background_color: '#ffffff',
+            orientation: 'portrait',
+            lang: 'pt-BR',
+            icons: [
+              { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+              { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+              { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+            ]
+          };
+          var globalEncoded = encodeURIComponent(JSON.stringify(globalM));
+          var globalUrl = 'data:application/manifest+json;charset=utf-8,' + globalEncoded;
+          document.write('<link rel="manifest" id="dynamic-manifest" href="' + globalUrl + '">');
+        }
+      })();
+    </script>
+
+    <script type="module" crossorigin src="/assets/index-Ci-puKwZ.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-B0AECAc6.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    
+    <!-- Registro manual do Service Worker apenas em produção / staging (evita conflito no Vite Dev Server) -->
+    <script>
+      if ('serviceWorker' in navigator && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function(registration) {
+              console.log('[PWA] Service Worker registrado com sucesso:', registration.scope);
+            })
+            .catch(function(error) {
+              console.warn('[PWA] Falha ao registrar Service Worker:', error);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
+
