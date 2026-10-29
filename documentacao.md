@@ -2418,9 +2418,14 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Adicionado alias de rota `['/resellers', '/resellers/list']` em `backend/routes/superadmin.js`, eliminando erro 404 em `GET /api/superadmin/resellers/list`.
     * Adicionados campos de sustentabilidade (`reseller_program_enabled`, `reseller_default_commission_rate`) em `cap_platform_settings`.
     * Adicionadas tabelas `cap_saas_resellers`, `cap_saas_referrals`, `cap_saas_commissions`, `cap_saas_payouts` e `cap_refresh_tokens` no baseline `init.sql` com índices e permissões `opera_app`.
-  - **3. Correção Crítica de Sobrescrita de API e DDL de Configurações da Plataforma**:
-    * Identificada e removida declaração duplicada da chave `superadmin` no cliente HTTP (`src/lib/api.js`), que sobrescrevia 39 métodos com uma versão incompleta em tempo de execução, causando `TypeError: K.superadmin.* is not a function`.
-    * Adicionadas as colunas `pix_key`, `pix_key_type`, `environment`, `grace_period_days` e `webhook_secret` em `cap_platform_settings` no DDL canônico (`init.sql` e `database.md`), resolvendo o erro 500 em `GET /api/superadmin/settings`.
-    * Recompilação completa do frontend (`npm run build`) gerando o bundle `dist/assets/index-BGdup7ij.js` com a árvore de métodos íntegra.
+  - **4. Rebrand Editorial do Modal de Onboarding de Salão no Super Admin (`CreateTenantModal.jsx`)**:
+    * Substituição completa do layout legado e dos inputs de cor nativos feios por uma experiência de alto padrão alinhada ao Design System Rosé Editorial / Stitch.
+    * Integração com a coleção dos **6 Temas White-Label Oficiais** (`Rosé`, `Nude`, `Lavanda`, `Sálvia`, `Preto e Dourado / Noir`, `Bordô`) com mostruário visual de paletas em círculos e mini-cards interativos.
+    * Suporte a **Tom Exclusivo (HEX)** com seletor moderno e validação de contraste WCAG 2.1 em tempo real contra fundos claros.
+    * Mini preview dinâmico ao vivo da vitrine do salão durante o preenchimento.
+    * Seletor em cards visuais dos **4 Planos SaaS Oficiais** (`Básico`, `Essencial`, `Premium`, `Signature`) sem plano Solo.
+    * Utilitário de geração de senha forte aleatória para o gestor com alternância de visibilidade (`Eye`/`EyeOff`).
+    * Backend atualizado para persistir `theme_id`, `brand_hex`, `primary_color`, `secondary_color` e `tertiary_color` diretamente na criação do salão no banco de dados.
+
 
 

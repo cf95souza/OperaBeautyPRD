@@ -100,7 +100,18 @@ export const getTenantById = async (id) => {
   return result.rows[0];
 };
 
-export const createTenant = async (name, slug, plan_price, plan_id, welcome_message, primary_color, secondary_color) => {
+export const createTenant = async (
+  name, 
+  slug, 
+  plan_price, 
+  plan_id, 
+  welcome_message, 
+  primary_color, 
+  secondary_color,
+  theme_id = 'rose',
+  brand_hex = null,
+  tertiary_color = null
+) => {
   const existCheck = await pool.query('SELECT id FROM public.cap_tenants WHERE slug = $1', [slug]);
   if (existCheck.rows.length > 0) {
     const error = new Error('Este link único (slug) já está sendo utilizado por outro salão.');
@@ -108,11 +119,34 @@ export const createTenant = async (name, slug, plan_price, plan_id, welcome_mess
     throw error;
   }
 
+  const finalThemeId = theme_id || 'rose';
+  const finalBrandHex = brand_hex || primary_color || '#8E3B4E';
+  const finalPrimary = primary_color || finalBrandHex;
+  const finalSecondary = secondary_color || '#F6E4E4';
+  const finalTertiary = tertiary_color || '#FBF7F5';
+
   const result = await pool.query(
-    `INSERT INTO public.cap_tenants (name, slug, status, plan_price, plan_id, welcome_message, primary_color, secondary_color, created_at)
-     VALUES ($1, $2, 'active', $3, $4, $5, $6, $7, NOW())
-     RETURNING id, slug, name, status, plan_price, plan_id, logo_url, primary_color, secondary_color, tertiary_color, banners, banner_url, banner_title, banner_subtitle, welcome_message, address, social_instagram, social_facebook, social_whatsapp, created_at`,
-    [name, slug, parseFloat(plan_price || 59.99), plan_id || null, welcome_message || '', primary_color || '#7c5357', secondary_color || '#eeb9bd']
+    `INSERT INTO public.cap_tenants (
+       name, slug, status, plan_price, plan_id, welcome_message, 
+       primary_color, secondary_color, tertiary_color, theme_id, brand_hex, created_at
+     )
+     VALUES ($1, $2, 'active', $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+     RETURNING id, slug, name, status, plan_price, plan_id, logo_url, 
+               primary_color, secondary_color, tertiary_color, theme_id, brand_hex, 
+               banners, banner_url, banner_title, banner_subtitle, welcome_message, 
+               address, social_instagram, social_facebook, social_whatsapp, created_at`,
+    [
+      name, 
+      slug, 
+      parseFloat(plan_price || 69.90), 
+      plan_id || null, 
+      welcome_message || '', 
+      finalPrimary, 
+      finalSecondary,
+      finalTertiary,
+      finalThemeId,
+      finalBrandHex
+    ]
   );
 
   return result.rows[0];

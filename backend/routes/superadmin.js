@@ -84,7 +84,10 @@ const createTenantSchema = z.object({
     plan_id: z.string().uuid('ID do plano inválido.').nullable().optional(),
     welcome_message: z.string().optional(),
     primary_color: z.string().optional(),
-    secondary_color: z.string().optional()
+    secondary_color: z.string().optional(),
+    tertiary_color: z.string().optional(),
+    theme_id: z.string().optional(),
+    brand_hex: z.string().optional()
   }),
   query: z.any(), params: z.any()
 });
@@ -250,10 +253,32 @@ router.get('/tenants/:id', validate(getTenantSchema), async (req, res) => {
 });
 
 router.post('/tenants', validate(createTenantSchema), async (req, res) => {
-  const { name, slug, plan_price, plan_id, welcome_message, primary_color, secondary_color } = req.body;
+  const { 
+    name, 
+    slug, 
+    plan_price, 
+    plan_id, 
+    welcome_message, 
+    primary_color, 
+    secondary_color,
+    tertiary_color,
+    theme_id,
+    brand_hex
+  } = req.body;
 
   try {
-    const newTenant = await createTenant(name, slug, plan_price, plan_id, welcome_message, primary_color, secondary_color);
+    const newTenant = await createTenant(
+      name, 
+      slug, 
+      plan_price, 
+      plan_id, 
+      welcome_message, 
+      primary_color, 
+      secondary_color,
+      theme_id,
+      brand_hex,
+      tertiary_color
+    );
     return res.status(201).json(newTenant);
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
