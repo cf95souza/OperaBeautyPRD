@@ -2418,4 +2418,9 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Adicionado alias de rota `['/resellers', '/resellers/list']` em `backend/routes/superadmin.js`, eliminando erro 404 em `GET /api/superadmin/resellers/list`.
     * Adicionados campos de sustentabilidade (`reseller_program_enabled`, `reseller_default_commission_rate`) em `cap_platform_settings`.
     * Adicionadas tabelas `cap_saas_resellers`, `cap_saas_referrals`, `cap_saas_commissions`, `cap_saas_payouts` e `cap_refresh_tokens` no baseline `init.sql` com índices e permissões `opera_app`.
+  - **3. Correção Crítica de Sobrescrita de API e DDL de Configurações da Plataforma**:
+    * Identificada e removida declaração duplicada da chave `superadmin` no cliente HTTP (`src/lib/api.js`), que sobrescrevia 39 métodos com uma versão incompleta em tempo de execução, causando `TypeError: K.superadmin.* is not a function`.
+    * Adicionadas as colunas `pix_key`, `pix_key_type`, `environment`, `grace_period_days` e `webhook_secret` em `cap_platform_settings` no DDL canônico (`init.sql` e `database.md`), resolvendo o erro 500 em `GET /api/superadmin/settings`.
+    * Recompilação completa do frontend (`npm run build`) gerando o bundle `dist/assets/index-BGdup7ij.js` com a árvore de métodos íntegra.
+
 

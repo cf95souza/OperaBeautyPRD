@@ -351,7 +351,7 @@ router.get('/settings', validate(platformSettingsSchema), async (req, res) => {
   }
 });
 
-router.post('/settings', validate(savePlatformSettingsSchema), async (req, res) => {
+const handleSaveSettings = async (req, res) => {
   try {
     const settings = await savePlatformSettings(req.body);
     return res.json(settings);
@@ -359,7 +359,11 @@ router.post('/settings', validate(savePlatformSettingsSchema), async (req, res) 
     req.log.error(error, 'Erro ao salvar configurações globais da plataforma');
     return res.status(500).json({ error: 'Erro interno ao salvar configurações.' });
   }
-});
+};
+
+router.post('/settings', validate(savePlatformSettingsSchema), handleSaveSettings);
+router.put('/settings', validate(savePlatformSettingsSchema), handleSaveSettings);
+
 
 const adminCreateSchema = z.object({
   body: z.object({
@@ -596,7 +600,7 @@ router.get('/resellers/settings', async (req, res) => {
   }
 });
 
-router.post('/resellers/settings', async (req, res) => {
+const handleUpdateResellerSettings = async (req, res) => {
   try {
     const { updateResellerProgramSettings } = await import('../services/superadminService.js');
     const { enabled, default_commission } = req.body;
@@ -606,7 +610,10 @@ router.post('/resellers/settings', async (req, res) => {
     req.log?.error?.(error, 'Erro ao atualizar configurações de parceiros');
     return res.status(500).json({ error: 'Erro ao atualizar configurações de parceiros.' });
   }
-});
+};
+
+router.post('/resellers/settings', handleUpdateResellerSettings);
+router.put('/resellers/settings', handleUpdateResellerSettings);
 
 router.get(['/resellers', '/resellers/list'], async (req, res) => {
   try {
@@ -619,7 +626,7 @@ router.get(['/resellers', '/resellers/list'], async (req, res) => {
   }
 });
 
-router.post('/resellers', async (req, res) => {
+router.post(['/resellers', '/resellers/create'], async (req, res) => {
   try {
     const { registerReseller } = await import('../services/resellerService.js');
     const reseller = await registerReseller({ ...req.body, is_superadmin: true });
@@ -630,6 +637,7 @@ router.post('/resellers', async (req, res) => {
     return res.status(500).json({ error: 'Erro ao cadastrar parceiro.' });
   }
 });
+
 
 router.patch('/resellers/:id/status', async (req, res) => {
   try {

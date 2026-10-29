@@ -97,19 +97,39 @@ CREATE INDEX IF NOT EXISTS idx_cap_refresh_tokens_device ON public.cap_refresh_t
 
 
 -- 2.2 Tabela de Configurações Globais da Plataforma
-CREATE TABLE public.cap_platform_settings (
+CREATE TABLE IF NOT EXISTS public.cap_platform_settings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     payment_gateway TEXT DEFAULT 'mercadopago', -- abacatepay, mercadopago, stripe
     gateway_api_key TEXT,
     gateway_public_key TEXT,
+    pix_key TEXT,
+    pix_key_type VARCHAR(20) DEFAULT 'cnpj',
+    environment VARCHAR(20) DEFAULT 'sandbox',
+    grace_period_days INT DEFAULT 5,
+    webhook_secret TEXT,
     reseller_program_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     reseller_default_commission_rate NUMERIC(5, 2) NOT NULL DEFAULT 20.00,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-INSERT INTO public.cap_platform_settings (payment_gateway, reseller_program_enabled, reseller_default_commission_rate)
-VALUES ('mercadopago', FALSE, 20.00)
+-- Garantir colunas se a tabela já existir (idempotência)
+ALTER TABLE public.cap_platform_settings 
+    ADD COLUMN IF NOT EXISTS payment_gateway TEXT DEFAULT 'mercadopago',
+    ADD COLUMN IF NOT EXISTS gateway_api_key TEXT,
+    ADD COLUMN IF NOT EXISTS gateway_public_key TEXT,
+    ADD COLUMN IF NOT EXISTS pix_key TEXT,
+    ADD COLUMN IF NOT EXISTS pix_key_type VARCHAR(20) DEFAULT 'cnpj',
+    ADD COLUMN IF NOT EXISTS environment VARCHAR(20) DEFAULT 'sandbox',
+    ADD COLUMN IF NOT EXISTS grace_period_days INT DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS webhook_secret TEXT,
+    ADD COLUMN IF NOT EXISTS reseller_program_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS reseller_default_commission_rate NUMERIC(5, 2) NOT NULL DEFAULT 20.00,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+INSERT INTO public.cap_platform_settings (payment_gateway, environment, grace_period_days, pix_key_type, reseller_program_enabled, reseller_default_commission_rate)
+VALUES ('mercadopago', 'sandbox', 5, 'cnpj', FALSE, 20.00)
 ON CONFLICT DO NOTHING;
+
 
 
 -- 2.3 Tabela Master de Salões (Tenants)

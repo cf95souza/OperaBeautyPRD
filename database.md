@@ -90,6 +90,11 @@ CREATE TABLE public.cap_platform_settings (
     payment_gateway TEXT DEFAULT 'mercadopago', -- abacatepay, mercadopago, stripe
     gateway_api_key TEXT,
     gateway_public_key TEXT,
+    pix_key TEXT,
+    pix_key_type VARCHAR(20) DEFAULT 'cnpj',
+    environment VARCHAR(20) DEFAULT 'sandbox',
+    grace_period_days INT DEFAULT 5,
+    webhook_secret TEXT,
     
     -- Governança do Programa de Revenda & Sustentabilidade Financeira (F4)
     reseller_program_enabled BOOLEAN NOT NULL DEFAULT FALSE, -- Inicia desligado para proteger o fluxo de caixa
@@ -97,6 +102,7 @@ CREATE TABLE public.cap_platform_settings (
     
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
 
 -- 2.3 Tabela Master de Salões (Tenants)
 CREATE TABLE public.cap_tenants (

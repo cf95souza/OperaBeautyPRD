@@ -710,8 +710,9 @@ export const api = {
 
   // Super Admin
   superadmin: {
-    async getDashboardMetrics() {
-      return request('/superadmin/dashboard-metrics');
+    async getDashboardMetrics(period = 'month') {
+      const q = period ? `?period=${period}` : '';
+      return request(`/superadmin/dashboard-metrics${q}`);
     },
     async getOverdueTenants() {
       return request('/superadmin/overdue-tenants');
@@ -891,6 +892,18 @@ export const api = {
     async processResellerPayout(id, payload) {
       return request(`/superadmin/resellers/payouts/${id}/process`, {
         method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+
+    // Governança DPO e LGPD no Super Admin (F5)
+    async listPrivacyRequests(status = 'all') {
+      const q = status ? `?status=${status}` : '';
+      return request(`/superadmin/privacy/requests${q}`);
+    },
+    async updatePrivacyRequest(id, payload) {
+      return request(`/superadmin/privacy/requests/${id}`, {
+        method: 'PATCH',
         body: JSON.stringify(payload)
       });
     }
@@ -1436,106 +1449,6 @@ export const api = {
     }
   },
 
-  // Governança Super Admin da Plataforma SaaS
-  superadmin: {
-    async getDashboardMetrics(period = 'month') {
-      return request(`/superadmin/dashboard-metrics?period=${period}`);
-    },
-    async listTenants() {
-      return request('/superadmin/tenants');
-    },
-    async getTenant(id) {
-      return request(`/superadmin/tenants/${id}`);
-    },
-    async createTenant(data) {
-      return request('/superadmin/tenants', {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
-    },
-    async updateTenant(id, data) {
-      return request(`/superadmin/tenants/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data)
-      });
-    },
-    async suspendTenant(id, reason) {
-      return request(`/superadmin/tenants/${id}/suspend`, {
-        method: 'POST',
-        body: JSON.stringify({ reason })
-      });
-    },
-    async reactivateTenant(id) {
-      return request(`/superadmin/tenants/${id}/reactivate`, {
-        method: 'POST'
-      });
-    },
-    async deleteTenant(id) {
-      return request(`/superadmin/tenants/${id}`, {
-        method: 'DELETE'
-      });
-    },
-    async getPlatformSettings() {
-      return request('/superadmin/settings');
-    },
-    async savePlatformSettings(data) {
-      return request('/superadmin/settings', {
-        method: 'PUT',
-        body: JSON.stringify(data)
-      });
-    },
-    // Parceiros e Revenda no Super Admin (F4)
-    async getResellerSettings() {
-      return request('/superadmin/resellers/settings');
-    },
-    async updateResellerSettings(data) {
-      return request('/superadmin/resellers/settings', {
-        method: 'PUT',
-        body: JSON.stringify(data)
-      });
-    },
-    async listResellers() {
-      return request('/superadmin/resellers/list');
-    },
-    async createReseller(data) {
-      return request('/superadmin/resellers/create', {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
-    },
-    async updateResellerStatus(id, status) {
-      return request(`/superadmin/resellers/${id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status })
-      });
-    },
-    async updateResellerCommission(id, commission_rate) {
-      return request(`/superadmin/resellers/${id}/commission`, {
-        method: 'PATCH',
-        body: JSON.stringify({ commission_rate })
-      });
-    },
-    async listResellerPayouts(status = 'all') {
-      return request(`/superadmin/resellers/payouts?status=${status}`);
-    },
-    async processResellerPayout(id, data) {
-      return request(`/superadmin/resellers/payouts/${id}/process`, {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
-    },
-    // Governança DPO e LGPD no Super Admin (F5)
-    async listPrivacyRequests(status = 'all') {
-      return request(`/superadmin/privacy/requests?status=${status}`);
-    },
-    async updatePrivacyRequest(id, data) {
-      return request(`/superadmin/privacy/requests/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data)
-      });
-    }
-  },
-
   // Programa de Revenda e Parceiros (F4)
   resellers: {
     async getStatus() {
@@ -1618,6 +1531,9 @@ export const api = {
     }
   }
 };
+
+export default api;
+
 
 
 
