@@ -308,6 +308,7 @@ router.post('/login-superadmin', loginLimiter, validate(loginSuperadminSchema), 
     return res.json({ token: authData.token, user: payload });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao realizar login do superadmin');
     return res.status(500).json({ error: 'Erro interno.' });
   }
 });
