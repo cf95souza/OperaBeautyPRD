@@ -33,15 +33,15 @@ describe('Auth Routes', () => {
     });
 
     it('deve retornar erro 401 para credenciais inválidas (usuário não encontrado)', async () => {
-      // Configura o mock do banco de dados para retornar vazio (usuário não existe)
-      db.query.mockResolvedValueOnce({ rows: [] });
+      // Configura o mock do banco de dados para retornar user_data nulo (função cap_login_staff)
+      db.query.mockResolvedValueOnce({ rows: [{ user_data: null }] });
 
       const res = await request(app)
         .post('/api/auth/login-staff')
         .send({ tenant_slug: 'demo', email: 'inexistente@test.com', password: 'SenhaForte!123' });
 
       expect(res.status).toBe(401);
-      expect(res.body.error).toBe('Credenciais inválidas.');
+      expect(res.body.error).toContain('incorretos');
     });
 
     // Testar o sucesso exigiria mockar a função crypt() do postgres ou mockar o authService.

@@ -13,6 +13,12 @@ import {
   getTenantPaymentMethods,
   updateTenantPaymentMethod
 } from '../services/giftcardService.js';
+import { 
+  checkGiftCardBruteForce, 
+  giftCardIpLimiter, 
+  recordFailedGiftCardAttempt, 
+  resetGiftCardAttempts 
+} from '../middlewares/giftcardSecurity.js';
 
 const router = express.Router();
 
@@ -32,7 +38,9 @@ const codeParamSchema = z.object({
     code: z.string().min(5, 'Código inválido.')
   }),
   body: z.object({
-    amount: z.number().min(0.01, 'O valor de resgate deve ser maior que zero.')
+    amount: z.number().min(0.01, 'O valor de resgate deve ser maior que zero.'),
+    appointment_id: z.string().uuid('ID de agendamento inválido.').optional().nullable(),
+    idempotency_key: z.string().max(100, 'Chave de idempotência muito longa.').optional().nullable()
   }), 
   query: z.any()
 });
@@ -129,29 +137,50 @@ router.post('/admin/confirm-payment/:request_id', authMiddleware, requireRole(['
   }
 });
 
-// Validar código do Gift Card de resgate (Admin/Manager/Client)
-router.get('/validate/:code', authMiddleware, async (req, res) => {
+// C14 (P1): Validar código do Gift Card de resgate com proteção anti-força bruta
+router.get('/validate/:code', authMiddleware, giftCardIpLimiter, checkGiftCardBruteForce, async (req, res) => {
   const tenantId = req.user.tenant_id;
+  const ip = req.ip;
+  const userId = req.user?.id;
 
   try {
     const gift = await validateGiftCardCode(tenantId, req.params.code);
+    await resetGiftCardAttempts(tenantId, ip, userId);
     return res.json(gift);
   } catch (error) {
+    if (error.statusCode === 404 || error.statusCode === 400) {
+      await recordFailedGiftCardAttempt(tenantId, ip, userId);
+    }
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     req.log.error(error);
     return res.status(500).json({ error: 'Erro ao validar código do vale-presente.' });
   }
 });
 
-// Resgatar Gift Card com suporte parcial
-router.post('/redeem/:code', authMiddleware, requireRole(['manager', 'admin']), validate(codeParamSchema), async (req, res) => {
+// C14 (P1): Resgatar Gift Card com proteção anti-força bruta, livro-razão e idempotência
+router.post('/redeem/:code', authMiddleware, requireRole(['manager', 'admin']), giftCardIpLimiter, checkGiftCardBruteForce, validate(codeParamSchema), async (req, res) => {
+  const tenantId = req.user.tenant_id;
+  const ip = req.ip;
+  const userId = req.user?.id;
+
   try {
-    const result = await redeemGiftCard(req.user.tenant_id, req.params.code, req.body.amount);
+    const idempotencyKey = req.body.idempotency_key || req.headers['idempotency-key'] || null;
+    const result = await redeemGiftCard(
+      tenantId, 
+      req.params.code, 
+      req.body.amount, 
+      req.body.appointment_id || null, 
+      idempotencyKey
+    );
+    await resetGiftCardAttempts(tenantId, ip, userId);
     return res.status(200).json({ 
-      message: 'Resgate realizado com sucesso.',
+      message: result.is_idempotent ? 'Resgate já processado anteriormente (idempotente).' : 'Resgate realizado com sucesso.',
       gift_card: result
     });
   } catch (error) {
+    if (error.statusCode === 404 || error.statusCode === 400) {
+      await recordFailedGiftCardAttempt(tenantId, ip, userId);
+    }
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     req.log.error(error);
     return res.status(500).json({ error: 'Erro ao resgatar vale-presente.' });

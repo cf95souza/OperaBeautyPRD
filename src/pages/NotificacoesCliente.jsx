@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { api } from '../lib/api';
+import { TelaCliente } from '../components/ui/TelaCliente';
 
 const NotificacoesCliente = () => {
   const { tenant_slug } = useParams();
@@ -51,8 +52,8 @@ const NotificacoesCliente = () => {
   };
 
   return (
-    <div className="bg-background text-on-background min-h-screen font-body-md">
-      <header className="w-full top-0 sticky z-40 bg-surface shadow-sm transition-all duration-300 ease-in-out pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 md:pt-4">
+    <TelaCliente larguraMaxima="max-w-7xl" className="font-body-md">
+      <header className="w-full top-0 sticky z-40 bg-surface shadow-sm transition-all duration-300 ease-in-out pt-3 pb-2 md:pt-4">
         <div className="flex justify-between items-center px-gutter py-sm w-full max-w-7xl mx-auto">
           <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center bg-surface-variant/30 text-on-surface rounded-full active:scale-95 transition-all">
             <span className="material-symbols-outlined">arrow_back</span>
@@ -114,7 +115,7 @@ const NotificacoesCliente = () => {
           </div>
         )}
       </main>
-    </div>
+    </TelaCliente>
   );
 };
 

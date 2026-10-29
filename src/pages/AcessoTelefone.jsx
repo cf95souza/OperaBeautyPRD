@@ -1,14 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { api } from '../lib/api';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
+import { Botao } from '../components/ui/Botao';
+import { CampoTelefone } from '../components/ui/CampoTelefone';
+import { Chip } from '../components/ui/Chip';
+import { TelaCliente } from '../components/ui/TelaCliente';
+import { ArrowRight, MapPin, Clock, X, ExternalLink, Copy, Check } from 'lucide-react';
+
+const InstagramIcon = ({ size = 15, className = '' }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+  </svg>
+);
 
 const AcessoTelefone = () => {
   const { tenant_slug } = useParams();
   const navigate = useNavigate();
   const { tenant } = useTenant();
+
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -16,207 +39,341 @@ const AcessoTelefone = () => {
   const [businessHours, setBusinessHours] = useState([]);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (tenant?.id) {
-      api.settings.getBusinessHours(tenant.id)
+      api.settings
+        .getBusinessHours(tenant.id)
         .then((data) => {
-          if (data) {
+          if (data && Array.isArray(data)) {
             setBusinessHours(data.sort((a, b) => a.day_of_week - b.day_of_week));
           }
         })
-        .catch(err => console.error("Erro ao carregar horários:", err));
+        .catch((err) => console.error('Erro ao carregar horários:', err));
     }
   }, [tenant]);
 
-  const formatPhone = (value) => {
-    let v = value.replace(/\D/g, '');
-    if (v.length > 11) v = v.slice(0, 11);
-    
-    if (v.length > 10) {
-        v = `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7)}`;
-    } else if (v.length > 6) {
-        v = `(${v.slice(0, 2)}) ${v.slice(2, 6)}-${v.slice(6)}`;
-    } else if (v.length > 2) {
-        v = `(${v.slice(0, 2)}) ${v.slice(2)}`;
-    } else if (v.length > 0) {
-        v = `(${v}`;
-    }
-    return v;
-  };
-
   const handlePhoneChange = (e) => {
-    setPhone(formatPhone(e.target.value));
+    setPhone(e.target.value);
+    if (error) setError(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!tenant) {
-      setError("Salão não configurado ou inativo. Contate o administrador.");
+      setError('Salão não configurado ou inativo. Contate o administrador.');
       return;
     }
-    
-    if (phone.length < 14) return;
-    
+
+    const digitsOnly = phone.replace(/\D/g, '');
+    if (digitsOnly.length < 10) {
+      setError('Digite seu telefone completo com DDD.');
+      return;
+    }
+
     setLoading(true);
+    setError(null);
+
     try {
       const { action } = await api.auth.checkClientExists(tenant.id, phone);
       if (action === 'login') {
         navigate(`/${tenant_slug}/acesso-senha`, { state: { phone } });
       } else if (action === 'register') {
         navigate(`/${tenant_slug}/cadastro`, { state: { phone } });
+      } else {
+        // Fallback para senha
+        navigate(`/${tenant_slug}/acesso-senha`, { state: { phone } });
       }
     } catch (err) {
       console.error(err);
-      setError("Erro ao verificar telefone. Tente novamente.");
+      if (err.status === 429) {
+        setError('Muitas tentativas em pouco tempo. Aguarde alguns instantes.');
+      } else {
+        setError('Não foi possível verificar seu telefone. Tente novamente.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCopyAddress = () => {
+    if (tenant?.address) {
+      navigator.clipboard.writeText(tenant.address);
+      setCopiedAddress(true);
+      setTimeout(() => setCopiedAddress(false), 2000);
+    }
+  };
+
+  // Inicial do salão para monograma elegante quando sem logo
+  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : 'T';
+
+  // Configurações de redes e localização
+  const hasAddress = Boolean(tenant?.address && tenant.address.trim());
+  const hasHours = Boolean(businessHours && businessHours.length > 0);
+  const hasInstagram = Boolean(tenant?.social_instagram && tenant.social_instagram.trim());
+
+  const diasSemana = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
   return (
-    <div className="flex flex-col min-h-screen font-body-md text-on-surface bg-background">
-      <main className="flex-grow flex flex-col items-center px-container-margin pt-[calc(env(safe-area-inset-top,0px)+40px)] pb-xl overflow-hidden relative">
-        <div className="absolute top-0 right-0 -z-10 w-64 h-64 bg-primary-fixed opacity-20 rounded-full blur-3xl translate-x-1/2 -translate-y-1/2"></div>
-        <div className="absolute bottom-0 left-0 -z-10 w-72 h-72 bg-secondary-container opacity-30 rounded-full blur-3xl -translate-x-1/3 translate-y-1/3"></div>
-        
-        <div className="w-full max-w-md flex flex-col items-center text-center animate-fade-in-up">
-          <header className="mb-xl">
-            <div className="flex flex-col items-center gap-sm">
-              {tenant?.logo_url ? (
-                <img 
-                  src={tenant.logo_url} 
-                  alt={tenant.name} 
-                  className="h-16 object-contain mb-1 rounded-lg shadow-sm bg-surface p-1" 
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-              ) : (
-                <span className="material-symbols-outlined text-primary text-[48px] mb-1" style={{ fontVariationSettings: "'FILL' 1" }}>spa</span>
-              )}
-              <h1 className="font-headline-md text-headline-md font-semibold text-primary tracking-tight">{tenant?.name || 'Serene Beauty'}</h1>
-            </div>
-          </header>
-
-          <div className="w-full mb-lg">
-            <img 
-              className="w-full aspect-[4/3] object-cover rounded-3xl shadow-premium mb-lg" 
-              alt="Beauty Spa environment" 
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0lmx1ogRGahvge5467Oei_h2Ymvaj_nE7LBksQ8zKBZy0rlQg_rfa6SOC8RbIhbh5bqY7VRaB3PlKXh3oHdk-vLRIdIBC9tTYSN0mt2FDGD9tLCTGxRj8RK4hcMzAwsv19gSq879TjByzaP7jecxaIvxjrO_m3K3nQ9ZmgHq7j2DxuhOid1LGOskqBU3DEJJ_WT0s3p_SwEmhdALdH0NusT4EVHaezcWZoqtHnuAZ3EoJB0sFrT5nvlV4NCx3OK6JCGnKAK3R4Z42"
+    <TelaCliente className="selection:bg-brand-tint selection:text-brand">
+      {/* Container Principal Mobile Centralizado */}
+      <main className="w-full max-w-[420px] mx-auto px-6 pt-6 pb-6 flex-grow flex flex-col items-center text-center">
+        {/* 1. Logo Circular com Borda Dourada */}
+        <div className="w-[72px] h-[72px] rounded-full bg-ink border-2 border-gold flex items-center justify-center shadow-sm mb-3 overflow-hidden select-none">
+          {tenant?.logo_url ? (
+            <img
+              src={tenant.logo_url}
+              alt={tenant?.name || 'Logo'}
+              className="w-full h-full object-cover p-1 rounded-full"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
             />
+          ) : (
+            <span className="font-display italic text-gold text-[34px] leading-none select-none">
+              {initialLetter}
+            </span>
+          )}
+        </div>
+
+        {/* 2. Nome do Salão */}
+        <h2 className="font-display text-[22px] font-semibold text-brand tracking-tight mb-6">
+          {tenant?.name || 'Studio Thais'}
+        </h2>
+
+        {/* 3. Imagem de Capa (Nítida / Fallback com formas orgânicas) */}
+        <div className="w-full h-[176px] rounded-[28px] overflow-hidden shadow-sm relative mb-7 bg-brand-tint select-none">
+          {tenant?.cover_url || tenant?.banner_url ? (
+            <img
+              src={tenant.cover_url || tenant.banner_url}
+              alt={tenant?.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full relative overflow-hidden flex items-center justify-center">
+              {/* Formas orgânicas circulares suaves de fundo (fiel ao layout) */}
+              <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-[#EFD2D4] opacity-80 pointer-events-none" />
+              <div className="absolute -bottom-16 -left-8 w-44 h-44 rounded-full bg-bg opacity-90 pointer-events-none" />
+              <span className="absolute top-4 left-5 text-[11px] font-sans font-medium tracking-wider text-ink-soft/75 uppercase pointer-events-none">
+                [Foto nítida do salão]
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* 4. Título & Slogan */}
+        <div className="mb-6 space-y-1.5">
+          <h1 className="font-display text-[28px] font-semibold text-ink leading-tight">
+            Que bom ter você aqui
+          </h1>
+          <p className="font-sans text-[15px] text-ink-soft leading-relaxed max-w-xs mx-auto">
+            {tenant?.slogan || 'Sua jornada de autocuidado e luxo começa aqui.'}
+          </p>
+        </div>
+
+        {/* 5. Formulário de Telefone */}
+        <form onSubmit={handleSubmit} className="w-full space-y-4">
+          <CampoTelefone
+            id="phone"
+            label="Seu telefone"
+            value={phone}
+            onChange={handlePhoneChange}
+            error={error}
+            textoAjuda="Continuar para digitar sua senha."
+            autoFocus
+          />
+
+          {/* Botão de Ação Primária "Continuar →" */}
+          <div className="pt-2">
+            <Botao
+              tipo="submit"
+              variante="primario"
+              tamanho="lg"
+              className="w-full"
+              isLoading={loading}
+              iconeFim={<ArrowRight size={18} strokeWidth={2.2} />}
+            >
+              Continuar
+            </Botao>
           </div>
+        </form>
 
-          <section className="w-full space-y-md">
-            <div className="space-y-xs">
-              <h2 className="font-serif text-headline-md font-semibold text-on-surface">Bem-vindo ao {tenant?.name || 'Serene Beauty'}</h2>
-              <p className="text-on-surface-variant font-body-md">Sua jornada de autocuidado e luxo começa aqui.</p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-lg pt-md">
-              <div className="text-left">
-                <Input
-                  id="phone"
-                  type="tel"
-                  label="Digite seu telefone"
-                  value={phone}
-                  onChange={handlePhoneChange}
-                  required
-                  placeholder="(00) 00000-0000"
-                  error={error}
-                  startIcon="phone"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                variant="primary"
-                className="w-full"
-                size="lg"
-                disabled={loading || phone.length < 14}
-                isLoading={loading}
-                endIcon="arrow_forward"
+        {/* 6. Pílulas de Ações Rápidas (Chips informativos) */}
+        {(hasAddress || hasHours || hasInstagram) && (
+          <div className="pt-6 flex items-center justify-center gap-2.5 flex-wrap">
+            {hasAddress && (
+              <Chip
+                onClick={() => setIsLocationModalOpen(true)}
+                icone={<MapPin size={15} strokeWidth={2} />}
               >
-                Próximo
-              </Button>
-            </form>
-
-            <div className="pt-lg flex items-center justify-center gap-xs">
-              <div className="h-[1px] w-8 bg-outline-variant"></div>
-              <p className="text-label-sm font-medium text-outline-variant uppercase tracking-widest">Acesso Cliente</p>
-              <div className="h-[1px] w-8 bg-outline-variant"></div>
-            </div>
-            
-            <div className="pt-sm">
-               <button 
-                onClick={() => navigate(`/${tenant_slug}/staff/login`)}
-                className="text-label-md text-primary hover:underline"
-              >
-                Sou funcionário / Gestor
-              </button>
-            </div>
-
-            {/* Ícones de Redes Sociais */}
-            {(tenant?.social_instagram || tenant?.social_facebook || tenant?.social_whatsapp) && (
-              <div className="pt-md flex items-center justify-center gap-md">
-                {tenant?.social_instagram && (
-                  <a 
-                    href={tenant.social_instagram.startsWith('http') ? tenant.social_instagram : `https://${tenant.social_instagram}`}
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="w-10 h-10 rounded-full bg-surface border border-outline-variant flex items-center justify-center hover:border-primary text-secondary hover:text-primary shadow-sm transition-all duration-200"
-                    title="Instagram"
-                  >
-                    <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.051.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/>
-                    </svg>
-                  </a>
-                )}
-                {tenant?.social_whatsapp && (
-                  <a 
-                    href={tenant.social_whatsapp.startsWith('http') ? tenant.social_whatsapp : `https://wa.me/${tenant.social_whatsapp.replace(/\D/g, '')}`}
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="w-10 h-10 rounded-full bg-surface border border-outline-variant flex items-center justify-center hover:border-primary text-secondary hover:text-primary shadow-sm transition-all duration-200"
-                    title="WhatsApp"
-                  >
-                    <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                       <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.099.824zm-3.423-14.416c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm.029 18.88c-1.161 0-2.305-.292-3.318-.844l-3.677.964.984-3.595c-.607-1.052-.927-2.246-.926-3.468.001-5.824 4.74-10.563 10.573-10.564 5.832.001 10.566 4.739 10.566 10.564 0 5.826-4.733 10.562-10.566 10.562z"/>
-                    </svg>
-                  </a>
-                )}
-              </div>
+                Endereço
+              </Chip>
             )}
-          </section>
+
+            {hasHours && (
+              <Chip
+                onClick={() => setIsHoursModalOpen(true)}
+                icone={<Clock size={15} strokeWidth={2} />}
+              >
+                Horários
+              </Chip>
+            )}
+
+            {hasInstagram && (
+              <Chip
+                as="a"
+                href={
+                  tenant.social_instagram.startsWith('http')
+                    ? tenant.social_instagram
+                    : `https://instagram.com/${tenant.social_instagram.replace('@', '')}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                icone={<InstagramIcon size={15} />}
+              >
+                Instagram
+              </Chip>
+            )}
+          </div>
+        )}
+
+        {/* 7. Link Rodapé: Sou funcionário / gestor */}
+        <div className="pt-8 pb-2">
+          <button
+            type="button"
+            onClick={() => navigate(`/${tenant_slug}/staff/login`)}
+            className="text-[13px] font-sans text-ink-soft hover:text-ink hover:underline transition-colors cursor-pointer select-none"
+          >
+            Sou funcionário / gestor
+          </button>
         </div>
       </main>
 
-      {/* Modais omitidos no refactoring por concisão, mas podem ser facilmente migrados usando o novo Card */}
+      {/* Modal: Endereço & Localização */}
       {isLocationModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm">
-           <div className="bg-surface rounded-3xl p-6 shadow-premium max-w-sm w-full border border-outline-variant relative">
-             <h3 className="font-serif text-headline-md mb-4 text-primary">Localização</h3>
-             <p className="text-body-md text-on-surface-variant mb-6">{tenant?.address}</p>
-             <Button variant="outline" className="w-full" onClick={() => setIsLocationModalOpen(false)}>Fechar</Button>
-           </div>
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="bg-surface rounded-card p-6 shadow-card max-w-sm w-full border border-line relative animate-scale-up text-left">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-brand">
+                <MapPin size={20} strokeWidth={2.2} />
+                <h3 className="font-display text-[20px] font-semibold">Endereço</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLocationModalOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-ink-soft hover:text-ink hover:bg-brand-tint/50 transition-colors"
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="font-sans text-[15px] text-ink leading-relaxed mb-5">
+              {tenant?.address}
+            </p>
+
+            <div className="flex flex-col gap-2.5">
+              <a
+                href={`https://maps.google.com/?q=${encodeURIComponent(tenant?.address || '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-full bg-brand text-white font-sans text-[14px] font-semibold hover:opacity-95 transition-all shadow-sm"
+              >
+                <span>Abrir no Google Maps</span>
+                <ExternalLink size={15} />
+              </a>
+
+              <button
+                type="button"
+                onClick={handleCopyAddress}
+                className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-full border border-line bg-surface text-ink font-sans text-[14px] font-medium hover:bg-brand-tint/30 transition-all"
+              >
+                {copiedAddress ? (
+                  <>
+                    <Check size={16} className="text-success" />
+                    <span>Copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={16} />
+                    <span>Copiar endereço</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
+      {/* Modal: Horários de Funcionamento */}
       {isHoursModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-surface/40 backdrop-blur-sm">
-           <div className="bg-surface rounded-3xl p-6 shadow-premium max-w-sm w-full border border-outline-variant relative">
-             <h3 className="font-serif text-headline-md mb-4 text-primary">Horários</h3>
-             <div className="space-y-2 mb-6">
-               {businessHours.map(h => (
-                 <div key={h.day_of_week} className="flex justify-between text-body-md text-on-surface-variant">
-                   <span>{['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][h.day_of_week]}</span>
-                   <span>{h.is_closed ? 'Fechado' : `${h.open_time.slice(0,5)} - ${h.close_time.slice(0,5)}`}</span>
-                 </div>
-               ))}
-             </div>
-             <Button variant="outline" className="w-full" onClick={() => setIsHoursModalOpen(false)}>Fechar</Button>
-           </div>
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="bg-surface rounded-card p-6 shadow-card max-w-sm w-full border border-line relative animate-scale-up text-left">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-brand">
+                <Clock size={20} strokeWidth={2.2} />
+                <h3 className="font-display text-[20px] font-semibold">Horários</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsHoursModalOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-ink-soft hover:text-ink hover:bg-brand-tint/50 transition-colors"
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-2 mb-6">
+              {businessHours.map((h) => {
+                const diaNome = diasSemana[h.day_of_week] || `Dia ${h.day_of_week}`;
+                const fechado = h.is_closed;
+                const horarioFormatado = fechado
+                  ? 'Fechado'
+                  : `${h.open_time?.slice(0, 5)} às ${h.close_time?.slice(0, 5)}`;
+
+                return (
+                  <div
+                    key={h.day_of_week}
+                    className="flex justify-between items-center py-1.5 border-b border-line/60 last:border-none text-[14px]"
+                  >
+                    <span className="font-medium text-ink">{diaNome}</span>
+                    <span
+                      className={
+                        fechado
+                          ? 'text-ink-soft font-normal italic'
+                          : 'text-brand font-semibold'
+                      }
+                    >
+                      {horarioFormatado}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Botao
+              variante="contorno"
+              tamanho="md"
+              className="w-full"
+              onClick={() => setIsHoursModalOpen(false)}
+            >
+              Fechar
+            </Botao>
+          </div>
         </div>
       )}
-    </div>
+    </TelaCliente>
   );
 };
 

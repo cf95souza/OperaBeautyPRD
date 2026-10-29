@@ -1,125 +1,210 @@
 import express from 'express';
-import pool from '../config/db.js';
-import { authMiddleware, requireRole } from '../middlewares/auth.js';
+import { z } from 'zod';
+import { validate } from '../middlewares/validate.js';
+import { authMiddleware, requireRole, optionalAuth } from '../middlewares/auth.js';
+import {
+  createReview,
+  getPendingReview,
+  listReviews,
+  listPublicReviews,
+  getReviewsStats,
+  toggleReviewVisibility,
+  replyToReview,
+  updateGoogleReviewUrl
+} from '../services/reviewService.js';
+import { resolveTenantId } from '../services/authService.js';
 
 const router = express.Router();
+const staffOnly = requireRole(['manager', 'superadmin', 'professional']);
+const managerOnly = requireRole(['manager', 'superadmin']);
 
-// 1. Cliente posta uma nova avaliação
-router.post('/', authMiddleware, requireRole(['client']), async (req, res) => {
+// Schemas Zod de Validação
+const createReviewSchema = z.object({
+  body: z.object({
+    appointment_id: z.string().uuid('ID de agendamento inválido.'),
+    rating: z.coerce.number().int().min(1, 'Nota mínima é 1.').max(5, 'Nota máxima é 5.'),
+    comment: z.string().max(1000, 'Comentário deve ter no máximo 1000 caracteres.').optional().nullable()
+  }),
+  params: z.any(),
+  query: z.any()
+});
+
+const listReviewsSchema = z.object({
+  query: z.object({
+    professional_id: z.string().uuid().optional(),
+    rating: z.coerce.number().int().min(1).max(5).optional(),
+    is_public: z.enum(['true', 'false']).transform(v => v === 'true').optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    offset: z.coerce.number().int().min(0).optional()
+  }),
+  body: z.any(),
+  params: z.any()
+});
+
+const visibilitySchema = z.object({
+  params: z.object({
+    id: z.string().uuid('ID de avaliação inválido.')
+  }),
+  body: z.object({
+    is_public: z.boolean()
+  }),
+  query: z.any()
+});
+
+const replySchema = z.object({
+  params: z.object({
+    id: z.string().uuid('ID de avaliação inválido.')
+  }),
+  body: z.object({
+    reply: z.string().min(1, 'Resposta não pode ser vazia.').max(1000, 'Resposta deve ter no máximo 1000 caracteres.')
+  }),
+  query: z.any()
+});
+
+const googleUrlSchema = z.object({
+  body: z.object({
+    google_review_url: z.string().url('URL do Google Reviews inválida.').max(500).or(z.literal(''))
+  }),
+  params: z.any(),
+  query: z.any()
+});
+
+// 1. Estatísticas de avaliações (Geral, Estrelas, Ranking de Profissionais e Link do Google)
+router.get('/stats', authMiddleware, staffOnly, async (req, res) => {
+  const tenant_id = req.user.tenant_id;
+
+  try {
+    const stats = await getReviewsStats(tenant_id);
+    return res.json(stats);
+  } catch (error) {
+    req.log?.error(error, 'Erro ao buscar estatísticas de avaliações');
+    return res.status(500).json({ error: 'Erro interno ao buscar estatísticas de avaliações.' });
+  }
+});
+
+// 2. Cliente posta uma nova avaliação
+router.post('/', authMiddleware, requireRole(['client']), validate(createReviewSchema), async (req, res) => {
   const { appointment_id, rating, comment } = req.body;
   const client_id = req.user.id;
   const tenant_id = req.user.tenant_id;
 
-  if (!appointment_id || !rating || rating < 1 || rating > 5) {
-    return res.status(400).json({ error: 'Dados inválidos.' });
-  }
-
   try {
-    // Verificar se o agendamento pertence ao cliente e está concluído
-    const apptQuery = await pool.query(
-      `SELECT staff_id as professional_id, status FROM public.cap_appointments 
-       WHERE id = $1 AND client_id = $2 AND tenant_id = $3`,
-      [appointment_id, client_id, tenant_id]
-    );
-
-    if (apptQuery.rows.length === 0) {
-      return res.status(404).json({ error: 'Agendamento não encontrado.' });
-    }
-
-    if (apptQuery.rows[0].status !== 'completed') {
-      return res.status(400).json({ error: 'Apenas agendamentos concluídos podem ser avaliados.' });
-    }
-
-    const professional_id = apptQuery.rows[0].professional_id;
-
-    // Inserir a review
-    await pool.query(
-      `INSERT INTO public.cap_reviews (tenant_id, appointment_id, client_id, professional_id, rating, comment)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [tenant_id, appointment_id, client_id, professional_id, rating, comment || null]
-    );
-
-    return res.status(201).json({ message: 'Avaliação enviada com sucesso!' });
+    const result = await createReview(tenant_id, client_id, appointment_id, rating, comment);
+    return res.status(201).json(result);
   } catch (error) {
-    if (error.constraint === 'unique_appointment_review') {
-      return res.status(400).json({ error: 'Este agendamento já foi avaliado.' });
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Este atendimento já possui uma avaliação registrada.' });
     }
-    console.error('Erro ao postar review:', error);
+    req.log?.error(error, 'Erro ao postar review');
     return res.status(500).json({ error: 'Erro interno ao salvar avaliação.' });
   }
 });
 
-// 2. Buscar agendamentos pendentes de avaliação para o cliente logado
+// 3. Buscar agendamentos pendentes de avaliação para o cliente logado
 router.get('/pending', authMiddleware, requireRole(['client']), async (req, res) => {
   const client_id = req.user.id;
   const tenant_id = req.user.tenant_id;
 
   try {
-    // Busca agendamentos concluídos que NÃO existem na tabela de reviews
-    // Retorna apenas 1 (o mais recente)
-    const pendingQuery = await pool.query(
-      `SELECT a.id as appointment_id, a.start_time as appointment_date, s.name as service_name, p.name as professional_name
-       FROM public.cap_appointments a
-       JOIN public.cap_services s ON a.service_id = s.id
-       JOIN public.cap_staff p ON a.staff_id = p.id
-       LEFT JOIN public.cap_reviews r ON a.id = r.appointment_id
-       WHERE a.client_id = $1 AND a.tenant_id = $2 
-       AND a.status = 'completed'
-       AND r.id IS NULL
-       ORDER BY a.start_time DESC
-       LIMIT 1`,
-      [client_id, tenant_id]
-    );
-
-    if (pendingQuery.rows.length === 0) {
-      return res.json(null);
-    }
-
-    return res.json(pendingQuery.rows[0]);
+    const pending = await getPendingReview(tenant_id, client_id);
+    return res.json(pending ? [pending] : []);
   } catch (error) {
-    console.error('Erro ao buscar reviews pendentes:', error);
-    return res.status(500).json({ error: 'Erro interno' });
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error(error, 'Erro ao buscar pendência de review');
+    return res.status(500).json({ error: 'Erro interno ao buscar avaliação pendente.' });
   }
 });
 
-// 3. Buscar médias de avaliação (Para gestores)
-router.get('/stats', authMiddleware, requireRole(['manager', 'superadmin']), async (req, res) => {
-  const tenant_id = req.user.tenant_id;
+// 4. Vitrine pública de avaliações (Para Home, Lookbook e Mini-site do salão)
+router.get('/public', optionalAuth, async (req, res) => {
+  let tenant_id = req.query.tenant_id || req.user?.tenant_id;
+  const tenant_slug = req.query.tenant_slug;
+  const limit = req.query.limit || 10;
+
+  if (!tenant_id && tenant_slug) {
+    tenant_id = await resolveTenantId(null, tenant_slug);
+  }
+
+  if (!tenant_id) {
+    return res.status(400).json({ error: 'tenant_id ou tenant_slug é obrigatório.' });
+  }
 
   try {
-    // Média geral do salão
-    const tenantAvgQuery = await pool.query(
-      `SELECT ROUND(AVG(rating), 1) as average, COUNT(*) as total_reviews
-       FROM public.cap_reviews WHERE tenant_id = $1`,
-      [tenant_id]
-    );
-
-    // Média por profissional
-    const staffAvgQuery = await pool.query(
-      `SELECT p.id, p.name, 
-              COALESCE(ROUND(AVG(r.rating), 1), 0) as average, 
-              COUNT(r.id) as total_reviews
-       FROM public.cap_staff p
-       LEFT JOIN public.cap_reviews r ON p.id = r.professional_id
-       WHERE p.tenant_id = $1 AND p.role = 'professional'
-       GROUP BY p.id, p.name
-       ORDER BY average DESC, total_reviews DESC`,
-      [tenant_id]
-    );
-
-    return res.json({
-      tenant: {
-        average: parseFloat(tenantAvgQuery.rows[0].average || 0),
-        total: parseInt(tenantAvgQuery.rows[0].total_reviews, 10)
-      },
-      staff: staffAvgQuery.rows.map(s => ({
-        ...s,
-        average: parseFloat(s.average)
-      }))
-    });
+    const reviews = await listPublicReviews(tenant_id, limit);
+    return res.json(reviews);
   } catch (error) {
-    console.error('Erro ao buscar stats de reviews:', error);
-    return res.status(500).json({ error: 'Erro interno' });
+    req.log?.error(error, 'Erro ao listar reviews públicos');
+    return res.status(500).json({ error: 'Erro ao buscar avaliações públicas.' });
+  }
+});
+
+// 5. Equipe/Gestor lista todas as avaliações com filtros
+router.get('/', authMiddleware, staffOnly, validate(listReviewsSchema), async (req, res) => {
+  const tenant_id = req.user.tenant_id;
+  const { professional_id, rating, is_public, limit, offset } = req.query;
+
+  try {
+    const list = await listReviews(tenant_id, {
+      professionalId: professional_id,
+      rating,
+      isPublic: is_public,
+      limit,
+      offset
+    });
+    return res.json(list);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error(error, 'Erro ao listar avaliações');
+    return res.status(500).json({ error: 'Erro interno ao listar avaliações.' });
+  }
+});
+
+// 6. Moderação de Visibilidade Pública (Gestor)
+router.patch('/:id/visibility', authMiddleware, managerOnly, validate(visibilitySchema), async (req, res) => {
+  const tenant_id = req.user.tenant_id;
+  const { id } = req.params;
+  const { is_public } = req.body;
+
+  try {
+    const updated = await toggleReviewVisibility(tenant_id, id, is_public);
+    return res.json(updated);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error(error, 'Erro ao alterar visibilidade de avaliação');
+    return res.status(500).json({ error: 'Erro ao alterar visibilidade.' });
+  }
+});
+
+// 7. Resposta à Avaliação (Gestor ou Profissional)
+router.post('/:id/reply', authMiddleware, staffOnly, validate(replySchema), async (req, res) => {
+  const tenant_id = req.user.tenant_id;
+  const { id } = req.params;
+  const { reply } = req.body;
+  const staff_id = req.user.staff_id || req.user.id;
+
+  try {
+    const updated = await replyToReview(tenant_id, id, reply, staff_id);
+    return res.json(updated);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error(error, 'Erro ao responder avaliação');
+    return res.status(500).json({ error: 'Erro ao registrar resposta.' });
+  }
+});
+
+// 8. Atualizar link do Google Reviews do Salão (Gestor)
+router.put('/google-url', authMiddleware, managerOnly, validate(googleUrlSchema), async (req, res) => {
+  const tenant_id = req.user.tenant_id;
+  const { google_review_url } = req.body;
+
+  try {
+    const updated = await updateGoogleReviewUrl(tenant_id, google_review_url);
+    return res.json(updated);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error(error, 'Erro ao atualizar URL do Google Reviews');
+    return res.status(500).json({ error: 'Erro ao atualizar link do Google Reviews.' });
   }
 });
 

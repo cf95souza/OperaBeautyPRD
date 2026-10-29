@@ -9,7 +9,10 @@ const router = express.Router();
 
 const listStaffSchema = z.object({
   query: z.object({
-    tenant_id: z.string().uuid('ID do inquilino inválido.').optional()
+    tenant_id: z.string().optional().transform(val => {
+      if (!val || val === 'undefined' || val === 'null') return undefined;
+      return val;
+    }).pipe(z.string().uuid('ID do inquilino inválido.').optional())
   }),
   body: z.any(), params: z.any()
 });

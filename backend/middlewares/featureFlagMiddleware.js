@@ -26,7 +26,16 @@ export const requireFeature = (featureName) => {
       }
 
       const { plan_features, flag_active } = result.rows[0];
-      const hasPlanFeature = plan_features && Array.isArray(plan_features) && plan_features.includes(featureName);
+      const hasPlanFeature = plan_features && Array.isArray(plan_features) && (
+        plan_features.includes(featureName) ||
+        plan_features.some(f => typeof f === 'string' && (
+          f.toLowerCase() === featureName.toLowerCase() ||
+          (featureName === 'pdv' && f.toLowerCase().includes('pdv')) ||
+          (featureName === 'clube' && f.toLowerCase().includes('clube')) ||
+          (featureName === 'giftcards' && (f.toLowerCase().includes('vale') || f.toLowerCase().includes('gift'))) ||
+          (featureName === 'whatsapp_gateway' && (f.toLowerCase().includes('whatsapp_gateway') || f.toLowerCase().includes('wa_gateway')))
+        ))
+      );
       
       if (!hasPlanFeature && !flag_active) {
         return res.status(403).json({ error: `Este recurso (${featureName}) não está disponível para o plano contratado do seu estabelecimento.` });

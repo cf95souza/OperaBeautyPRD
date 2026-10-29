@@ -16,7 +16,10 @@ const router = express.Router();
 
 const listCouponsSchema = z.object({
   query: z.object({
-    tenant_id: z.string().uuid('ID do inquilino inválido.'),
+    tenant_id: z.string().optional().transform(val => {
+      if (!val || val === 'undefined' || val === 'null') return undefined;
+      return val;
+    }).pipe(z.string().uuid('ID do inquilino inválido.').optional()),
     code: z.string().optional()
   }),
   body: z.any(), params: z.any()
@@ -27,7 +30,10 @@ const getCouponSchema = z.object({
     id: z.string().uuid('ID do cupom inválido.')
   }),
   query: z.object({
-    tenant_id: z.string().uuid('ID do inquilino inválido.')
+    tenant_id: z.string().optional().transform(val => {
+      if (!val || val === 'undefined' || val === 'null') return undefined;
+      return val;
+    }).pipe(z.string().uuid('ID do inquilino inválido.').optional())
   }),
   body: z.any()
 });
@@ -49,9 +55,12 @@ const redeemCouponSchema = z.object({
     id: z.string().uuid('ID do cupom inválido.')
   }),
   query: z.object({
-    tenant_id: z.string().uuid('ID do inquilino inválido.')
-  }),
-  body: z.any()
+    tenant_id: z.string().optional().transform(val => {
+      if (!val || val === 'undefined' || val === 'null') return undefined;
+      return val;
+    }).pipe(z.string().uuid('ID do inquilino inválido.').optional())
+  }).optional(),
+  body: z.any().optional()
 });
 
 const updateCouponSchema = z.object({
@@ -77,10 +86,15 @@ const deleteCouponSchema = z.object({
 });
 
 router.get('/', authMiddleware, validate(listCouponsSchema), async (req, res) => {
-  const { tenant_id, code } = req.query;
+  const targetTenantId = req.user.role === 'superadmin' ? req.query.tenant_id : (req.user.tenant_id || req.query.tenant_id);
+  const { code } = req.query;
+
+  if (!targetTenantId) {
+    return res.status(400).json({ error: 'tenant_id é obrigatório.' });
+  }
 
   try {
-    const mapped = await listCoupons(tenant_id, code);
+    const mapped = await listCoupons(targetTenantId, code);
     return res.json(mapped);
   } catch (error) {
     req.log.error(error, 'Erro ao listar cupons');
@@ -90,10 +104,14 @@ router.get('/', authMiddleware, validate(listCouponsSchema), async (req, res) =>
 
 router.get('/:id', authMiddleware, validate(getCouponSchema), async (req, res) => {
   const { id } = req.params;
-  const { tenant_id } = req.query;
+  const targetTenantId = req.user.role === 'superadmin' ? req.query.tenant_id : (req.user.tenant_id || req.query.tenant_id);
+
+  if (!targetTenantId) {
+    return res.status(400).json({ error: 'tenant_id é obrigatório.' });
+  }
 
   try {
-    const coupon = await getCouponById(id, tenant_id);
+    const coupon = await getCouponById(id, targetTenantId);
     return res.json(coupon);
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
@@ -126,10 +144,14 @@ router.post('/', authMiddleware, requireRole(['manager']), validate(createCoupon
 
 router.post('/:id/redeem', authMiddleware, validate(redeemCouponSchema), async (req, res) => {
   const { id } = req.params;
-  const { tenant_id } = req.query;
+  const tenantId = req.query?.tenant_id || req.user?.tenant_id;
   
+  if (!tenantId) {
+    return res.status(400).json({ error: 'tenant_id é obrigatório.' });
+  }
+
   try {
-    const { currentCoupon, updatedCoupon } = await redeemCoupon(id, tenant_id);
+    const { currentCoupon, updatedCoupon } = await redeemCoupon(id, tenantId);
 
     await logAudit({
       req,

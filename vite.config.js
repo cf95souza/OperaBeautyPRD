@@ -7,11 +7,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: process.env.API_TARGET || 'http://localhost:5001',
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://localhost:5000',
+        target: process.env.API_TARGET || 'http://localhost:5001',
         changeOrigin: true,
       }
     },
@@ -19,21 +19,31 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'autoUpdate',
       // NÃO injetar registro automático — o manifest é dinâmico via script inline no index.html
       injectRegister: null,
       workbox: {
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         importScripts: ['/custom-sw.js'],
-        // Garantir que navegação sempre retorna o index.html (SPA)
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        // Garantir que navegação sempre retorna o /index.html raiz (SPA)
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api/, /^\/uploads/],
         runtimeCaching: [
           {
-            urlPattern: /^https?.*/,
+            urlPattern: ({ request, url }) => request.mode === 'navigate' && !url.pathname.startsWith('/api'),
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'fallback-cache',
+              cacheName: 'pages-cache',
+            }
+          },
+          {
+            urlPattern: ({ url }) => !url.pathname.startsWith('/api') && !url.pathname.startsWith('/uploads'),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'static-assets-cache',
             }
           }
         ]

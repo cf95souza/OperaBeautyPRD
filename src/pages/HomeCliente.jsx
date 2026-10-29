@@ -1,49 +1,74 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
+import { useBooking } from '../context/BookingContext';
 import { api } from '../lib/api';
+import { useSEO } from '../hooks/useSEO';
 import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
-import PushNotificationManager from '../components/PushNotificationManager';
 import ReviewModal from '../components/ReviewModal';
 import AssinarTermoModal from '../components/AssinarTermoModal';
+import { ModalIndicarAmiga } from '../components/cliente/ModalIndicarAmiga';
+import { Botao } from '../components/ui/Botao';
+import { Chip } from '../components/ui/Chip';
+import { TelaCliente } from '../components/ui/TelaCliente';
+import {
+  Bell,
+  Plus,
+  ArrowRight,
+  Star,
+  RotateCcw,
+  Users,
+  MapPin,
+  Calendar,
+  Clock,
+  User,
+  X,
+  Share2,
+  Copy,
+  Check,
+  Sparkles,
+  Globe
+} from 'lucide-react';
 
 const HomeCliente = () => {
   const { tenant_slug } = useParams();
   const navigate = useNavigate();
   const { tenant, session } = useTenant();
+  const { updateBooking } = useBooking();
+
+  // Estados dos dados principais
+  const [proximoHorario, setProximoHorario] = useState(null);
+  const [activeWaitlistOffer, setActiveWaitlistOffer] = useState(null);
+  const [ultimoAgendamento, setUltimoAgendamento] = useState(null);
+  const [loadingAppts, setLoadingAppts] = useState(true);
   const [services, setServices] = useState([]);
-  const [loadingServices, setLoadingServices] = useState(true);
-  const [walletBalance, setWalletBalance] = useState(0);
-  const [lookbooks, setLookbooks] = useState([]);
-  const [loadingLookbooks, setLoadingLookbooks] = useState(true);
-  const [selectedLook, setSelectedLook] = useState(null);
-  
+  const [membershipSessions, setMembershipSessions] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Metadados dinâmicos de SEO e compartilhamento social no portal do cliente (F3)
+  useSEO({
+    title: tenant?.name ? `${tenant.name} | Agendamento Online` : 'OperaBeauty | Agendamento',
+    description: tenant?.welcome_message || `Agende serviços no ${tenant?.name || 'salão'} com facilidade, acumule cashback e acompanhe seus horários.`,
+    image: tenant?.meta_image_url || tenant?.logo_url || tenant?.banner_url,
+    url: typeof window !== 'undefined' ? `${window.location.origin}/${tenant_slug}/home` : undefined,
+    canonical: typeof window !== 'undefined' ? `${window.location.origin}/${tenant_slug}/home` : undefined
+  });
+
+  // Modais e alertas
   const [pendingReview, setPendingReview] = useState(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-  
   const [pendingConsents, setPendingConsents] = useState([]);
   const [selectedConsent, setSelectedConsent] = useState(null);
+  const [detalhesModalOpen, setDetalhesModalOpen] = useState(false);
+  const [indicarModalOpen, setIndicarModalOpen] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  const getVipBadge = (tier) => {
-    const styles = {
-      Prata: 'bg-slate-100 text-slate-700 border border-slate-200/80 shadow-[0_2px_4px_rgba(148,163,184,0.06)]',
-      Ouro: 'bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A]/60 shadow-[0_2px_4px_rgba(180,83,9,0.04)]',
-      VIP: 'bg-[#FAF5FF] text-[#6B21A8] border border-[#E9D5FF]/60 shadow-[0_2px_4px_rgba(107,33,168,0.04)]',
-      Black: 'bg-neutral-900 text-amber-200 border border-neutral-800 shadow-[0_2px_6px_rgba(0,0,0,0.12)] font-bold'
-    };
-    
-    const label = tier || 'Prata';
-    const styleClass = styles[label] || styles.Prata;
-    
-    return (
-      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-all duration-300 ${styleClass}`}>
-        <span className="material-symbols-outlined text-[12px] filled" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
-        {label}
-      </span>
-    );
-  };
+  // Faixa de lembretes
+  const [showReminderBanner, setShowReminderBanner] = useState(
+    () => !localStorage.getItem('operabeauty_dismiss_reminder')
+  );
 
+  // Carrossel de Banners
   const banners = Array.isArray(tenant?.banners) && tenant.banners.length > 0
     ? tenant.banners
     : (tenant?.banner_url || tenant?.banner_title || tenant?.banner_subtitle)
@@ -62,405 +87,732 @@ const HomeCliente = () => {
   useEffect(() => {
     if (banners.length <= 1) return;
     const interval = setInterval(() => {
-      setCurrentSlide(prev => (prev + 1) % banners.length);
+      setCurrentSlide((prev) => (prev + 1) % banners.length);
     }, 5000);
     return () => clearInterval(interval);
-  }, [banners]);
+  }, [banners.length]);
 
+  // Carregamento dos dados do cliente e do salão
   useEffect(() => {
     if (!tenant) return;
-    const fetchServices = async () => {
-      setLoadingServices(true);
+
+    let isMounted = true;
+
+    const fetchData = async () => {
+      // 1. Busca os serviços disponíveis
       try {
         const data = await api.services.list(tenant.id);
-        if (data) {
-          // Apenas os 5 primeiros que estão ativos
-          setServices(data.filter(s => s.is_active).slice(0, 5));
+        if (data && isMounted) {
+          setServices(data.filter((s) => s.is_active).slice(0, 6));
         }
       } catch (err) {
-        console.error("Erro ao carregar serviços:", err);
-      } finally {
-        setLoadingServices(false);
+        console.error('Erro ao carregar serviços:', err);
       }
-    };
 
-    const fetchWallet = async () => {
-      try {
-        const wallet = await api.wallets.getMyWallet();
-        if (wallet) setWalletBalance(parseFloat(wallet.balance || 0));
-      } catch (err) {
-        console.error(err);
-      }
-    };
+      // 2. Dados específicos do cliente autenticado
+      if (session && session.role === 'client') {
+        // Agendamentos (Próximo e Último concluído)
+        setLoadingAppts(true);
+        try {
+          const appts = await api.appointments.list({
+            client_id: session.id,
+            tenant_id: tenant.id
+          });
 
-    const fetchLookbooks = async () => {
-      setLoadingLookbooks(true);
-      try {
-        const data = await api.lookbook.list(tenant.id);
-        setLookbooks(data || []);
-      } catch (err) {
-        console.error("Erro ao carregar lookbooks:", err);
-      } finally {
-        setLoadingLookbooks(false);
-      }
-    };
+          if (appts && Array.isArray(appts) && isMounted) {
+            // Início do dia de hoje (00:00) para garantir que agendamentos de hoje continuem visíveis
+            const inicioDeHoje = new Date();
+            inicioDeHoje.setHours(0, 0, 0, 0);
 
-    const fetchPendingReviews = async () => {
-      try {
-        const pending = await api.request('/reviews/pending');
-        if (pending) {
-          setPendingReview(pending);
-          setShowReviewModal(true);
+            // Próximo agendamento futuro ou de hoje ainda ativo
+            const futuros = appts
+              .filter((a) => {
+                if (!['scheduled', 'in-progress'].includes(a.status)) return false;
+                const dataAgendamento = new Date(a.start_time);
+                return dataAgendamento >= inicioDeHoje;
+              })
+              .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+
+            setProximoHorario(futuros[0] || null);
+
+            // Último agendamento concluído para "Repetir último serviço"
+            const passados = appts
+              .filter((a) => a.status === 'completed')
+              .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+
+            setUltimoAgendamento(passados[0] || null);
+          }
+        } catch (err) {
+          console.error('Erro ao buscar agendamentos:', err);
+        } finally {
+          if (isMounted) setLoadingAppts(false);
         }
-      } catch (err) {
-        console.error("Erro ao buscar avaliações pendentes:", err);
-      }
-    };
 
-    const fetchNotificationsCount = async () => {
-      try {
-        const notifs = await api.request('/notifications');
-        if (notifs) {
-          setUnreadCount(notifs.filter(n => !n.is_read).length);
+        // Clube / Sessões do Cliente
+        try {
+          const myMembership = await api.memberships.getMy();
+          if (myMembership && isMounted) {
+            setMembershipSessions(myMembership.remaining_sessions ?? null);
+          }
+        } catch (err) {
+          // Salão pode não ter clube ativo
         }
-      } catch (err) {
-        console.error("Erro ao buscar notificações:", err);
-      }
-    };
 
-    const fetchPendingConsents = async () => {
-      try {
-        const consents = await api.request('/consents/pending');
-        if (consents && consents.length > 0) {
-          setPendingConsents(consents);
+        // Notificações não lidas
+        try {
+          const notifs = await api.request('/notifications');
+          if (notifs && isMounted) {
+            setUnreadCount(notifs.filter((n) => !n.is_read).length);
+          }
+        } catch (err) {
+          // Silencioso
         }
-      } catch (err) {
-        console.error("Erro ao buscar termos pendentes:", err);
+
+        // Avaliação pendente
+        try {
+          const pending = await api.request('/reviews/pending');
+          const reviewItem = Array.isArray(pending) ? pending[0] : pending;
+          if (reviewItem && reviewItem.appointment_id && isMounted) {
+            setPendingReview(reviewItem);
+            setShowReviewModal(true);
+          }
+        } catch (err) {
+          // Silencioso
+        }
+
+        // Termos / Consentimentos pendentes
+        try {
+          const consents = await api.request('/consents/pending');
+          if (consents && consents.length > 0 && isMounted) {
+            setPendingConsents(consents);
+          }
+        } catch (err) {
+          // Silencioso
+        }
+
+        // Oferta de vaga liberada da lista de espera (D6 P1)
+        try {
+          const waitlistData = await api.waitlist.getMy();
+          if (waitlistData && Array.isArray(waitlistData)) {
+            const offered = waitlistData.find((w) => w.status === 'offered');
+            if (offered && isMounted) {
+              setActiveWaitlistOffer(offered);
+            }
+          }
+        } catch (err) {
+          // Silencioso
+        }
       }
     };
 
-    fetchServices();
-    fetchLookbooks();
-    if (session && session.role === 'client') {
-      fetchWallet();
-      fetchPendingReviews();
-      fetchNotificationsCount();
-      fetchPendingConsents();
-    }
+    fetchData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [tenant, session]);
 
+  // Ativação de lembrete push
+  const handleAtivarLembrete = async () => {
+    try {
+      if ('Notification' in window) {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          localStorage.setItem('operabeauty_dismiss_reminder', 'true');
+          setShowReminderBanner(false);
+        } else {
+          localStorage.setItem('operabeauty_dismiss_reminder', 'true');
+          setShowReminderBanner(false);
+        }
+      } else {
+        localStorage.setItem('operabeauty_dismiss_reminder', 'true');
+        setShowReminderBanner(false);
+      }
+    } catch (err) {
+      setShowReminderBanner(false);
+    }
+  };
+
+  const handleDispensarLembrete = () => {
+    localStorage.setItem('operabeauty_dismiss_reminder', 'true');
+    setShowReminderBanner(false);
+  };
+
+  // Repetir último serviço
+  const handleRepetirUltimoServico = () => {
+    if (ultimoAgendamento) {
+      navigate(`/${tenant_slug}/agendar/horarios`, {
+        state: {
+          preselectedServiceId: ultimoAgendamento.service_id,
+          preselectedStaffId: ultimoAgendamento.staff_id,
+          serviceName: ultimoAgendamento.service_name
+        }
+      });
+    } else {
+      navigate(`/${tenant_slug}/agendar/servicos`);
+    }
+  };
+
+  // Remarcar em 1 toque a partir do cartão da Home (D6 P1)
+  const handleRemarcarProximo = () => {
+    if (!proximoHorario) return;
+    updateBooking({
+      rescheduleAppointmentId: proximoHorario.id,
+      originalAppointment: proximoHorario,
+      service: {
+        id: proximoHorario.service_id,
+        name: proximoHorario.service_name,
+        price: proximoHorario.total_price || 0,
+        duration: 60
+      },
+      services: [{
+        id: proximoHorario.service_id,
+        name: proximoHorario.service_name,
+        price: proximoHorario.total_price || 0,
+        duration_minutes: 60
+      }],
+      professional: proximoHorario.staff_id
+        ? { id: proximoHorario.staff_id, name: proximoHorario.staff_name }
+        : { id: 'any', name: 'Qualquer profissional' }
+    });
+    navigate(`/${tenant_slug}/agendar/horarios`);
+  };
+
+  // Compartilhar link de indicação
+  const handleCopiarIndicaLink = () => {
+    const link = `${window.location.origin}/${tenant_slug}/cadastro?ref=${session?.id || 'amiga'}`;
+    navigator.clipboard.writeText(link);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  // Dados formatados do próximo agendamento
+  const dataProximo = proximoHorario ? new Date(proximoHorario.start_time) : null;
+  const diaSemana = dataProximo
+    ? dataProximo
+        .toLocaleDateString('pt-BR', { weekday: 'short' })
+        .toUpperCase()
+        .replace('.', '')
+        .slice(0, 3)
+    : '';
+  const diaNumero = dataProximo ? dataProximo.getDate() : '';
+  const horaFormatada = dataProximo
+    ? dataProximo.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : '';
+
+  // Monograma e primeiro nome
+  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : 'T';
+  const primeiroNome = session?.name ? session.name.trim().split(' ')[0] : '';
+
   return (
-    <div className="bg-background text-on-background min-h-screen pb-[80px] md:pb-0 font-body-md text-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
-      {/* TopAppBar */}
-      <header className="w-full top-0 sticky z-40 bg-surface shadow-sm transition-all duration-300 ease-in-out pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 md:pt-4">
-        <div className="flex justify-between items-center px-gutter py-sm w-full max-w-7xl mx-auto">
-          <div className="w-10"></div>{/* Spacer to keep title centered */}
-          <div className="flex items-center justify-center gap-2 flex-1">
+    <TelaCliente temNavegacaoInferior className="selection:bg-brand-tint selection:text-brand">
+      {/* 1. Cabeçalho Fixo Rosé Editorial */}
+      <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur-md border-b border-line/40 px-5 pt-3 pb-3 max-w-[420px] mx-auto w-full flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          {/* Logo Circular */}
+          <div className="w-9 h-9 rounded-full bg-ink border border-gold flex items-center justify-center overflow-hidden shadow-sm select-none shrink-0">
             {tenant?.logo_url ? (
-              <img 
-                src={tenant.logo_url} 
-                alt={tenant.name} 
-                className="h-8 md:h-10 object-contain rounded-md" 
-                onError={(e) => { e.target.style.display = 'none'; }}
+              <img
+                src={tenant.logo_url}
+                alt={tenant?.name}
+                className="w-full h-full object-cover p-0.5 rounded-full"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
               />
             ) : (
-              <span className="material-symbols-outlined text-primary font-headline-md text-headline-md shrink-0">spa</span>
+              <span className="font-display italic text-gold text-[17px] leading-none">
+                {initialLetter}
+              </span>
             )}
-            <h1 className="font-headline-md text-headline-md-mobile md:text-headline-md text-primary tracking-tight">
-              {tenant?.name || 'Carregando...'}
-            </h1>
           </div>
-          <div className="w-10 flex justify-end">
-            <button 
-              onClick={() => navigate(`/${tenant_slug}/notificacoes`)}
-              className="text-primary hover:bg-surface-variant/30 p-2 rounded-full transition-colors relative"
-            >
-              <span className="material-symbols-outlined">notifications</span>
-              {unreadCount > 0 && (
-                <span className="absolute top-2 right-2 w-3 h-3 bg-error text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-          </div>
+          <span className="font-display text-[18px] font-semibold text-brand tracking-tight">
+            {tenant?.name || 'Studio Thais'}
+          </span>
         </div>
+
+        {/* Ícone de Notificações */}
+        <button
+          type="button"
+          onClick={() => navigate(`/${tenant_slug}/notificacoes`)}
+          className="w-10 h-10 rounded-full flex items-center justify-center text-ink hover:text-brand hover:bg-brand-tint/40 transition-colors relative"
+          aria-label="Notificações"
+        >
+          <Bell size={21} strokeWidth={2} />
+          {unreadCount > 0 && (
+            <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-brand rounded-full ring-2 ring-bg animate-pulse" />
+          )}
+        </button>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-container-margin md:px-xl py-lg space-y-xl animate-fade-in-up">
-        
-        {/* Hero Section */}
-        <section className="space-y-sm">
-          <PushNotificationManager tenantSlug={tenant_slug} />
-          
-          <div className="mb-md">
-            <h2 className="font-headline-lg-mobile md:text-headline-lg text-on-surface flex items-center gap-2 flex-wrap">
-              Olá, {session?.name ? session.name.split(' ')[0] : 'Bem-vindo(a)'}
-              {session?.vip_tier && getVipBadge(session.vip_tier)}
-            </h2>
-            <p className="text-secondary">
-              {tenant?.welcome_message || 'Encontre sua serenidade hoje.'}
-            </p>
-          </div>
-        </section>
-
-        {/* Alertas de Assinatura Pendente */}
-        {pendingConsents.length > 0 && (
-          <div className="bg-[#fff3e0] border border-[#ffb74d] rounded-2xl p-4 shadow-sm animate-fade-in-up flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-4">
-            <div className="flex gap-3 items-start">
-              <span className="material-symbols-outlined text-[#e65100] mt-1 shrink-0">gavel</span>
-              <div>
-                <h3 className="font-headline-sm text-[#e65100]">Ação Necessária</h3>
-                <p className="text-[#e65100]/80 text-sm font-medium">Você possui {pendingConsents.length} termo(s) aguardando assinatura digital.</p>
-              </div>
+      {/* Conteúdo Principal Centralizado Mobile */}
+      <main className="w-full max-w-[420px] mx-auto px-5 pt-3 space-y-5 flex-grow">
+        {/* 2. Faixa de Lembretes (Fina e Dispensável) */}
+        {showReminderBanner && (
+          <div className="w-full h-11 px-3.5 rounded-full bg-[#F6E4E4] border border-line/60 flex items-center justify-between shadow-xs animate-fade-in text-[13px]">
+            <span className="font-sans font-medium text-[#2B2327] truncate pr-2">
+              Receber lembrete 24h antes?
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleAtivarLembrete}
+                className="h-7 px-3.5 rounded-full bg-brand text-white font-sans text-[12px] font-semibold hover:opacity-90 active:scale-95 transition-all shadow-xs"
+              >
+                Ativar
+              </button>
+              <button
+                type="button"
+                onClick={handleDispensarLembrete}
+                className="w-6 h-6 rounded-full flex items-center justify-center text-ink-soft hover:text-ink transition-colors"
+                aria-label="Dispensar aviso"
+              >
+                <X size={14} />
+              </button>
             </div>
-            <button 
+          </div>
+        )}
+
+        {/* Alerta de Assinatura de Termo Pendente */}
+        {pendingConsents.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200/80 rounded-[20px] p-4 shadow-sm flex items-center justify-between">
+            <div className="space-y-0.5 pr-2">
+              <span className="text-[12px] font-bold text-amber-900 uppercase tracking-wider block">
+                Termo Pendente
+              </span>
+              <p className="text-[13px] text-amber-900/90 font-medium">
+                Você possui termo de consentimento para assinar.
+              </p>
+            </div>
+            <button
+              type="button"
               onClick={() => setSelectedConsent(pendingConsents[0])}
-              className="bg-[#e65100] text-white px-6 py-2 rounded-xl font-bold hover:bg-[#ef6c00] transition-colors w-full sm:w-auto shrink-0"
+              className="h-8 px-3.5 rounded-full bg-amber-800 text-white text-[12px] font-semibold shrink-0 hover:bg-amber-900 transition-colors"
             >
-              Assinar Agora
+              Assinar
             </button>
           </div>
         )}
 
-        {/* Primary Actions (Bento Grid Style) */}
-        <section className="grid grid-cols-2 gap-md">
-          <button 
-            onClick={() => navigate(`/${tenant_slug}/agendar/servicos`)}
-            className="flex flex-col items-start p-lg bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0px_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 group border border-surface-variant/50 relative overflow-hidden text-left animate-fade-in"
-          >
-            <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="w-12 h-12 flex items-center justify-center bg-primary-container text-on-primary-container rounded-full mb-lg relative z-10 shrink-0 shadow-sm">
-              <span className="material-symbols-outlined text-headline-md">calendar_add_on</span>
-            </div>
-            <span className="font-label-md text-label-md text-on-surface relative z-10 group-hover:text-primary transition-colors">Agendar Novo<br />Horário</span>
-          </button>
-
-          <button 
-            onClick={() => navigate(`/${tenant_slug}/historico`)}
-            className="flex flex-col items-start p-lg bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0px_8px_30px_rgba(0,0,0,0.08)] transition-all duration-300 group border border-surface-variant/50 relative overflow-hidden text-left animate-fade-in"
-          >
-            <div className="absolute inset-0 bg-surface-variant/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="w-12 h-12 flex items-center justify-center bg-surface-variant text-on-surface-variant rounded-full mb-lg relative z-10 shrink-0 shadow-sm">
-              <span className="material-symbols-outlined text-headline-md">history</span>
-            </div>
-            <span className="font-label-md text-label-md text-on-surface relative z-10 group-hover:text-on-surface-variant transition-colors">Meus<br />Agendamentos</span>
-          </button>
-        </section>
-
-        {/* Atalho Carteira Digital (Cashback) */}
-        {session && session.role === 'client' && (
-          <section 
-            onClick={() => navigate(`/${tenant_slug}/carteira`)}
-            className="flex items-center justify-between p-lg bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0px_8px_30px_rgba(0,0,0,0.08)] border border-surface-variant/50 cursor-pointer transition-all group active:scale-[0.99] animate-fade-in"
-          >
-            <div className="flex items-center gap-md">
-              <div className="w-12 h-12 flex items-center justify-center bg-primary/10 text-primary rounded-full shrink-0 shadow-sm">
-                <span className="material-symbols-outlined text-[24px]">wallet</span>
+        {/* 2.1 Banner de Oferta de Vaga Liberada da Lista de Espera (D6 P1) */}
+        {activeWaitlistOffer && (
+          <section className="animate-fade-in-down">
+            <div className="w-full bg-linear-to-r from-brand-tint via-surface to-brand-tint/60 border-2 border-brand/50 rounded-card p-4 shadow-sm flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-brand text-white flex items-center justify-center shrink-0 shadow-xs animate-pulse">
+                  <Sparkles size={18} />
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-brand block">
+                    ⚡ Vaga Liberada para Você!
+                  </span>
+                  <p className="text-xs font-bold text-ink leading-tight mt-0.5">
+                    {activeWaitlistOffer.service_name || 'Procedimento'} · {new Date(`${activeWaitlistOffer.desired_date}T12:00:00Z`).toLocaleDateString('pt-BR')}
+                  </p>
+                  <p className="text-[11px] text-ink-soft mt-0.5">
+                    Você tem prioridade para garantir este horário.
+                  </p>
+                </div>
               </div>
-              <div className="text-left">
-                <span className="font-label-sm text-secondary text-[11px] block uppercase tracking-wider">Meu Saldo de Cashback</span>
-                <span className="font-headline-sm text-primary font-bold text-lg">R$ {walletBalance.toFixed(2).replace('.', ',')}</span>
-              </div>
-            </div>
-            <div className="text-secondary group-hover:text-primary transition-colors flex items-center justify-center">
-              <span className="material-symbols-outlined">chevron_right</span>
+              <button
+                type="button"
+                onClick={() => {
+                  updateBooking({
+                    service: activeWaitlistOffer.service_id ? {
+                      id: activeWaitlistOffer.service_id,
+                      name: activeWaitlistOffer.service_name || 'Serviço',
+                      price: activeWaitlistOffer.service_price || 0,
+                      duration: 60
+                    } : null,
+                    professional: activeWaitlistOffer.professional_id ? {
+                      id: activeWaitlistOffer.professional_id,
+                      name: activeWaitlistOffer.professional_name || 'Profissional'
+                    } : { id: 'any', name: 'Qualquer profissional' },
+                    date: activeWaitlistOffer.desired_date
+                  });
+                  navigate(`/${tenant_slug}/agendar/horarios?waitlistId=${activeWaitlistOffer.id}`);
+                }}
+                className="px-3.5 py-2 rounded-full bg-brand text-white text-xs font-bold shadow-xs hover:bg-brand-hover active:scale-95 transition-all shrink-0 cursor-pointer"
+              >
+                Garantir
+              </button>
             </div>
           </section>
         )}
 
-        {/* Assinaturas & Planos (Glassmorphism Card) */}
-        <section 
-          onClick={() => navigate(`/${tenant_slug}/clube`)}
-          className="relative rounded-xl overflow-hidden shadow-[0px_4px_20px_rgba(0,0,0,0.04)] border border-surface-variant/30 cursor-pointer group active:scale-[0.99] transition-all"
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-container/40 to-surface-container-lowest/80 backdrop-blur-md z-0"></div>
-          <div className="relative z-10 p-lg flex items-center justify-between">
-            <div className="space-y-base">
-              <div className="flex items-center space-x-2 text-primary">
-                <span className="material-symbols-outlined filled text-body-md" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
-                <span className="font-label-sm text-label-sm uppercase tracking-wider">Fidelidade</span>
-              </div>
-              <h3 className="font-headline-md text-headline-md text-on-surface">Clube {tenant?.name ? tenant.name.split(' ')[0] : ''}</h3>
-              <p className="text-secondary text-sm md:text-base">
-                {session?.vip_tier 
-                  ? `Seu nível atual no clube é ${session.vip_tier}. Aproveite os seus benefícios exclusivos!` 
-                  : 'Veja os planos de assinatura disponíveis para você.'}
-              </p>
+        {/* 3. Saudação Editorial */}
+        <section className="pt-1">
+          <h1 className="font-display text-[30px] font-semibold text-ink leading-tight mb-1">
+            {primeiroNome ? `Olá, ${primeiroNome}` : 'Olá'}
+          </h1>
+          <p className="font-sans text-[15px] text-ink-soft">
+            {tenant?.welcome_message || 'Que tal um momento só seu?'}
+          </p>
+        </section>
+
+        {/* 4. Cartão "SEU PRÓXIMO HORÁRIO" (ou Convite se vazio) */}
+        <section>
+          {loadingAppts ? (
+            <div className="w-full h-[156px] rounded-card bg-surface border border-line p-5 flex items-center justify-center animate-pulse shadow-card">
+              <span className="text-ink-soft text-[14px]">Carregando seu próximo horário...</span>
             </div>
-            <div className="bg-primary text-on-primary rounded-full p-3 group-hover:bg-primary/90 transition-colors shadow-sm flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined">arrow_forward</span>
+          ) : proximoHorario ? (
+            <div className="w-full bg-surface rounded-card p-5 border border-line shadow-card text-left space-y-4">
+              <span className="text-[11px] font-semibold font-sans uppercase tracking-wider text-ink-soft block">
+                Seu próximo horário
+              </span>
+
+              {/* Linha com Data e Info do Atendimento */}
+              <div className="flex items-center gap-3.5">
+                {/* Bloco de Data Rosa Suave */}
+                <div className="w-16 h-16 rounded-[18px] bg-[#F6E4E4] border border-line/50 flex flex-col items-center justify-center shrink-0 shadow-xs select-none">
+                  <span className="text-[11px] font-bold font-sans text-ink-soft tracking-wider">
+                    {diaSemana}
+                  </span>
+                  <span className="font-display text-[22px] font-bold text-brand leading-none mt-0.5">
+                    {diaNumero}
+                  </span>
+                </div>
+
+                {/* Detalhes do Serviço */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-sans text-[17px] font-bold text-ink truncate leading-snug">
+                    {proximoHorario.service_name}
+                  </h3>
+                  <p className="font-sans text-[14px] text-ink-soft mt-0.5 truncate">
+                    {horaFormatada} · com {proximoHorario.staff_name}
+                  </p>
+                </div>
+              </div>
+
+              {/* Botões de Ação com Contorno */}
+              <div className="flex items-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={handleRemarcarProximo}
+                  className="flex-1 h-11 rounded-full border border-line bg-surface hover:bg-[#F6E4E4]/40 text-ink text-[14px] font-semibold transition-colors duration-150 active:scale-[0.99] cursor-pointer"
+                >
+                  Remarcar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetalhesModalOpen(true)}
+                  className="flex-1 h-11 rounded-full border border-line bg-surface hover:bg-[#F6E4E4]/40 text-ink text-[14px] font-semibold transition-colors duration-150 active:scale-[0.99] cursor-pointer"
+                >
+                  Detalhes
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Estado sem agendamento futuro: Card Acolhedor */
+            <div className="w-full bg-surface rounded-card p-5 border border-line shadow-card text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-[#F6E4E4] text-brand border border-line/60 flex items-center justify-center mx-auto shadow-xs">
+                <Calendar size={22} strokeWidth={2} />
+              </div>
+              <div>
+                <h3 className="font-display text-[18px] font-semibold text-ink">
+                  Nenhum agendamento agendado
+                </h3>
+                <p className="font-sans text-[13px] text-ink-soft mt-1">
+                  Reserve um momento especial para cuidar de você hoje mesmo.
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* 5. Botão Primário Dominante "+ Agendar novo horário" */}
+        <section>
+          <Botao
+            variante="primario"
+            tamanho="lg"
+            className="w-full shadow-md"
+            onClick={() => navigate(`/${tenant_slug}/agendar/servicos`)}
+            iconeInicio={<Plus size={20} strokeWidth={2.4} />}
+          >
+            Agendar novo horário
+          </Botao>
+        </section>
+
+        {/* 6. Atalhos em Chips: Repetir último serviço & Indicar */}
+        <section className="flex items-center justify-center gap-2.5 flex-wrap">
+          <Chip
+            onClick={handleRepetirUltimoServico}
+            icone={<RotateCcw size={14} strokeWidth={2.2} />}
+          >
+            Repetir último serviço
+          </Chip>
+
+          <Chip
+            onClick={() => setIndicarModalOpen(true)}
+            icone={<Users size={14} strokeWidth={2.2} />}
+          >
+            Indicar uma amiga
+          </Chip>
+
+          <Chip
+            onClick={() => navigate(`/${tenant_slug}/site`)}
+            icone={<Globe size={14} strokeWidth={2.2} />}
+          >
+            Conhecer o espaço
+          </Chip>
+        </section>
+
+        {/* 7. Cartão do Clube de Fidelidade */}
+        <section>
+          <div
+            onClick={() => navigate(`/${tenant_slug}/clube`)}
+            className="w-full bg-surface border border-gold/60 hover:border-gold rounded-card p-4 shadow-card flex items-center justify-between transition-colors duration-200 cursor-pointer active:scale-[0.99] select-none"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-[16px] bg-[#FAF3E0] text-gold flex items-center justify-center shrink-0 shadow-sm">
+                <Star size={24} strokeWidth={2.2} className="fill-gold/20 text-gold" />
+              </div>
+              <div className="text-left">
+                <span className="text-[11px] font-bold font-sans uppercase tracking-wider text-ink-soft block">
+                  Clube {tenant?.name ? tenant.name.split(' ')[0] : 'Studio'}
+                </span>
+                <span className="font-sans text-[15px] font-bold text-ink leading-tight block mt-0.5">
+                  {membershipSessions !== null
+                    ? `Você tem ${membershipSessions} ${membershipSessions === 1 ? 'sessão disponível' : 'sessões disponíveis'}`
+                    : 'Acesse benefícios e planos exclusivos'}
+                </span>
+              </div>
+            </div>
+            <div className="text-ink-soft hover:text-ink pl-2 shrink-0">
+              <ArrowRight size={18} strokeWidth={2.2} />
             </div>
           </div>
         </section>
 
-        {/* Banners Promocionais (Carrossel Dinâmico) */}
-        {banners.length > 0 && (
-          <section className="w-full overflow-hidden relative rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] group">
-            {/* Wrapper deslizante */}
-            <div 
-              className="flex transition-transform duration-700 ease-in-out"
-              style={{ transform: `translateX(-${currentSlide * (100 / banners.length)}%)`, width: `${banners.length * 100}%` }}
-            >
-              {banners.map((slide, idx) => (
-                <div key={slide.id || idx} className="w-full h-40 md:h-56 relative shrink-0 overflow-hidden" style={{ width: `${100 / banners.length}%` }}>
-                  {slide.url ? (
-                    <img 
-                      src={slide.url} 
-                      alt={slide.title || 'Banner promocional'} 
-                      className="w-full h-full object-cover" 
-                    />
-                  ) : (
-                    <div 
-                      className="w-full h-full"
-                      style={{
-                        background: `linear-gradient(135deg, ${tenant?.primary_color || '#7c5357'}, ${tenant?.secondary_color || '#eeb9bd'})`
-                      }}
-                    />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent flex flex-col justify-end p-lg">
-                    {slide.title && (
-                      <h3 className="text-white font-headline-md text-headline-md-mobile md:text-headline-md shadow-sm">
-                        {slide.title}
-                      </h3>
+        {/* 8. Banner Promocional do Salão */}
+        <section className="w-full rounded-card overflow-hidden shadow-card border border-line select-none relative">
+          {banners.length > 0 ? (
+            <div className="relative w-full h-[140px] overflow-hidden">
+              <div
+                className="flex transition-transform duration-700 ease-in-out h-full"
+                style={{
+                  transform: `translateX(-${currentSlide * (100 / banners.length)}%)`,
+                  width: `${banners.length * 100}%`
+                }}
+              >
+                {banners.map((slide, idx) => (
+                  <div
+                    key={slide.id || idx}
+                    className="w-full h-full relative shrink-0 overflow-hidden"
+                    style={{ width: `${100 / banners.length}%` }}
+                  >
+                    {slide.url ? (
+                      <img
+                        src={slide.url}
+                        alt={slide.title || 'Banner promocional'}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-[#F6E4E4] flex items-center justify-center relative overflow-hidden">
+                        <div className="absolute -top-8 -right-8 w-36 h-36 rounded-full bg-[#EFD2D4] opacity-80" />
+                        <div className="absolute -bottom-10 -left-6 w-32 h-32 rounded-full bg-white/70 opacity-90" />
+                        <span className="font-sans text-[12px] font-bold tracking-wider text-brand uppercase relative z-10 px-4 py-1.5 rounded-full bg-white/85 backdrop-blur-xs shadow-xs border border-line/60">
+                          [Banner Promocional do Salão]
+                        </span>
+                      </div>
                     )}
-                    {slide.subtitle && (
-                      <p className="text-white/90 text-sm md:text-base mt-1 shadow-sm">
-                        {slide.subtitle}
-                      </p>
+                    {(slide.title || slide.subtitle) && (
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent flex flex-col justify-end p-4">
+                        {slide.title && (
+                          <h4 className="text-white font-display text-[16px] font-semibold">
+                            {slide.title}
+                          </h4>
+                        )}
+                        {slide.subtitle && (
+                          <p className="text-white/90 font-sans text-[12px]">
+                            {slide.subtitle}
+                          </p>
+                        )}
+                      </div>
                     )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Indicadores do Slide (Dots) */}
+              {banners.length > 1 && (
+                <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+                  {banners.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setCurrentSlide(idx)}
+                      className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                        currentSlide === idx ? 'bg-white scale-125' : 'bg-white/50'
+                      }`}
+                      aria-label={`Slide ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Fallback quando sem banners */
+            <div className="w-full h-[140px] bg-[#F6E4E4] rounded-card flex items-center justify-center relative overflow-hidden border border-line/60">
+              <div className="absolute -top-8 -right-8 w-36 h-36 rounded-full bg-[#EFD2D4] opacity-80" />
+              <div className="absolute -bottom-10 -left-6 w-32 h-32 rounded-full bg-white/70 opacity-90" />
+              <span className="font-sans text-[12px] font-bold tracking-wider text-brand uppercase relative z-10 px-4 py-1.5 rounded-full bg-white/85 backdrop-blur-xs shadow-xs border border-line/60">
+                [Banner Promocional do Salão]
+              </span>
+            </div>
+          )}
+        </section>
+
+        {/* 9. Recomendações de Serviços (Inspirações Rápidas) */}
+        {services.length > 0 && (
+          <section className="pt-1 space-y-3 text-left">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-[18px] font-semibold text-ink">
+                Serviços em Destaque
+              </h2>
+              <button
+                type="button"
+                onClick={() => navigate(`/${tenant_slug}/agendar/servicos`)}
+                className="text-brand font-sans text-[13px] font-semibold hover:underline"
+              >
+                Ver todos
+              </button>
+            </div>
+
+            <div className="flex overflow-x-auto gap-3 pb-2 -mx-5 px-5 scrollbar-none">
+              {services.map((svc) => (
+                <div
+                  key={svc.id}
+                  onClick={() =>
+                    navigate(`/${tenant_slug}/agendar/servicos`, {
+                      state: { preselectedServiceId: svc.id }
+                    })
+                  }
+                  className="min-w-[200px] w-[200px] bg-surface rounded-[18px] p-4 border border-line shadow-sm hover:border-brand-accent/50 transition-all cursor-pointer shrink-0 active:scale-[0.99] flex flex-col justify-between"
+                >
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-medium text-ink-soft">
+                      {svc.duration_minutes} min
+                    </span>
+                    <h3 className="font-sans text-[14px] font-bold text-ink line-clamp-1">
+                      {svc.name}
+                    </h3>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between pt-2 border-t border-line/50">
+                    <span className="font-sans text-[14px] font-bold text-brand">
+                      {svc.is_starting_price && 'A partir de '}
+                      R$ {parseFloat(svc.price).toFixed(2).replace('.', ',')}
+                    </span>
+                    <span className="w-7 h-7 rounded-full bg-[#F6E4E4] text-brand border border-line/50 flex items-center justify-center text-[12px] font-bold">
+                      +
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
-
-            {/* Indicadores de Slide (Dots) */}
-            {banners.length > 1 && (
-              <div className="absolute bottom-sm left-1/2 -translate-x-1/2 flex items-center gap-xs z-10">
-                {banners.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentSlide(idx)}
-                    className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                      currentSlide === idx ? 'bg-white scale-125' : 'bg-white/50 hover:bg-white/80'
-                    }`}
-                    aria-label={`Ir para slide ${idx + 1}`}
-                  />
-                ))}
-              </div>
-            )}
           </section>
         )}
-
-        {/* Gift Cards / Vales-Presente */}
-        {tenant?.features?.giftcards && (
-          <section 
-            onClick={() => navigate(`/${tenant_slug}/presentear`)}
-            className="relative rounded-xl overflow-hidden shadow-[0px_4px_20px_rgba(0,0,0,0.04)] border border-[#f4c8ce]/30 cursor-pointer group active:scale-[0.99] transition-all"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-[#ffe4e8] to-surface-container-lowest z-0"></div>
-            <div className="relative z-10 p-lg flex items-center justify-between">
-              <div className="space-y-base max-w-[70%]">
-                <div className="flex items-center space-x-2 text-[#b0616b]">
-                  <span className="material-symbols-outlined text-body-md" style={{ fontVariationSettings: "'FILL' 1" }}>redeem</span>
-                  <span className="font-label-sm text-label-sm uppercase tracking-wider font-bold">Gift Cards</span>
-                </div>
-                <h3 className="font-headline-md text-headline-md text-on-surface">Dê beleza de presente</h3>
-                <p className="text-secondary text-sm md:text-base">
-                  Compre um vale-presente e surpreenda quem você ama pelo WhatsApp.
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-white text-[#b0616b] rounded-full shadow-sm flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined">arrow_forward</span>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Lookbook / Inspire-se */}
-        {lookbooks.length > 0 && (
-          <section className="space-y-md">
-            <div className="flex items-center justify-between">
-              <h3 className="font-headline-md text-headline-md text-on-surface">Inspire-se</h3>
-            </div>
-            <div className="flex overflow-x-auto hide-scrollbar space-x-md pb-4 -mx-container-margin px-container-margin md:mx-0 md:px-0">
-              {loadingLookbooks ? (
-                <div className="flex items-center justify-center w-full py-10">
-                  <span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span>
-                </div>
-              ) : (
-                lookbooks.map(look => (
-                  <div 
-                    key={look.id} 
-                    onClick={() => setSelectedLook(look)} 
-                    className="min-w-[140px] w-[40vw] md:w-1/4 aspect-[4/5] bg-surface-container-lowest rounded-2xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] overflow-hidden shrink-0 group cursor-pointer relative"
-                  >
-                    <img src={look.image_url} alt={look.title || 'Inspiração'} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* Serviços Especiais (Horizontal Scroll) */}
-        <section className="space-y-md">
-          <div className="flex items-center justify-between">
-            <h3 className="font-headline-md text-headline-md text-on-surface">Recomendações</h3>
-            <button onClick={() => navigate(`/${tenant_slug}/agendar/servicos`)} className="text-primary font-label-md text-label-md hover:underline">Ver todos</button>
-          </div>
-          <div className="flex overflow-x-auto hide-scrollbar space-x-md pb-4 -mx-container-margin px-container-margin md:mx-0 md:px-0">
-            {loadingServices ? (
-              <div className="flex items-center justify-center w-full py-10">
-                <span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span>
-              </div>
-            ) : services.length === 0 ? (
-              <div className="text-secondary py-4 w-full text-center">Nenhum serviço disponível no momento.</div>
-            ) : (
-              services.map(service => (
-                <div key={service.id} onClick={() => navigate(`/${tenant_slug}/agendar/servicos`)} className="min-w-[280px] w-[70vw] md:w-1/3 bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] overflow-hidden shrink-0 group cursor-pointer border border-transparent hover:border-primary-container/30">
-                  <div className="h-40 bg-surface-container overflow-hidden relative">
-                    <div className="w-full h-full flex items-center justify-center text-primary/20">
-                        <span className="material-symbols-outlined text-[64px]">spa</span>
-                    </div>
-                    <div className="absolute top-sm right-sm bg-surface-container-lowest/80 backdrop-blur-sm rounded-full p-1.5 text-primary">
-                      <span className="material-symbols-outlined text-[18px]">favorite</span>
-                    </div>
-                  </div>
-                  <div className="p-md space-y-xs">
-                    <h4 className="font-label-md text-label-md text-on-surface line-clamp-1">{service.name}</h4>
-                    <p className="text-secondary text-sm">
-                      {service.is_starting_price && "A partir de "}
-                      R$ {parseFloat(service.price).toFixed(2).replace('.', ',')} • {service.duration_minutes} min
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-        <div className="h-24 md:hidden"></div>
       </main>
 
-      {selectedConsent && (
-        <AssinarTermoModal 
-          consent={selectedConsent} 
-          onClose={() => setSelectedConsent(null)} 
-          onSigned={() => {
-            setPendingConsents(prev => prev.filter(c => c.id !== selectedConsent.id));
-            setSelectedConsent(null);
-          }}
-        />
+      {/* Modal: Detalhes do Próximo Agendamento */}
+      {detalhesModalOpen && proximoHorario && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/40 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="bg-surface rounded-card p-6 shadow-card max-w-sm w-full border border-line relative animate-scale-up text-left space-y-4">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <h3 className="font-display text-[20px] font-semibold text-brand">
+                Detalhes do Agendamento
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDetalhesModalOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-ink-soft hover:text-ink hover:bg-brand-tint/50 transition-colors"
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-[14px]">
+              <div className="flex items-start gap-3">
+                <Sparkles size={18} className="text-brand shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-ink-soft text-[12px] block">Serviço</span>
+                  <span className="font-semibold text-ink">{proximoHorario.service_name}</span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <User size={18} className="text-brand shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-ink-soft text-[12px] block">Profissional</span>
+                  <span className="font-semibold text-ink">{proximoHorario.staff_name}</span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <Calendar size={18} className="text-brand shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-ink-soft text-[12px] block">Data e Hora</span>
+                  <span className="font-semibold text-ink">
+                    {dataProximo?.toLocaleDateString('pt-BR', { dateStyle: 'long' })} às{' '}
+                    {horaFormatada}
+                  </span>
+                </div>
+              </div>
+
+              {tenant?.address && (
+                <div className="flex items-start gap-3">
+                  <MapPin size={18} className="text-brand shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-ink-soft text-[12px] block">Endereço</span>
+                    <span className="font-medium text-ink">{tenant.address}</span>
+                  </div>
+                </div>
+              )}
+
+              {proximoHorario.total_price && (
+                <div className="pt-2 border-t border-line flex justify-between items-center">
+                  <span className="text-ink-soft text-[13px]">Valor estimado:</span>
+                  <span className="font-bold text-brand text-[16px]">
+                    R$ {parseFloat(proximoHorario.total_price).toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 space-y-2">
+              <Botao
+                variante="contorno"
+                tamanho="md"
+                className="w-full"
+                onClick={() => {
+                  setDetalhesModalOpen(false);
+                  navigate(`/${tenant_slug}/historico`);
+                }}
+              >
+                Ver todos os agendamentos
+              </Botao>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Bottom Nav Bar */}
-      <ClienteBottomNavBar activeTab="home" tenantSlug={tenant_slug} />
+      {/* Modal: Indicar uma Amiga (Item D19 P2) */}
+      <ModalIndicarAmiga
+        isOpen={indicarModalOpen}
+        onClose={() => setIndicarModalOpen(false)}
+      />
+
 
       {/* Modal de Avaliação Pendente */}
       {showReviewModal && pendingReview && (
-        <ReviewModal 
-          reviewData={pendingReview} 
+        <ReviewModal
+          reviewData={pendingReview}
           onClose={() => setShowReviewModal(false)}
           onReviewSubmitted={() => {
             setShowReviewModal(false);
@@ -469,42 +821,21 @@ const HomeCliente = () => {
         />
       )}
 
-      {/* Modal Lookbook */}
-      {selectedLook && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in">
-          <div className="bg-surface rounded-2xl w-full max-w-[400px] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95">
-            <div className="relative w-full aspect-square bg-surface-variant">
-              <img src={selectedLook.image_url} alt={selectedLook.title || 'Inspiração'} className="w-full h-full object-cover" />
-              <button 
-                onClick={() => setSelectedLook(null)}
-                className="absolute top-4 right-4 w-10 h-10 bg-black/50 text-white rounded-full flex items-center justify-center backdrop-blur-sm hover:bg-black/70 transition-colors"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="p-6">
-              <h3 className="font-headline-md text-on-surface mb-2">{selectedLook.title || 'Inspiração'}</h3>
-              {selectedLook.description && <p className="text-secondary text-sm mb-6">{selectedLook.description}</p>}
-              
-              <button 
-                onClick={() => {
-                  navigate(`/${tenant_slug}/agendar/servicos`, { 
-                    state: { 
-                      preselectedServiceId: selectedLook.service_id,
-                      preselectedStaffId: selectedLook.staff_id
-                    } 
-                  });
-                }}
-                className="w-full py-4 rounded-xl font-bold text-on-primary bg-primary hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95 mt-4"
-              >
-                <span className="material-symbols-outlined">auto_awesome</span>
-                Quero Fazer Igual
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Modal de Assinatura de Termo */}
+      {selectedConsent && (
+        <AssinarTermoModal
+          consent={selectedConsent}
+          onClose={() => setSelectedConsent(null)}
+          onSigned={() => {
+            setPendingConsents((prev) => prev.filter((c) => c.id !== selectedConsent.id));
+            setSelectedConsent(null);
+          }}
+        />
       )}
-    </div>
+
+      {/* 10. Navegação Inferior Rosé Editorial */}
+      <ClienteBottomNavBar activeTab="home" tenantSlug={tenant_slug} />
+    </TelaCliente>
   );
 };
 

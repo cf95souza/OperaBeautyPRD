@@ -1,18 +1,57 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useNotification } from '../../context/NotificationProvider';
+import { 
+  CreditCard, 
+  QrCode, 
+  ShieldCheck, 
+  Key, 
+  Copy, 
+  Check, 
+  ExternalLink, 
+  Sparkles, 
+  Lock, 
+  LogOut, 
+  Clock, 
+  RefreshCw, 
+  Eye, 
+  EyeOff,
+  AlertTriangle,
+  Server
+} from 'lucide-react';
 
+/**
+ * Configurações Globais da Plataforma SaaS (Super Admin) - Rosé Editorial
+ */
 const SettingsAdmin = () => {
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const navigate = useNavigate();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, confirm } = useNotification();
 
-  const [gateway, setGateway] = useState('mercadopago');
+  // Estados do Gateway e Cobrança SaaS
+  const [gateway, setGateway] = useState('sandbox');
+  const [environment, setEnvironment] = useState('sandbox');
+  const [pixKey, setPixKey] = useState('');
+  const [pixKeyType, setPixKeyType] = useState('cnpj');
   const [apiKey, setApiKey] = useState('');
   const [publicKey, setPublicKey] = useState('');
-  const [settingsId, setSettingsId] = useState(null);
-  const [savingSettings, setSavingSettings] = useState(false);
+  const [webhookSecret, setWebhookSecret] = useState('');
+  const [gracePeriodDays, setGracePeriodDays] = useState(5);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  // Estados de Carregamento e Interface
+  const [loading, setLoading] = useState(true);
+  const [savingGateway, setSavingGateway] = useState(false);
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
+
+  // Estados de Segurança e Troca de Senha Mestre
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const webhookUrl = `${window.location.origin}/api/invoices/webhook`;
 
   useEffect(() => {
     fetchSettings();
@@ -20,250 +59,408 @@ const SettingsAdmin = () => {
 
   const fetchSettings = async () => {
     try {
+      setLoading(true);
       const data = await api.superadmin.getPlatformSettings();
       if (data) {
-        setGateway(data.payment_gateway || 'mercadopago');
-        setApiKey(data.gateway_api_key || '');
+        setGateway(data.payment_gateway || 'sandbox');
+        setEnvironment(data.environment || 'sandbox');
+        setPixKey(data.pix_key || '');
+        setPixKeyType(data.pix_key_type || 'cnpj');
         setPublicKey(data.gateway_public_key || '');
-        setSettingsId(data.id);
+        setGracePeriodDays(Number(data.grace_period_days || 5));
+        setHasApiKey(Boolean(data.has_api_key || data.gateway_api_key));
+        if (data.gateway_api_key) {
+          setApiKey(data.gateway_api_key);
+        }
+        if (data.webhook_secret) {
+          setWebhookSecret(data.webhook_secret);
+        }
       }
     } catch (err) {
-      console.log('Nenhuma configuração encontrada:', err);
+      console.error('Erro ao buscar configurações da plataforma:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSaveGateway = async () => {
-    setSavingSettings(true);
+  const handleSaveGateway = async (e) => {
+    e?.preventDefault?.();
+    setSavingGateway(true);
     try {
       const payload = {
         payment_gateway: gateway,
+        environment,
+        pix_key: pixKey,
+        pix_key_type: pixKeyType,
         gateway_api_key: apiKey,
-        gateway_public_key: publicKey
+        gateway_public_key: publicKey,
+        webhook_secret: webhookSecret,
+        grace_period_days: Number(gracePeriodDays)
       };
 
       const data = await api.superadmin.savePlatformSettings(payload);
       if (data) {
-        setSettingsId(data.id);
+        setHasApiKey(Boolean(data.has_api_key || data.gateway_api_key));
+        if (data.gateway_api_key) setApiKey(data.gateway_api_key);
       }
-      showSuccess('Configurações do Gateway salvas com sucesso!');
+      showSuccess('Configurações de cobrança do SaaS salvas com sucesso!');
     } catch (error) {
       console.error(error);
-      showError('Erro ao salvar as configurações.');
+      showError(error.message || 'Erro ao salvar as configurações.');
     } finally {
-      setSavingSettings(false);
+      setSavingGateway(false);
     }
   };
 
-  const handleLogout = () => {
-    api.auth.logout();
-    navigate('/superadmin/login');
+  const handleCopyWebhook = async () => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(webhookUrl);
+      } else {
+        const input = document.createElement('input');
+        input.value = webhookUrl;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+      }
+      setCopiedWebhook(true);
+      showSuccess('URL do Webhook copiada com sucesso!');
+      setTimeout(() => setCopiedWebhook(false), 3000);
+    } catch (err) {
+      showError('Não foi possível copiar automaticamente.');
+    }
+  };
+
+  const handleLogout = async () => {
+    if (await confirm('Sair do Painel Master?', 'Você precisará autenticar-se novamente com e-mail, senha e 2FA para acessar o Super Admin.')) {
+      api.auth.logout();
+      navigate('/superadmin/login');
+    }
   };
 
   return (
-    <div className="font-body-md text-body-md antialiased overflow-x-hidden min-h-screen flex bg-surface text-on-surface animate-fade-in-up">
-      
-      {/* Mobile Drawer Overlay */}
-      {isDrawerOpen && (
-        <div 
-          className="md:hidden fixed inset-0 bg-black/50 z-40 transition-opacity"
-          onClick={() => setIsDrawerOpen(false)}
-        ></div>
-      )}
+    <div className="space-y-8 animate-fade-in pb-16 max-w-5xl mx-auto">
+      {/* Cabeçalho Editorial Rosé */}
+      <div>
+        <h1 className="font-display font-bold text-3xl sm:text-4xl text-ink tracking-tight">
+          Configurações da Plataforma
+        </h1>
+        <p className="text-sm text-ink-soft mt-1">
+          Gerencie o gateway de cobrança das mensalidades dos salões, chave PIX oficial, webhooks e segurança mestre.
+        </p>
+      </div>
 
-      {/* Navigation Drawer */}
-      <aside className={`flex flex-col h-screen w-80 fixed top-0 bg-surface-container-lowest border-r border-outline-variant/30 z-50 transition-all duration-300 ${isDrawerOpen ? 'left-0' : '-left-80'} md:left-0`}>
-        <div className="p-xl border-b border-outline-variant/30 bg-surface-container-lowest flex flex-col gap-4">
-          <h1 className="font-serif text-[28px] text-primary font-bold">OperaBeauty</h1>
-          <div className="flex items-center gap-md">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-sm">
-              <span className="material-symbols-outlined text-on-primary" style={{ fontVariationSettings: "'FILL' 1" }}>admin_panel_settings</span>
-            </div>
-            <div>
-              <h2 className="font-title-md text-title-md font-semibold text-on-surface tracking-tight">Super Admin</h2>
-              <p className="font-body-sm text-body-sm text-on-surface-variant">Gestão da Plataforma</p>
-            </div>
-          </div>
+      {loading ? (
+        <div className="p-16 text-center text-xs text-ink-soft italic">
+          Carregando parâmetros globais da plataforma...
         </div>
-        <nav className="flex-1 overflow-y-auto py-md space-y-xs">
-          <Link to="/superadmin" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>dashboard</span>
-            Painel Geral
-          </Link>
-          <Link to="/superadmin/tenants" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>storefront</span>
-            Salões e Clientes
-          </Link>
-          <Link to="/superadmin/planos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>subscriptions</span>
-            Gestão de Planos
-          </Link>
-          <Link to="/superadmin/equipe" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>admin_panel_settings</span>
-            Equipe SaaS
-          </Link>
-          <Link to="/superadmin/features" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>toggle_on</span>
-            Feature Flags
-          </Link>
-          <Link to="/superadmin/avisos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>campaign</span>
-            Mural de Avisos
-          </Link>
-          <Link to="/superadmin/auditoria" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>security</span>
-            Auditoria e Saúde
-          </Link>
-          <Link to="/superadmin/configuracoes" className="flex items-center gap-md py-3 px-4 bg-primary-container text-on-primary-container rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>settings</span>
-            Configurações
-          </Link>
-        </nav>
-        <div className="px-md mt-auto flex flex-col gap-2">
-          <button onClick={handleLogout} className="flex items-center gap-md py-3 px-4 text-error hover:bg-error-container rounded-lg font-label-md text-label-md transition-colors w-full text-left">
-            <span className="material-symbols-outlined">logout</span>
-            Sair do Sistema
-          </button>
-          
-          <div className="flex items-center gap-sm p-4 bg-surface-container-low rounded-xl">
-            <div className="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden">
-              <span className="material-symbols-outlined text-secondary">person</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-label-md text-label-md text-on-surface">Super Admin</span>
-              <span className="font-label-sm text-label-sm text-secondary">Administrador do Sistema</span>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 md:ml-72 flex flex-col min-h-screen bg-background">
-        
-        {/* Top App Bar (Mobile) */}
-        <header className="md:hidden flex justify-between items-center px-gutter py-3 w-full max-w-full bg-surface shadow-sm sticky top-0 z-30 pt-[max(env(safe-area-inset-top),_0.75rem)] min-h-[4rem]">
-          <div className="flex items-center gap-sm">
-            <button onClick={() => setIsDrawerOpen(true)} className="material-symbols-outlined text-primary p-2">menu</button>
-            <div className="flex items-center gap-xs cursor-pointer active:opacity-80">
-              <span className="material-symbols-outlined text-primary font-headline-md text-headline-md">spa</span>
-              <span className="font-headline-md text-[20px] text-primary tracking-tight">Admin Mestre</span>
-            </div>
-          </div>
-          <div className="w-8 h-8"></div>
-        </header>
-
-        <div className="p-container-margin md:p-xl flex-1 flex flex-col gap-xl">
-          
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-lg">
-            <div>
-              <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-xs">Configurações Globais</h1>
-              <p className="font-body-md text-body-md text-secondary">Ajustes gerais da plataforma e segurança da sua conta Super Admin.</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-lg">
-            {/* Perfil */}
-            <div className="bg-surface rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-lg border border-surface-variant">
-              <div className="flex items-center gap-3 mb-6">
-                <span className="material-symbols-outlined text-[32px] text-primary">manage_accounts</span>
-                <h3 className="font-headline-sm text-headline-sm">Sua Conta</h3>
-              </div>
-              
-              <div className="flex flex-col gap-4">
+      ) : (
+        <div className="space-y-6">
+          {/* Card 1: Cobrança Automática do SaaS & Gateway Master */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6 sm:p-7 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-line/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-brand-tint flex items-center justify-center text-brand">
+                  <CreditCard className="w-5 h-5" />
+                </div>
                 <div>
-                  <label className="block font-label-sm text-secondary mb-1">E-mail Principal</label>
-                  <input 
-                    type="email" 
-                    readOnly
-                    className="w-full bg-surface-container-lowest border border-surface-variant rounded-lg p-3 outline-none text-secondary"
-                    value="admin@sistema.com"
-                  />
-                  <p className="text-[12px] text-secondary mt-1">Email padrão do proprietário da plataforma. Não pode ser alterado por aqui.</p>
+                  <h3 className="font-display font-bold text-xl text-ink">
+                    Gateway de Pagamento SaaS & Chave PIX
+                  </h3>
+                  <p className="text-xs text-ink-soft">
+                    Configurações de recebimento das mensalidades pagas pelos donos de salão (D18).
+                  </p>
+                </div>
+              </div>
+
+              {/* Seletor de Ambiente */}
+              <div className="flex items-center gap-2 self-start sm:self-center">
+                <span className="text-xs text-ink-soft font-medium">Ambiente:</span>
+                <div className="inline-flex rounded-full p-1 bg-stone-100 border border-line">
+                  <button
+                    type="button"
+                    onClick={() => setEnvironment('sandbox')}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                      environment === 'sandbox'
+                        ? 'bg-brand text-white shadow-2xs'
+                        : 'text-ink-soft hover:text-ink'
+                    }`}
+                  >
+                    Sandbox (Testes)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEnvironment('production')}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                      environment === 'production'
+                        ? 'bg-emerald-700 text-white shadow-2xs'
+                        : 'text-ink-soft hover:text-ink'
+                    }`}
+                  >
+                    Produção (Real)
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Segurança */}
-            <div className="bg-surface rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-lg border border-surface-variant">
-              <div className="flex items-center gap-3 mb-6">
-                <span className="material-symbols-outlined text-[32px] text-[#10b981]">security</span>
-                <h3 className="font-headline-sm text-headline-sm">Segurança</h3>
-              </div>
-              
-              <div className="flex flex-col gap-4">
-                <p className="text-body-md text-secondary mb-2">Para alterar a sua senha master do sistema, clique no botão abaixo. Você receberá um e-mail com o link seguro de recuperação (Supabase Auth).</p>
-                
-                <button className="bg-surface-container-high text-on-surface px-6 py-3 rounded-lg font-label-md hover:bg-surface-variant transition-colors w-full md:w-auto self-start">
-                  Enviar E-mail de Troca de Senha
-                </button>
-              </div>
-            </div>
-
-            {/* Gateway de Pagamento */}
-            <div className="bg-surface rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-lg border border-surface-variant lg:col-span-2">
-              <div className="flex items-center gap-3 mb-6">
-                <span className="material-symbols-outlined text-[32px] text-primary">payments</span>
+            <form onSubmit={handleSaveGateway} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Provedor de Pagamento */}
                 <div>
-                  <h3 className="font-headline-sm text-headline-sm">Gateway de Pagamento</h3>
-                  <p className="text-secondary text-sm mt-1">Configure por onde os salões pagarão a mensalidade SaaS.</p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block font-label-sm text-secondary mb-1">Provedor Ativo</label>
-                  <select 
-                    className="w-full bg-surface-container-lowest border border-surface-variant rounded-lg p-3 outline-none focus:border-primary"
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-ink-soft mb-1.5">
+                    Provedor / Gateway Integrado
+                  </label>
+                  <select
                     value={gateway}
                     onChange={(e) => setGateway(e.target.value)}
+                    className="w-full text-xs bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand transition-colors cursor-pointer"
                   >
+                    <option value="sandbox">Simulador Sandbox (Nativo OperaBeauty)</option>
                     <option value="mercadopago">Mercado Pago</option>
-                    <option value="stripe">Stripe</option>
+                    <option value="asaas">Asaas Pagamentos</option>
                     <option value="abacatepay">AbacatePay</option>
+                    <option value="stripe">Stripe</option>
                   </select>
+                  <p className="text-[11px] text-ink-soft mt-1">
+                    Processa a geração do QR Code e a baixa automática das mensalidades do software.
+                  </p>
                 </div>
+
+                {/* Dias de Carência Padrão */}
                 <div>
-                  <label className="block font-label-sm text-secondary mb-1">Access Token / Secret Key</label>
-                  <input 
-                    type="password" 
-                    className="w-full bg-surface-container-lowest border border-surface-variant rounded-lg p-3 outline-none focus:border-primary"
-                    placeholder="Cole a chave de API aqui"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                  />
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-ink-soft mb-1.5">
+                    Tolerância de Carência (Grace Period)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={gracePeriodDays}
+                      onChange={(e) => setGracePeriodDays(Number(e.target.value))}
+                      className="w-full text-xs bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand transition-colors cursor-pointer"
+                    >
+                      <option value={3}>3 dias de carência</option>
+                      <option value={5}>5 dias de carência (Recomendado)</option>
+                      <option value={7}>7 dias de carência</option>
+                      <option value={10}>10 dias de carência</option>
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-ink-soft mt-1">
+                    Prazo em que o salão continua funcionando normalmente após o vencimento antes do bloqueio gradual.
+                  </p>
                 </div>
+
+                {/* Chave PIX Oficial da Plataforma */}
                 <div>
-                  <label className="block font-label-sm text-secondary mb-1">Public Key (Opcional, se exigido pelo provedor)</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-surface-container-lowest border border-surface-variant rounded-lg p-3 outline-none focus:border-primary"
-                    placeholder="Cole a chave pública aqui se houver"
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-ink-soft mb-1.5">
+                    Chave PIX Institucional do SaaS
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={pixKeyType}
+                      onChange={(e) => setPixKeyType(e.target.value)}
+                      className="w-32 text-xs bg-stone-50 border border-line rounded-xl px-2.5 py-2.5 text-ink outline-none focus:border-brand"
+                    >
+                      <option value="cnpj">CNPJ</option>
+                      <option value="email">E-mail</option>
+                      <option value="phone">Celular</option>
+                      <option value="random">Aleatória</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={pixKey}
+                      onChange={(e) => setPixKey(e.target.value)}
+                      placeholder="ex: 12.345.678/0001-99 ou financeiro@..."
+                      className="flex-1 text-xs bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand font-mono"
+                    />
+                  </div>
+                  <p className="text-[11px] text-ink-soft mt-1">
+                    Utilizada na montagem do payload EMV BR Code dos QR Codes das faturas de mensalidade.
+                  </p>
+                </div>
+
+                {/* Token Privado de API */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                      Access Token / Chave Privada da API
+                    </label>
+                    {hasApiKey && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        Criptografia Ativa (AES-256)
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showApiKey ? "text" : "password"}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder={hasApiKey ? "Chave protegida no banco. Digite nova para alterar." : "Cole sua chave de API aqui"}
+                      className="w-full text-xs font-mono bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 pr-10 text-ink outline-none focus:border-brand"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-2 text-ink-soft hover:text-ink p-1 cursor-pointer"
+                    >
+                      {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chave Pública */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-ink-soft mb-1.5">
+                    Public Key (Opcional)
+                  </label>
+                  <input
+                    type="text"
                     value={publicKey}
                     onChange={(e) => setPublicKey(e.target.value)}
+                    placeholder="Cole a chave pública se exigida pelo provedor"
+                    className="w-full text-xs font-mono bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand"
+                  />
+                </div>
+
+                {/* Segredo do Webhook */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-ink-soft mb-1.5">
+                    Webhook Secret / Assinatura (Opcional)
+                  </label>
+                  <input
+                    type="password"
+                    value={webhookSecret}
+                    onChange={(e) => setWebhookSecret(e.target.value)}
+                    placeholder="Segredo para validação de integridade HMAC"
+                    className="w-full text-xs font-mono bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand"
                   />
                 </div>
               </div>
-              <div className="mt-6 border-t border-surface-variant pt-6 flex justify-end">
-                <button onClick={handleSaveGateway} disabled={savingSettings} className="bg-primary text-on-primary px-6 py-3 rounded-full font-label-md hover:opacity-90 disabled:opacity-50 transition-colors shadow-sm">
-                  {savingSettings ? 'Salvando...' : 'Salvar Gateway'}
+
+              {/* Caixa da URL de Webhook para colar no Gateway */}
+              <div className="p-4 rounded-2xl bg-stone-50 border border-line space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-ink flex items-center gap-1.5">
+                    <Server className="w-3.5 h-3.5 text-brand" />
+                    URL do Webhook para Baixa Automática de Faturas
+                  </span>
+                  <span className="text-[11px] text-ink-soft">Cole no painel do seu gateway</span>
+                </div>
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    readOnly
+                    value={webhookUrl}
+                    className="w-full text-xs font-mono bg-white text-ink-soft px-3.5 py-2.5 pr-28 rounded-xl border border-line select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyWebhook}
+                    className={`absolute right-1 top-1 bottom-1 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      copiedWebhook
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-brand hover:bg-brand-hover text-white'
+                    }`}
+                  >
+                    {copiedWebhook ? (
+                      <>
+                        <Check className="w-3 h-3" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copiar URL</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={savingGateway}
+                  className="px-6 py-2.5 rounded-full bg-brand hover:bg-brand-hover text-white text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{savingGateway ? 'Salvando...' : 'Salvar Configurações de Cobrança'}</span>
                 </button>
               </div>
-            </div>
-            
-            {/* Encerramento */}
-            <div className="bg-error-container rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-lg border border-error/20 lg:col-span-2">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="material-symbols-outlined text-[32px] text-error">logout</span>
-                <h3 className="font-headline-sm text-headline-sm text-error">Encerrar Sessão Mestre</h3>
+            </form>
+          </div>
+
+          {/* Card 2: Segurança & Conta Master (2FA e Senha) */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6 sm:p-7 space-y-5">
+            <div className="flex items-center gap-3 pb-4 border-b border-line/60">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-700">
+                <ShieldCheck className="w-5 h-5" />
               </div>
-              <p className="text-body-md text-on-error-container mb-6">Finalize seu acesso atual ao Painel de Controle SaaS para garantir a segurança da plataforma ao sair do computador.</p>
-              
-              <button onClick={handleLogout} className="bg-error text-on-error px-6 py-3 rounded-full font-label-md hover:opacity-90 transition-colors">
-                Sair do Sistema Agora
-              </button>
+              <div>
+                <h3 className="font-display font-bold text-xl text-ink">
+                  Segurança & Conta Master
+                </h3>
+                <p className="text-xs text-ink-soft">
+                  Governança da credencial suprema do SaaS e proteção por Segundo Fator (2FA TOTP).
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="p-4 rounded-2xl bg-stone-50 border border-line space-y-1">
+                <span className="text-[11px] uppercase tracking-wider text-ink-soft font-semibold">
+                  E-mail do Administrador Master
+                </span>
+                <p className="text-sm font-bold text-ink">admin@sistema.com</p>
+                <p className="text-xs text-ink-soft pt-1">
+                  Identificador raiz com permissão para gerenciar planos, faturas e auditoria de todos os salões.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-stone-50 border border-line space-y-2 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] uppercase tracking-wider text-ink-soft font-semibold">
+                      Segundo Fator (2FA TOTP)
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                      Protegido (C13)
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink-soft mt-1 leading-relaxed">
+                    Exige código de 6 dígitos via Google Authenticator / Authy no momento do login.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* Card 3: Encerramento de Sessão */}
+          <div className="rounded-[22px] border border-rose-200/80 bg-rose-50/40 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-700 shrink-0">
+                <LogOut className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-rose-950">
+                  Encerrar Sessão Mestre
+                </h4>
+                <p className="text-xs text-rose-800 mt-0.5 leading-relaxed">
+                  Finalize seu acesso ao Painel de Controle SaaS para garantir que nenhum terminal permaneça logado.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="px-5 py-2.5 rounded-full border border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-xs font-semibold transition-colors shadow-2xs shrink-0 cursor-pointer"
+            >
+              Sair do Sistema Agora
+            </button>
+          </div>
         </div>
-      </main>
+      )}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { api } from '../lib/api';
+import { getThemeTokens, applyThemeVariables } from '../lib/themeTokens';
 
 const TenantContext = createContext({});
 
@@ -23,6 +24,17 @@ export const TenantProvider = ({ children }) => {
       }
     }
   }, [tenant_slug, location.pathname]);
+
+  // Captura e preservação do código de indicação (Item D19 P2)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const refParam = params.get('ref');
+    if (refParam && tenant_slug) {
+      const cleanRef = refParam.trim().toUpperCase();
+      sessionStorage.setItem(`opera_referral_code:${tenant_slug}`, cleanRef);
+      localStorage.setItem(`opera_referral_code:${tenant_slug}`, cleanRef);
+    }
+  }, [location.search, tenant_slug]);
 
 
   useEffect(() => {
@@ -48,8 +60,6 @@ export const TenantProvider = ({ children }) => {
           localStorage.setItem('operabeauty_last_tenant', tenant_slug);
           
           // --- Injeção Dinâmica de PWA (Especial para iOS e Multi-Tenant) ---
-          // Atualiza título e apple meta tags com o nome real do salão
-          // O manifest é servido pelo backend via /api/manifest/:slug (URL real)
           const isStaff = window.location.pathname.includes('/staff');
           const pwaDisplayName = isStaff 
             ? (tenantData.name || 'OperaBeauty') + ' - Staff' 
@@ -62,14 +72,12 @@ export const TenantProvider = ({ children }) => {
           }
         }
 
-
-        // 2. Aplica as cores do Salão (White Label)
-        if (tenantData.primary_color) {
-          document.documentElement.style.setProperty('--color-primary', tenantData.primary_color);
-        }
-        if (tenantData.secondary_color) {
-          document.documentElement.style.setProperty('--color-primary-container', tenantData.secondary_color);
-        }
+        // 2. Aplica as cores do Salão (White Label / Rosé Design System)
+        const themeTokens = getThemeTokens(
+          tenantData.theme_id || 'rose', 
+          tenantData.brand_hex || tenantData.primary_color || '#8E3B4E'
+        );
+        applyThemeVariables(themeTokens);
 
         // 3. Tenta recuperar a sessão do usuário via API
         try {
@@ -131,8 +139,24 @@ export const TenantProvider = ({ children }) => {
     setSession(null);
   };
 
+  // Permite preview dinâmico ao vivo ao selecionar tema ou mudar cor no painel do salão
+  const applyLiveTheme = (themeId, brandHex = null) => {
+    const tokens = getThemeTokens(themeId, brandHex);
+    applyThemeVariables(tokens);
+  };
+
   return (
-    <TenantContext.Provider value={{ tenant, session, loading, login, loginClient, loginStaff, logout }}>
+    <TenantContext.Provider value={{ 
+      tenant, 
+      setTenant,
+      session, 
+      loading, 
+      login, 
+      loginClient, 
+      loginStaff, 
+      logout,
+      applyLiveTheme
+    }}>
       {children}
     </TenantContext.Provider>
   );

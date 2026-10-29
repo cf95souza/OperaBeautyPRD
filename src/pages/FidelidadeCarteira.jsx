@@ -4,6 +4,7 @@ import { useTenant } from '../context/TenantContext';
 import { api } from '../lib/api';
 import { useNotification } from '../context/NotificationProvider';
 import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
+import { TelaCliente } from '../components/ui/TelaCliente';
 
 const FidelidadeCarteira = () => {
   const { tenant_slug } = useParams();
@@ -49,9 +50,9 @@ const FidelidadeCarteira = () => {
   }
 
   return (
-    <div className="bg-background text-on-background min-h-screen pb-[90px] md:pb-6 font-body-md text-body-md antialiased">
+    <TelaCliente temNavegacaoInferior larguraMaxima="max-w-7xl" className="font-body-md text-body-md antialiased">
       {/* Header */}
-      <header className="w-full top-0 sticky z-40 bg-surface shadow-sm pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 md:pt-4">
+      <header className="w-full top-0 sticky z-40 bg-surface shadow-sm pt-3 pb-2 md:pt-4">
         <div className="flex justify-between items-center px-gutter py-sm w-full max-w-7xl mx-auto">
           <button 
             onClick={() => navigate(-1)} 
@@ -154,7 +155,7 @@ const FidelidadeCarteira = () => {
 
       {/* Nav Bar do Cliente */}
       <ClienteBottomNavBar activeTab="home" tenantSlug={tenant_slug} />
-    </div>
+    </TelaCliente>
   );
 };
 

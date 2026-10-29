@@ -1,100 +1,166 @@
 import express from 'express';
-import pool from '../config/db.js';
-import { authMiddleware, requireRole } from '../middlewares/auth.js';
+import { z } from 'zod';
+import { validate } from '../middlewares/validate.js';
+import { authMiddleware } from '../middlewares/auth.js';
+import {
+  addToWaitlist,
+  listWaitlist,
+  getMyWaitlist,
+  acceptWaitlistOffer,
+  cancelWaitlistEntry,
+  expireOffersAndAdvance
+} from '../services/waitlistService.js';
 
 const router = express.Router();
 
-// 1. Cliente entra na fila de espera
-router.post('/', authMiddleware, requireRole(['client']), async (req, res) => {
-  const { desired_date, service_id, professional_id } = req.body;
-  const client_id = req.user.id;
-  const tenant_id = req.user.tenant_id;
+const addToWaitlistSchema = z.object({
+  body: z.object({
+    desired_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data desejada inválida (formato AAAA-MM-DD).'),
+    service_id: z.string().uuid('ID do serviço inválido.').nullable().optional(),
+    professional_id: z.string().uuid('ID do profissional inválido.').nullable().optional(),
+    preferred_time_range: z.enum(['any', 'morning', 'afternoon', 'night']).optional()
+  }),
+  params: z.any(),
+  query: z.any()
+});
 
-  if (!desired_date) {
-    return res.status(400).json({ error: 'A data desejada é obrigatória.' });
-  }
+const acceptOfferSchema = z.object({
+  body: z.object({
+    start_time: z.string().datetime({ message: 'Data/hora de início inválida.' }),
+    staff_id: z.string().uuid().nullable().optional(),
+    service_id: z.string().uuid().nullable().optional(),
+    services: z.array(z.any()).optional(),
+    total_price: z.coerce.number().min(0).optional()
+  }),
+  params: z.object({
+    id: z.string().uuid('ID da oferta inválido.')
+  }),
+  query: z.any()
+});
+
+/**
+ * POST /api/waitlist - Cliente entra na lista de espera
+ */
+router.post('/', authMiddleware, validate(addToWaitlistSchema), async (req, res) => {
+  const { desired_date, service_id, professional_id, preferred_time_range } = req.body;
+  const tenantId = req.user.tenant_id;
+  const clientId = req.user.id;
 
   try {
-    // Verifica se já está na fila para esse dia
-    const check = await pool.query(
-      `SELECT id FROM public.cap_waitlist WHERE tenant_id = $1 AND client_id = $2 AND desired_date = $3 AND status = 'pending'`,
-      [tenant_id, client_id, desired_date]
-    );
+    const entry = await addToWaitlist({
+      tenantId,
+      clientId,
+      desiredDate: desired_date,
+      serviceId: service_id,
+      professionalId: professional_id,
+      preferredTimeRange: preferred_time_range
+    });
 
-    if (check.rows.length > 0) {
-      return res.status(400).json({ error: 'Você já está na lista de espera para esta data.' });
-    }
-
-    const result = await pool.query(
-      `INSERT INTO public.cap_waitlist (tenant_id, client_id, service_id, professional_id, desired_date)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [tenant_id, client_id, service_id || null, professional_id || null, desired_date]
-    );
-
-    return res.status(201).json({ message: 'Adicionado à lista de espera com sucesso!', id: result.rows[0].id });
+    return res.status(201).json(entry);
   } catch (error) {
-    console.error('Erro ao entrar na waitlist:', error);
-    return res.status(500).json({ error: 'Erro interno' });
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    req.log.error(error, 'Erro ao entrar na lista de espera');
+    return res.status(500).json({ error: 'Erro interno ao entrar na lista de espera.' });
   }
 });
 
-// 2. Gestor lista a fila de espera
-router.get('/', authMiddleware, requireRole(['manager', 'superadmin', 'professional']), async (req, res) => {
-  const tenant_id = req.user.tenant_id;
-  const { status = 'pending', date } = req.query;
+/**
+ * GET /api/waitlist/my - Minhas inscrições na lista de espera (Cliente)
+ */
+router.get('/my', authMiddleware, async (req, res) => {
+  const tenantId = req.user.tenant_id;
+  const clientId = req.user.id;
 
   try {
-    let query = `
-      SELECT w.id, w.desired_date, w.status, w.created_at,
-             c.name as client_name, c.phone as client_phone,
-             s.name as service_name, p.name as professional_name
-      FROM public.cap_waitlist w
-      JOIN public.cap_clients c ON w.client_id = c.id
-      LEFT JOIN public.cap_services s ON w.service_id = s.id
-      LEFT JOIN public.cap_staff p ON w.professional_id = p.id
-      WHERE w.tenant_id = $1 AND w.status = $2
-    `;
-    const params = [tenant_id, status];
-
-    if (date) {
-      params.push(date);
-      query += ` AND w.desired_date = $3`;
-    }
-
-    query += ` ORDER BY w.created_at ASC`;
-
-    const result = await pool.query(query, params);
-    return res.json(result.rows);
+    const entries = await getMyWaitlist(tenantId, clientId);
+    return res.json(entries);
   } catch (error) {
-    console.error('Erro ao listar waitlist:', error);
-    return res.status(500).json({ error: 'Erro interno' });
+    req.log.error(error, 'Erro ao listar minhas inscrições na fila');
+    return res.status(500).json({ error: 'Erro interno ao consultar lista de espera.' });
   }
 });
 
-// 3. Gestor atualiza o status de um pedido da fila
-router.put('/:id', authMiddleware, requireRole(['manager', 'superadmin', 'professional']), async (req, res) => {
-  const tenant_id = req.user.tenant_id;
+/**
+ * POST /api/waitlist/:id/accept - Aceitar oferta de vaga liberada
+ */
+router.post('/:id/accept', authMiddleware, validate(acceptOfferSchema), async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { start_time, staff_id, service_id, services, total_price } = req.body;
+  const tenantId = req.user.tenant_id;
+  const clientId = req.user.id;
 
-  if (!['pending', 'fulfilled', 'cancelled'].includes(status)) {
-    return res.status(400).json({ error: 'Status inválido' });
+  try {
+    const appt = await acceptWaitlistOffer({
+      tenantId,
+      waitlistId: id,
+      clientId,
+      start_time,
+      staff_id,
+      service_id,
+      services,
+      total_price
+    });
+
+    return res.status(201).json(appt);
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    req.log.error(error, 'Erro ao aceitar oferta de vaga');
+    return res.status(500).json({ error: 'Erro interno ao confirmar vaga da lista de espera.' });
+  }
+});
+
+/**
+ * DELETE /api/waitlist/:id - Cancelar/Sair da lista de espera
+ */
+router.delete('/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const tenantId = req.user.tenant_id;
+  const clientId = req.user.id;
+  const userRole = req.user.role;
+
+  try {
+    const cancelled = await cancelWaitlistEntry({
+      tenantId,
+      waitlistId: id,
+      clientId,
+      userRole
+    });
+
+    return res.json(cancelled);
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    req.log.error(error, 'Erro ao cancelar inscrição na fila');
+    return res.status(500).json({ error: 'Erro interno ao cancelar lista de espera.' });
+  }
+});
+
+/**
+ * GET /api/waitlist - Listagem da fila (Gestor/Equipe)
+ */
+router.get('/', authMiddleware, async (req, res) => {
+  const tenantId = req.user.tenant_id;
+  const userRole = req.user.role;
+  const { status, date } = req.query;
+
+  if (userRole === 'client') {
+    return res.status(403).json({ error: 'Acesso negado.' });
   }
 
   try {
-    const result = await pool.query(
-      `UPDATE public.cap_waitlist SET status = $1 WHERE id = $2 AND tenant_id = $3 RETURNING id`,
-      [status, id, tenant_id]
-    );
+    // Rotina automática de expiração antes de listar
+    await expireOffersAndAdvance(tenantId).catch(() => {});
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Registro não encontrado' });
-    }
-
-    return res.json({ message: 'Status atualizado com sucesso' });
+    const list = await listWaitlist(tenantId, status, date);
+    return res.json(list);
   } catch (error) {
-    console.error('Erro ao atualizar waitlist:', error);
-    return res.status(500).json({ error: 'Erro interno' });
+    req.log.error(error, 'Erro ao listar fila de espera');
+    return res.status(500).json({ error: 'Erro interno ao consultar lista de espera.' });
   }
 });
 

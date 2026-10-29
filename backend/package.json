@@ -7,7 +7,12 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --forceExit",
-    "test:load": "node tests/loadtest.js"
+    "test:load": "node tests/loadtest.js",
+    "migrate:up": "node ../scripts/migrate.js up",
+    "migrate:down": "node ../scripts/migrate.js down",
+    "migrate:status": "node ../scripts/migrate.js status",
+    "migrate:create": "node ../scripts/migrate.js create",
+    "migrate:baseline": "node ../scripts/migrate.js baseline"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

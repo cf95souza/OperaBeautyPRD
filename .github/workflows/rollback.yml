@@ -1,0 +1,44 @@
+name: OperaBeauty Rollback em 1 Clique
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_tag:
+        description: 'Tag de imagem para restauração (deixe em branco para usar .last_deployed_tag)'
+        required: false
+        default: ''
+        type: string
+      environment:
+        description: 'Ambiente alvo do rollback'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+jobs:
+  execute-rollback:
+    name: Executar Rollback na VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Executar Rollback Remoto via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            DEPLOY_DIR="${{ secrets.SSH_DEPLOY_DIR || '/home/' || secrets.SSH_USERNAME || '/OperaBeauty' }}"
+            cd "$DEPLOY_DIR"
+
+            echo "=========================================================="
+            echo "🔄 Disparando Rollback no ambiente: [${{ github.event.inputs.environment }}]..."
+            echo "=========================================================="
+
+            chmod +x ./scripts/rollback.sh
+            ./scripts/rollback.sh "${{ github.event.inputs.target_tag }}"

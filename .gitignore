@@ -1,11 +1,25 @@
-node_modules
-dist
-dist-ssr
+# Dependências
+node_modules/
+
+# Arquivos de Build e Pacotes Compactados
+dist/
+dist-ssr/
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Ambientes e Segredos (C4 - P0)
+.env*
+!.env.example
 *.local
-.env
-backend/.env
+*.enc
+*.pem
+*.key
 REPO_URL.txt
-# Auditoria e Docs
+
+# Auditoria e Docs Locais
 *.md
 !README.md
 arquivados/

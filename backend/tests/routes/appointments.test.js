@@ -11,8 +11,16 @@ jest.unstable_mockModule('pino-http', () => {
   };
 });
 
+const mockClient = {
+  query: jest.fn(),
+  release: jest.fn()
+};
+
 jest.unstable_mockModule('../../config/db.js', () => ({
-  default: { query: jest.fn() }
+  default: { 
+    query: jest.fn(),
+    connect: jest.fn(() => mockClient)
+  }
 }));
 
 const db = (await import('../../config/db.js')).default;
@@ -41,6 +49,32 @@ describe('Appointments Routes Tests', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    db.query.mockImplementation(async (sql) => {
+      return { rows: [{ id: '123e4567-e89b-12d3-a456-426614174002', client_id: 'client-id', name: 'Maria', status: 'cancelled' }] };
+    });
+    mockClient.query.mockImplementation(async (sql) => {
+      if (typeof sql === 'string') {
+        if (sql.includes('public.cap_staff WHERE id = $1 AND tenant_id = $2 FOR UPDATE')) {
+          return { rows: [{ id: 'staff-id', commission_rate: '10' }] };
+        }
+        if (sql.includes('public.cap_services')) {
+          return { rows: [{ id: '123e4567-e89b-12d3-a456-426614174001', name: 'Corte', duration_minutes: 30, price: 50 }] };
+        }
+        if (sql.includes('SELECT id FROM public.cap_appointments') && sql.includes('start_time < $4')) {
+          return { rows: [] };
+        }
+        if (sql.includes('INSERT INTO public.cap_appointments')) {
+          return { rows: [{ id: 'appt-id', status: 'confirmed' }] };
+        }
+        if (sql.includes('SELECT id, tenant_id, client_id, staff_id')) {
+          return { rows: [{ id: '123e4567-e89b-12d3-a456-426614174002', client_id: 'client-id', staff_id: 'staff-id', service_id: 'service-id', start_time: new Date(), end_time: new Date(), status: 'scheduled' }] };
+        }
+        if (sql.includes('UPDATE public.cap_appointments')) {
+          return { rows: [{ id: 'appt-id', checkin_status: 'checked_in' }] };
+        }
+      }
+      return { rows: [] };
+    });
   });
 
   describe('POST /api/appointments', () => {
@@ -57,8 +91,6 @@ describe('Appointments Routes Tests', () => {
     });
 
     it('deve criar agendamento valido', async () => {
-      db.query.mockResolvedValueOnce({ rows: [{ id: 'appt-id', status: 'confirmed' }] }); // mock service insert
-
       const res = await request(app)
         .post('/api/appointments')
         .set('Authorization', `Bearer ${validTokenClient}`)
@@ -73,9 +105,37 @@ describe('Appointments Routes Tests', () => {
       expect(res.body.id).toBe('appt-id');
     });
 
-    it('deve rejeitar (403) cliente de outro tenant', async () => {
-      db.query.mockRejectedValueOnce({ statusCode: 403, message: 'Acesso negado' });
+    it('deve retornar 409 quando o horário para o profissional já estiver ocupado', async () => {
+      mockClient.query.mockImplementation(async (sql) => {
+        if (typeof sql === 'string') {
+          if (sql.includes('public.cap_staff WHERE id = $1 AND tenant_id = $2 FOR UPDATE')) {
+            return { rows: [{ id: 'staff-id' }] };
+          }
+          if (sql.includes('public.cap_services')) {
+            return { rows: [{ id: '123e4567-e89b-12d3-a456-426614174001', name: 'Corte', duration_minutes: 30, price: 50 }] };
+          }
+          if (sql.includes('SELECT id FROM public.cap_appointments') && sql.includes('start_time < $4')) {
+            return { rows: [{ id: 'conflict-id' }] };
+          }
+        }
+        return { rows: [] };
+      });
 
+      const res = await request(app)
+        .post('/api/appointments')
+        .set('Authorization', `Bearer ${validTokenClient}`)
+        .send({
+          staff_id: '123e4567-e89b-12d3-a456-426614174000',
+          service_id: '123e4567-e89b-12d3-a456-426614174001',
+          start_time: '2026-10-10T10:00:00Z',
+          total_price: 150.00
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/Esse horário acabou de ser ocupado/);
+    });
+
+    it('deve rejeitar (403) cliente de outro tenant', async () => {
       const res = await request(app)
         .post('/api/appointments')
         .set('Authorization', `Bearer ${validTokenStaff}`) // staff tenta agendar pra um client
@@ -93,8 +153,6 @@ describe('Appointments Routes Tests', () => {
 
   describe('PUT /api/appointments/:id', () => {
     it('deve atualizar status e checkin', async () => {
-      db.query.mockResolvedValueOnce({ rows: [{ id: 'appt-id', checkin_status: 'checked_in' }] });
-
       const res = await request(app)
         .put('/api/appointments/123e4567-e89b-12d3-a456-426614174002')
         .set('Authorization', `Bearer ${validTokenStaff}`)
@@ -109,7 +167,7 @@ describe('Appointments Routes Tests', () => {
 
   describe('DELETE /api/appointments/:id', () => {
     it('deve deletar agendamento corretamente', async () => {
-      db.query.mockResolvedValueOnce({ rows: [{ id: '123e4567-e89b-12d3-a456-426614174002', status: 'cancelled' }] });
+      db.query.mockResolvedValueOnce({ rows: [{ id: '123e4567-e89b-12d3-a456-426614174002', client_id: 'client-id', status: 'cancelled' }] });
 
       const res = await request(app)
         .delete('/api/appointments/123e4567-e89b-12d3-a456-426614174002')

@@ -1,43 +1,138 @@
 import express from 'express';
-import pool from '../config/db.js';
+import { z } from 'zod';
 import { authMiddleware, requireRole } from '../middlewares/auth.js';
+import {
+  getClientReferralProfile,
+  validateReferralCode,
+  getAdminReferralDashboard,
+  updateReferralSettings
+} from '../services/referralService.js';
+import pool from '../config/db.js';
 
 const router = express.Router();
 
+// Schema Zod para atualização das configurações do programa pelo gestor
+const referralSettingsSchema = z.object({
+  active: z.boolean().optional(),
+  rewardType: z.enum(['wallet', 'coupon']).optional(),
+  referrerReward: z.number().nonnegative().optional(),
+  refereeReward: z.number().nonnegative().optional(),
+  trigger: z.enum(['on_signup', 'on_first_completed_appointment']).optional(),
+  customMessage: z.string().max(600).optional().nullable()
+});
+
+/**
+ * GET /api/referral/profile
+ * Retorna o perfil de indicação da cliente autenticada (código, métricas, link e mensagem).
+ */
+router.get('/profile', authMiddleware, requireRole(['client']), async (req, res) => {
+  try {
+    const { id, tenant_id } = req.user;
+    const baseUrl = req.get('origin') || `${req.protocol}://${req.get('host')}`;
+    const profile = await getClientReferralProfile(tenant_id, id, baseUrl);
+    return res.json(profile);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error(error, 'Erro ao buscar perfil de indicação da cliente');
+    return res.status(500).json({ error: 'Erro ao buscar perfil de indicação.' });
+  }
+});
+
+/**
+ * GET /api/referral/stats (Alias retrocompatível)
+ */
 router.get('/stats', authMiddleware, requireRole(['client']), async (req, res) => {
   try {
     const { id, tenant_id } = req.user;
-
-    // 1. Pegar o referral_code do cliente atual
-    const clientRes = await pool.query('SELECT referral_code FROM public.cap_clients WHERE id = $1 AND tenant_id = $2', [id, tenant_id]);
-    if (clientRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
-    }
-    const referralCode = clientRes.rows[0].referral_code;
-
-    // 2. Contar quantos amigos ele indicou
-    const friendsRes = await pool.query('SELECT COUNT(*) as total FROM public.cap_clients WHERE referred_by = $1 AND tenant_id = $2', [id, tenant_id]);
-    const totalFriends = parseInt(friendsRes.rows[0].total, 10);
-
-    // 3. Somar os bônus recebidos na carteira devido a indicações
-    // As transações foram inseridas com a descrição 'Bônus por indicação de novo amigo!'
-    const bonusRes = await pool.query(`
-      SELECT SUM(amount) as total_bonus 
-      FROM public.cap_wallet_transactions 
-      WHERE client_id = $1 AND tenant_id = $2 AND description = 'Bônus por indicação de novo amigo!'
-    `, [id, tenant_id]);
-    
-    const totalBonus = parseFloat(bonusRes.rows[0].total_bonus || 0);
-
+    const baseUrl = req.get('origin') || `${req.protocol}://${req.get('host')}`;
+    const profile = await getClientReferralProfile(tenant_id, id, baseUrl);
     return res.json({
-      referralCode,
-      totalFriends,
-      totalBonus
+      referralCode: profile.referralCode,
+      totalFriends: profile.stats.totalFriends,
+      totalBonus: profile.stats.totalBonusEarned,
+      ...profile
     });
-
   } catch (error) {
-    console.error(error);
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error(error, 'Erro ao buscar estatísticas de indicação');
     return res.status(500).json({ error: 'Erro ao buscar estatísticas de indicação.' });
+  }
+});
+
+/**
+ * GET /api/referral/validate/:code
+ * Endpoint público que valida o código de indicação antes do cadastro.
+ */
+router.get('/validate/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    let tenantId = req.query.tenant_id;
+    const tenantSlug = req.query.tenant_slug;
+
+    if (!tenantId && tenantSlug) {
+      const tenantRes = await pool.query(
+        'SELECT id FROM public.cap_tenants WHERE slug = $1 LIMIT 1',
+        [tenantSlug]
+      );
+      if (tenantRes.rows.length > 0) {
+        tenantId = tenantRes.rows[0].id;
+      }
+    }
+
+    if (!tenantId) {
+      return res.status(400).json({ valid: false, message: 'Salão não informado.' });
+    }
+
+    const validation = await validateReferralCode(tenantId, code);
+    return res.json(validation);
+  } catch (error) {
+    req.log?.error(error, 'Erro ao validar código de indicação');
+    return res.status(500).json({ valid: false, message: 'Erro ao validar código de indicação.' });
+  }
+});
+
+/**
+ * GET /api/referral/admin/dashboard
+ * Retorna os KPIs, embaixadoras e histórico de indicações para a gestão.
+ */
+router.get('/admin/dashboard', authMiddleware, requireRole(['manager', 'superadmin']), async (req, res) => {
+  try {
+    const { tenant_id } = req.user;
+    const { page, limit, search } = req.query;
+    const dashboard = await getAdminReferralDashboard(tenant_id, { page, limit, search });
+    return res.json(dashboard);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error(error, 'Erro ao buscar dashboard de indicações');
+    return res.status(500).json({ error: 'Erro ao buscar dashboard de indicações.' });
+  }
+});
+
+/**
+ * PUT /api/referral/admin/settings
+ * Atualiza as configurações e regras do programa de indicação pelo gestor.
+ */
+router.put('/admin/settings', authMiddleware, requireRole(['manager', 'superadmin']), async (req, res) => {
+  try {
+    const { tenant_id } = req.user;
+    const parsed = referralSettingsSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: 'Dados inválidos.',
+        details: parsed.error.issues.map(i => i.message)
+      });
+    }
+
+    const updated = await updateReferralSettings(tenant_id, parsed.data);
+    return res.json({
+      message: 'Configurações do programa de indicação atualizadas com sucesso.',
+      settings: updated
+    });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error(error, 'Erro ao atualizar configurações de indicação');
+    return res.status(500).json({ error: 'Erro ao atualizar configurações de indicação.' });
   }
 });
 

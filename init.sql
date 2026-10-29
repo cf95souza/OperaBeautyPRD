@@ -43,10 +43,15 @@ DROP TABLE IF EXISTS public.cap_leads CASCADE;
 DROP TABLE IF EXISTS public.cap_reviews CASCADE;
 
 -- ==========================================
--- 1. EXTENSÕES NECESSÁRIAS
+-- 1. EXTENSÕES NECESSÁRIAS E FUSO HORÁRIO (C11)
 -- ==========================================
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+-- Fuso horário padrão canônico (Brasília / America/Sao_Paulo)
+SET timezone TO 'America/Sao_Paulo';
+ALTER DATABASE operabeauty SET timezone TO 'America/Sao_Paulo';
 
 -- ==========================================
 -- 2. CRIAÇÃO DAS TABELAS (MULTI-TENANT & SAAS)
@@ -117,6 +122,12 @@ CREATE TABLE public.cap_platform_admins (
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     name TEXT NOT NULL,
+    totp_secret TEXT,
+    totp_enabled BOOLEAN DEFAULT FALSE,
+    totp_temp_secret TEXT,
+    last_login_at TIMESTAMPTZ,
+    last_login_ip TEXT,
+    last_login_user_agent TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -212,7 +223,8 @@ CREATE TABLE public.cap_inventory (
     type TEXT DEFAULT 'professional', -- 'sale' ou 'professional'
     price NUMERIC DEFAULT 0,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT chk_inventory_quantity_non_negative CHECK (quantity >= 0)
 );
 
 -- 2.11 Relação Serviço x Estoque (Quantos itens o serviço gasta)
@@ -242,7 +254,12 @@ CREATE TABLE public.cap_appointments (
     checkin_status TEXT DEFAULT 'pending', -- pending, checked_in
     checkin_request TEXT, -- Ex: Café sem açúcar
     cashback_redeemed DECIMAL(10, 2) DEFAULT 0.00,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT no_overlapping_appointments EXCLUDE USING gist (
+        tenant_id WITH =,
+        staff_id WITH =,
+        tstzrange(start_time, end_time) WITH &&
+    ) WHERE (status <> 'cancelled')
 );
 
 -- 2.13 Prontuários e Histórico (Timeline)
@@ -282,7 +299,9 @@ CREATE TABLE public.cap_coupons (
     expires_at TIMESTAMPTZ,
     service_id UUID REFERENCES public.cap_services(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(tenant_id, code)
+    UNIQUE(tenant_id, code),
+    CONSTRAINT chk_coupon_uses CHECK (max_uses IS NULL OR current_uses <= max_uses),
+    CONSTRAINT chk_coupon_current_uses_non_negative CHECK (current_uses >= 0)
 );
 
 -- 2.16 Leads da Landing Page
@@ -306,8 +325,11 @@ CREATE TABLE public.cap_refresh_tokens (
     family_id UUID, -- Usado para vincular o token ao Device Fingerprint (FINDING-07)
     is_revoked BOOLEAN DEFAULT FALSE,
     ip_address TEXT,
-    user_agent TEXT
+    user_agent TEXT,
+    device_id TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_cap_refresh_tokens_device ON public.cap_refresh_tokens(device_id);
 
 -- 2.18 Logs de Auditoria (Audit Trail)
 CREATE TABLE public.cap_audit_logs (
@@ -462,7 +484,9 @@ CREATE TABLE IF NOT EXISTS public.cap_wallet_transactions (
     description TEXT NOT NULL,
     expires_at TIMESTAMPTZ,
     is_expired BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    idempotency_key VARCHAR(100),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_wallet_idempotency UNIQUE (tenant_id, idempotency_key)
 );
 
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_client ON public.cap_wallet_transactions(client_id);
@@ -491,14 +515,36 @@ CREATE TABLE public.cap_giftcards (
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
     purchaser_id UUID REFERENCES public.cap_clients(id) ON DELETE SET NULL,
     service_id UUID REFERENCES public.cap_services(id) ON DELETE CASCADE,
+    request_id VARCHAR(50) UNIQUE,
+    redemption_code VARCHAR(50) UNIQUE,
     recipient_name TEXT,
-    code VARCHAR(20) UNIQUE NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'redeemed', 'expired')),
+    recipient_phone VARCHAR(50),
+    message TEXT,
+    original_value NUMERIC(10, 2) NOT NULL DEFAULT 0.00 CHECK (original_value >= 0),
+    available_balance NUMERIC(10, 2) NOT NULL DEFAULT 0.00 CONSTRAINT chk_giftcard_balance_non_negative CHECK (available_balance >= 0),
+    payment_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+    status TEXT NOT NULL DEFAULT 'PENDING_PAYMENT' CHECK (status IN ('PENDING_PAYMENT', 'ACTIVE', 'PARTIALLY_REDEEMED', 'REDEEMED', 'EXPIRED', 'CANCELLED')),
+    idempotency_key VARCHAR(100),
     expires_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_giftcard_idempotency UNIQUE (tenant_id, idempotency_key)
 );
 CREATE INDEX IF NOT EXISTS idx_cap_giftcards_tenant ON public.cap_giftcards(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_cap_giftcards_code ON public.cap_giftcards(code);
+CREATE INDEX IF NOT EXISTS idx_cap_giftcards_code ON public.cap_giftcards(redemption_code);
+
+-- 13.1 Livro-Razão Imutável de Resgates de Vale-Presente (C10)
+CREATE TABLE IF NOT EXISTS public.cap_giftcard_redemptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    giftcard_id UUID NOT NULL REFERENCES public.cap_giftcards(id) ON DELETE CASCADE,
+    appointment_id UUID REFERENCES public.cap_appointments(id) ON DELETE SET NULL,
+    amount NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+    idempotency_key VARCHAR(100),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_giftcard_redemption_idempotency UNIQUE (tenant_id, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_giftcard_redemptions_giftcard ON public.cap_giftcard_redemptions(giftcard_id);
+CREATE INDEX IF NOT EXISTS idx_giftcard_redemptions_tenant ON public.cap_giftcard_redemptions(tenant_id);
 
 
 -- ==========================================
@@ -715,3 +761,164 @@ CREATE TABLE IF NOT EXISTS public.cap_consents (
     signed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ==========================================
+-- 7. USUÁRIO COM PRIVILÉGIO MÍNIMO (C5 - P1)
+-- ==========================================
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'opera_app') THEN
+        CREATE ROLE opera_app WITH LOGIN PASSWORD 'opera_app_secure_pass';
+    END IF;
+END
+$$;
+
+ALTER ROLE opera_app WITH NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT CONNECT ON DATABASE operabeauty TO opera_app;
+GRANT USAGE ON SCHEMA public TO opera_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO opera_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO opera_app;
+GRANT EXECUTE ON ALL ROUTINES IN SCHEMA public TO opera_app;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO opera_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO opera_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON ROUTINES TO opera_app;
+
+-- ==========================================
+-- 8. ISOLAMENTO POR TENANT EM PROFUNDIDADE (RLS - C6 P1)
+-- ==========================================
+DO $$
+DECLARE
+    tbl_rec RECORD;
+BEGIN
+    FOR tbl_rec IN 
+        SELECT DISTINCT table_name 
+        FROM information_schema.columns 
+        WHERE column_name = 'tenant_id' 
+          AND table_schema = 'public'
+        ORDER BY table_name
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl_rec.table_name);
+        EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_policy ON public.%I;', tbl_rec.table_name);
+        EXECUTE format('
+            CREATE POLICY tenant_isolation_policy ON public.%I
+            AS PERMISSIVE
+            FOR ALL
+            TO opera_app, postgres
+            USING (
+                current_setting(''app.current_tenant_id'', true) = tenant_id::text
+                OR current_setting(''app.is_superadmin'', true) = ''true''
+                OR current_setting(''app.bypass_rls'', true) = ''true''
+            )
+            WITH CHECK (
+                current_setting(''app.current_tenant_id'', true) = tenant_id::text
+                OR current_setting(''app.is_superadmin'', true) = ''true''
+                OR current_setting(''app.bypass_rls'', true) = ''true''
+            );
+        ', tbl_rec.table_name);
+    END LOOP;
+END
+$$;
+-- ==============================================================================
+-- FASE 44 - ITEM D2 (P1): OPERABEAUTY WHATSAPP GATEWAY NATIVO (BAILEYS V7)
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.cap_whatsapp_instances (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    instance_name VARCHAR(100) NOT NULL DEFAULT 'default',
+    phone_number VARCHAR(30),
+    status VARCHAR(30) NOT NULL DEFAULT 'DISCONNECTED',
+    qr_code TEXT,
+    pairing_code VARCHAR(20),
+    connected_at TIMESTAMPTZ,
+    last_activity_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_whatsapp_instance_tenant UNIQUE (tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.cap_whatsapp_auth_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    key_name VARCHAR(150) NOT NULL,
+    encrypted_value TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_whatsapp_auth_key UNIQUE (tenant_id, key_name)
+);
+
+CREATE TABLE IF NOT EXISTS public.cap_whatsapp_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    appointment_id UUID REFERENCES public.cap_appointments(id) ON DELETE SET NULL,
+    recipient_phone VARCHAR(30) NOT NULL,
+    message_type VARCHAR(30) NOT NULL DEFAULT 'REMINDER',
+    content TEXT,
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+    error_message TEXT,
+    idempotency_key VARCHAR(100),
+    interactive_button_payload JSONB,
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_whatsapp_idempotency UNIQUE (tenant_id, idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_instances_tenant ON public.cap_whatsapp_instances(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_wa_auth_keys_tenant_key ON public.cap_whatsapp_auth_keys(tenant_id, key_name);
+CREATE INDEX IF NOT EXISTS idx_wa_messages_tenant ON public.cap_whatsapp_messages(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_wa_messages_appointment ON public.cap_whatsapp_messages(appointment_id);
+CREATE INDEX IF NOT EXISTS idx_wa_messages_status ON public.cap_whatsapp_messages(status);
+
+ALTER TABLE public.cap_whatsapp_instances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_whatsapp_auth_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_whatsapp_messages ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'opera_app') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_whatsapp_instances TO opera_app;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_whatsapp_auth_keys TO opera_app;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_whatsapp_messages TO opera_app;
+    END IF;
+END $$;
+
+-- ==========================================
+-- 16. Tabelas de Anamnese Dinâmica (CRM / LGPD)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.cap_anamnesis_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    fields_schema JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_anamnesis_template_tenant UNIQUE (tenant_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.cap_client_anamnesis (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    client_id UUID NOT NULL REFERENCES public.cap_clients(id) ON DELETE CASCADE,
+    answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_client_anamnesis UNIQUE (tenant_id, client_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_anamnesis_templates_tenant ON public.cap_anamnesis_templates(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_client_anamnesis_tenant ON public.cap_client_anamnesis(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_client_anamnesis_client ON public.cap_client_anamnesis(client_id);
+CREATE INDEX IF NOT EXISTS idx_client_anamnesis_expires ON public.cap_client_anamnesis(expires_at);
+
+ALTER TABLE public.cap_anamnesis_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cap_client_anamnesis ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'opera_app') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_anamnesis_templates TO opera_app;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.cap_client_anamnesis TO opera_app;
+    END IF;
+END $$;
+

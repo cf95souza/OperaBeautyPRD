@@ -1,8 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
 import { useNotification } from '../../context/NotificationProvider';
-import { Link } from 'react-router-dom';
+import { 
+  ToggleLeft, 
+  ToggleRight, 
+  Plus, 
+  Edit3, 
+  Trash2, 
+  Building2, 
+  CheckCircle2, 
+  XCircle, 
+  X, 
+  Sparkles,
+  Layers,
+  Check
+} from 'lucide-react';
+import { EstadoVazio } from '../../components/ui/EstadoVazio';
 
+/**
+ * Gestão de Feature Flags e Módulos Modulares do Super Admin (Rosé Editorial)
+ */
 const FeatureFlagsAdmin = () => {
   const { showSuccess, showError, confirm } = useNotification();
   const [flags, setFlags] = useState([]);
@@ -39,10 +56,10 @@ const FeatureFlagsAdmin = () => {
         api.superadmin.listFeatureFlags(),
         api.superadmin.listTenants()
       ]);
-      setFlags(flagsData);
+      setFlags(flagsData || []);
       setTenants(tenantsData || []);
     } catch (err) {
-      showError('Erro ao carregar dados iniciais.');
+      showError('Erro ao carregar dados de Feature Flags.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -53,9 +70,9 @@ const FeatureFlagsAdmin = () => {
     try {
       setTenantLoading(true);
       const data = await api.superadmin.listTenantFeatureFlags(tenantId);
-      setTenantFlags(data);
+      setTenantFlags(data || []);
     } catch (err) {
-      showError('Erro ao buscar as flags do inquilino.');
+      showError('Erro ao buscar as flags do salão selecionado.');
       console.error(err);
     } finally {
       setTenantLoading(false);
@@ -88,7 +105,7 @@ const FeatureFlagsAdmin = () => {
       setFormData({
         name: flag.name,
         description: flag.description || '',
-        is_active_global: flag.is_active_global
+        is_active_global: Boolean(flag.is_active_global)
       });
     } else {
       setEditingFlag(null);
@@ -102,7 +119,7 @@ const FeatureFlagsAdmin = () => {
   };
 
   const handleDelete = async (id) => {
-    if (await confirm('Tem certeza?', 'A Feature Flag será excluída permanentemente. Todos os salões perderão as configurações associadas a ela.')) {
+    if (await confirm('Excluir Feature Flag?', 'A flag será removida permanentemente e todos os salões perderão as configurações associadas a ela.')) {
       try {
         await api.superadmin.deleteFeatureFlag(id);
         showSuccess('Feature Flag excluída com sucesso!');
@@ -132,275 +149,297 @@ const FeatureFlagsAdmin = () => {
   };
 
   return (
-    <div className="flex h-screen bg-surface font-sans text-on-surface overflow-hidden">
-      {/* Sidebar - Navigation Drawer */}
-      <aside className="w-80 bg-surface-container-lowest border-r border-outline-variant/30 flex flex-col transition-all duration-300">
-        <div className="p-xl border-b border-outline-variant/30 bg-surface-container-lowest flex flex-col gap-4">
-          <h1 className="font-serif text-[28px] text-primary font-bold">OperaBeauty</h1>
-          <div className="flex items-center gap-md">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-sm">
-              <span className="material-symbols-outlined text-on-primary" style={{ fontVariationSettings: "'FILL' 1" }}>admin_panel_settings</span>
-            </div>
-            <div>
-              <h2 className="font-title-md text-title-md font-semibold text-on-surface tracking-tight">Super Admin</h2>
-              <p className="font-body-sm text-body-sm text-on-surface-variant">Gestão da Plataforma</p>
-            </div>
-          </div>
+    <div className="space-y-8 animate-fade-in pb-16 max-w-7xl mx-auto">
+      {/* Cabeçalho Editorial Rosé */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display font-bold text-3xl sm:text-4xl text-ink tracking-tight">
+            Feature Flags & Módulos
+          </h1>
+          <p className="text-sm text-ink-soft mt-1">
+            Controle modularmente a ativação de funcionalidades globais e permissões exclusivas por salão.
+          </p>
         </div>
-        <nav className="flex-1 overflow-y-auto py-md space-y-xs">
-          <Link to="/superadmin" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface rounded-lg mx-md font-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>dashboard</span>
-            Painel Geral
-          </Link>
-          <Link to="/superadmin/tenants" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>storefront</span>
-            Salões e Clientes
-          </Link>
-          <Link to="/superadmin/planos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>subscriptions</span>
-            Gestão de Planos
-          </Link>
-          <Link to="/superadmin/equipe" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>admin_panel_settings</span>
-            Equipe SaaS
-          </Link>
-          <Link to="/superadmin/features" className="flex items-center gap-md py-3 px-4 bg-primary-container text-on-primary-container rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>toggle_on</span>
-            Feature Flags
-          </Link>
-          <Link to="/superadmin/avisos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>campaign</span>
-            Mural de Avisos
-          </Link>
-          <Link to="/superadmin/auditoria" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>security</span>
-            Auditoria e Saúde
-          </Link>
-          <Link to="/superadmin/configuracoes" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>settings</span>
-            Configurações
-          </Link>
-        </nav>
-      </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-surface">
-        {/* Header */}
-        <div className="p-container-margin md:p-xl flex-1 flex flex-col gap-xl">
-          
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-lg border-b border-outline-variant/30 pb-lg">
-            <div>
-              <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-xs">Feature Flags & Módulos Beta</h1>
-              <p className="font-body-md text-body-md text-secondary">Controle a liberação de funcionalidades e módulos experimentais</p>
+        <button
+          onClick={() => openModal()}
+          className="px-5 py-2.5 rounded-full bg-brand hover:bg-brand-hover text-white text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Nova Feature Flag</span>
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="p-16 text-center text-xs text-ink-soft italic">
+          Carregando módulos da plataforma...
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Coluna 1 & 2: Módulos Cadastrados (Global) */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-brand-tint flex items-center justify-center text-brand">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <h2 className="font-display font-bold text-lg text-ink">Módulos Cadastrados</h2>
+              </div>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-ink-soft tabular-nums">
+                {flags.length} flags
+              </span>
             </div>
-            <button
-              onClick={() => openModal()}
-              className="bg-primary text-on-primary font-label-md text-label-md py-3 px-6 rounded-full flex items-center gap-sm hover:opacity-90 shadow-sm transition-all duration-300"
-            >
-              <span className="material-symbols-outlined text-md">add</span>
-              Nova Feature Flag
-            </button>
+
+            <div className="rounded-[22px] border border-line bg-white shadow-xs overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-stone-50 border-b border-line text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                    <th className="p-4">Identificador</th>
+                    <th className="p-4">Descrição</th>
+                    <th className="p-4 text-center">Global</th>
+                    <th className="p-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line/60">
+                  {flags.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="p-8 text-center">
+                        <EstadoVazio
+                          icone={<ToggleLeft className="w-7 h-7 text-brand" />}
+                          titulo="Nenhuma Feature Flag cadastrada"
+                          descricao="Controle modularmente quais funcionalidades e módulos estão liberados para cada plano ou salão."
+                          textoAcao="+ Criar Feature Flag"
+                          aoClicarAcao={() => openModal()}
+                          className="my-2 border-0 shadow-none bg-transparent"
+                        />
+                      </td>
+                    </tr>
+                  ) : (
+                    flags.map((flag) => (
+                      <tr key={flag.id} className="hover:bg-stone-50/60 transition-colors">
+                        <td className="p-4">
+                          <code className="px-2.5 py-1 bg-stone-100 text-brand rounded-lg font-mono text-xs font-semibold">
+                            {flag.name}
+                          </code>
+                        </td>
+                        <td className="p-4 text-xs text-ink-soft max-w-xs leading-relaxed">
+                          {flag.description || 'Sem descrição'}
+                        </td>
+                        <td className="p-4 text-center">
+                          {flag.is_active_global ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E8F5E9] text-[#2E7D32]">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Ativo
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-stone-100 text-stone-600">
+                              <XCircle className="w-3 h-3" />
+                              Por Salão
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => openModal(flag)}
+                              className="p-1.5 rounded-lg text-ink-soft hover:text-brand hover:bg-stone-100 transition-colors cursor-pointer"
+                              title="Editar"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(flag.id)}
+                              className="p-1.5 rounded-lg text-ink-soft hover:text-rose-600 hover:bg-stone-100 transition-colors cursor-pointer"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto pt-4 space-y-xl">
-          {loading ? (
-            <div className="text-center py-20 font-body-md text-on-surface-variant">Carregando Feature Flags...</div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-xl">
-              
-              {/* Left & Middle Column: Global Flags List */}
-              <div className="lg:col-span-2 space-y-md">
-                <h2 className="font-title-md text-title-md font-bold text-on-surface">Módulos Cadastrados</h2>
-                <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 overflow-hidden">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-surface-container-low border-b border-outline-variant/30 text-on-surface-variant font-label-md text-label-md">
-                        <th className="p-4">Identificador (Chave)</th>
-                        <th className="p-4">Descrição</th>
-                        <th className="p-4 text-center">Ativa Globalmente</th>
-                        <th className="p-4 text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {flags.length === 0 ? (
-                        <tr>
-                          <td colSpan="4" className="p-8 text-center text-on-surface-variant font-body-md">Nenhuma Feature Flag cadastrada ainda.</td>
-                        </tr>
-                      ) : (
-                        flags.map((flag) => (
-                          <tr key={flag.id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/30 transition-colors font-body-md">
-                            <td className="p-4">
-                              <code className="px-2 py-1 bg-surface-container-high text-primary rounded-md font-mono text-sm">{flag.name}</code>
-                            </td>
-                            <td className="p-4 text-on-surface-variant text-sm">{flag.description}</td>
-                            <td className="p-4 text-center">
-                              <span className={`inline-flex items-center gap-xs px-2.5 py-0.5 rounded-full text-xs font-semibold ${flag.is_active_global ? 'bg-green-100 text-green-800' : 'bg-outline-variant/30 text-on-surface-variant'}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${flag.is_active_global ? 'bg-green-600' : 'bg-on-surface-variant/40'}`}></span>
-                                {flag.is_active_global ? 'Ativo' : 'Inativo'}
-                              </span>
-                            </td>
-                            <td className="p-4 text-right space-x-xs">
-                              <button
-                                onClick={() => openModal(flag)}
-                                className="p-1.5 text-on-surface-variant hover:text-primary transition-all rounded-md"
-                                title="Editar"
-                              >
-                                <span className="material-symbols-outlined text-md">edit</span>
-                              </button>
-                              <button
-                                onClick={() => handleDelete(flag.id)}
-                                className="p-1.5 text-on-surface-variant hover:text-error transition-all rounded-md"
-                                title="Excluir"
-                              >
-                                <span className="material-symbols-outlined text-md">delete</span>
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+          {/* Coluna 3: Liberação por Salão Específico */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-brand-tint flex items-center justify-center text-brand">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <h2 className="font-display font-bold text-lg text-ink">Liberação por Salão</h2>
+            </div>
+
+            <div className="rounded-[22px] border border-line bg-white shadow-xs p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-ink-soft mb-1.5">
+                  Selecione o Salão
+                </label>
+                <select
+                  value={selectedTenantId}
+                  onChange={(e) => setSelectedTenantId(e.target.value)}
+                  className="w-full text-xs bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand transition-colors"
+                >
+                  <option value="">-- Escolha um salão para gerenciar --</option>
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name} ({t.slug})</option>
+                  ))}
+                </select>
               </div>
 
-              {/* Right Column: Tenant-Specific Activation */}
-              <div className="space-y-md">
-                <h2 className="font-title-md text-title-md font-bold text-on-surface">Liberação por Locatário (Salão)</h2>
-                
-                <div className="bg-surface-container-lowest p-lg rounded-xl border border-outline-variant/30 space-y-md">
-                  <div>
-                    <label className="font-label-md text-label-md text-on-surface-variant block mb-sm">Selecione o Salão</label>
-                    <select
-                      value={selectedTenantId}
-                      onChange={(e) => setSelectedTenantId(e.target.value)}
-                      className="w-full px-md py-sm bg-surface-container-low border border-outline rounded-lg focus:outline-none focus:border-primary text-on-surface font-body-md"
-                    >
-                      <option value="">-- Escolha um salão --</option>
-                      {tenants.map((t) => (
-                        <option key={t.id} value={t.id}>{t.name} ({t.slug})</option>
-                      ))}
-                    </select>
+              {selectedTenantId ? (
+                <div className="space-y-3 pt-2 border-t border-line/60">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-ink">Módulos no Salão</span>
+                    <span className="text-ink-soft tabular-nums">{tenantFlags.length} disponíveis</span>
                   </div>
 
-                  {selectedTenantId ? (
-                    <div className="space-y-md">
-                      <h3 className="font-title-sm text-title-sm font-semibold border-b border-outline-variant/20 pb-xs">Lista de Módulos</h3>
-                      
-                      {tenantLoading ? (
-                        <div className="text-center py-md text-on-surface-variant">Carregando flags...</div>
-                      ) : tenantFlags.length === 0 ? (
-                        <div className="text-center py-md text-on-surface-variant">Crie feature flags primeiro.</div>
-                      ) : (
-                        <div className="space-y-sm">
-                          {tenantFlags.map((tf) => (
-                            <div key={tf.feature_flag_id} className="flex items-center justify-between p-md bg-surface-container-low rounded-lg border border-outline-variant/10">
-                              <div>
-                                <p className="font-title-sm text-sm font-semibold">{tf.name}</p>
-                                <p className="text-xs text-on-surface-variant">{tf.description || 'Sem descrição'}</p>
-                                {tf.is_active_global && (
-                                  <span className="text-[10px] text-green-600 font-bold uppercase mt-xs block">Ativo Globalmente</span>
-                                )}
-                              </div>
-                              <div className="flex items-center">
-                                <input
-                                  type="checkbox"
-                                  disabled={tf.is_active_global}
-                                  checked={tf.is_active}
-                                  onChange={(e) => handleToggleTenantFlag(tf.feature_flag_id, e.target.checked)}
-                                  className="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary focus:ring-2 disabled:opacity-50"
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                  {tenantLoading ? (
+                    <div className="text-center py-6 text-xs text-ink-soft italic">Carregando permissões...</div>
+                  ) : tenantFlags.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-ink-soft italic">Nenhuma flag cadastrada.</div>
                   ) : (
-                    <div className="text-center py-xl text-on-surface-variant font-body-md">
-                      Selecione um salão para gerenciar a liberação de módulos Beta especificamente para ele.
+                    <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+                      {tenantFlags.map((tf) => (
+                        <div 
+                          key={tf.feature_flag_id}
+                          className="p-3 rounded-xl border border-line bg-stone-50/50 hover:bg-stone-50 transition-colors flex items-center justify-between gap-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-ink truncate">{tf.name}</p>
+                            <p className="text-[11px] text-ink-soft line-clamp-1 mt-0.5">{tf.description || 'Sem descrição'}</p>
+                            {tf.is_active_global && (
+                              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block mt-1">
+                                Ativo Globalmente (Todos)
+                              </span>
+                            )}
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input
+                              type="checkbox"
+                              disabled={tf.is_active_global}
+                              checked={tf.is_active}
+                              onChange={(e) => handleToggleTenantFlag(tf.feature_flag_id, e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand disabled:opacity-40"></div>
+                          </label>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
-              </div>
-
-            </div>
-          )}
-        </div>
-
-        {/* Modal: Nova / Editar Flag */}
-        {isModalOpen && (
-          <div className="fixed inset-0 bg-scrim/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-            <div className="bg-surface-container-lowest w-full max-w-md rounded-3xl border border-outline-variant/30 overflow-hidden shadow-xl flex flex-col max-h-[90vh] animate-scale-up">
-              <header className="p-lg border-b border-outline-variant/30 flex justify-between items-center bg-surface-container-lowest">
-                <h3 className="font-title-lg text-title-lg font-bold text-on-surface">{editingFlag ? 'Editar Feature Flag' : 'Nova Feature Flag'}</h3>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="p-1 rounded-full hover:bg-surface-container-high transition-all text-on-surface-variant"
-                >
-                  <span className="material-symbols-outlined text-md">close</span>
-                </button>
-              </header>
-              <form onSubmit={handleSubmit} className="p-lg space-y-md flex-1 overflow-y-auto">
-                <div>
-                  <label className="font-label-md text-label-md text-on-surface-variant block mb-xs">Identificador da Flag (Sem espaços)</label>
-                  <input
-                    type="text"
-                    required
-                    disabled={!!editingFlag}
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
-                    placeholder="ex: modulo_vip"
-                    className="w-full px-md py-sm bg-surface-container-low border border-outline rounded-lg focus:outline-none focus:border-primary text-on-surface font-body-md disabled:opacity-60"
-                  />
-                  <p className="text-xs text-on-surface-variant mt-xs">Apenas letras minúsculas, números e sublinhados.</p>
+              ) : (
+                <div className="py-8 text-center text-xs text-ink-soft italic leading-relaxed">
+                  Selecione um salão acima para liberar ou restringir módulos Beta exclusivamente para ele.
                 </div>
-
-                <div>
-                  <label className="font-label-md text-label-md text-on-surface-variant block mb-xs">Descrição</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Descreva o propósito dessa flag"
-                    rows="3"
-                    className="w-full px-md py-sm bg-surface-container-low border border-outline rounded-lg focus:outline-none focus:border-primary text-on-surface font-body-md"
-                  ></textarea>
-                </div>
-
-                <div className="flex items-center gap-md p-md bg-surface-container-low rounded-lg border border-outline-variant/10">
-                  <div className="flex-1">
-                    <p className="font-title-sm text-sm font-semibold">Ativa Globalmente</p>
-                    <p className="text-xs text-on-surface-variant">Libera o módulo para todos os salões da plataforma automaticamente</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={formData.is_active_global}
-                    onChange={(e) => setFormData({ ...formData, is_active_global: e.target.checked })}
-                    className="w-5 h-5 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary focus:ring-2"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-sm pt-md border-t border-outline-variant/20">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 border border-outline rounded-lg font-label-md text-label-md hover:bg-surface-container-high transition-all text-on-surface"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-primary text-on-primary hover:bg-primary/90 transition-all rounded-lg font-label-md text-label-md"
-                  >
-                    Salvar
-                  </button>
-                </div>
-              </form>
+              )}
             </div>
           </div>
-        )}
         </div>
-      </main>
+      )}
+
+      {/* Modal: Nova / Editar Flag */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div 
+            className="relative w-full max-w-md bg-white rounded-[26px] shadow-2xl border border-line overflow-hidden flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-[#FAF7F5] px-6 py-5 border-b border-line flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-brand-tint flex items-center justify-center text-brand">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-xl text-ink leading-tight">
+                    {editingFlag ? 'Editar Feature Flag' : 'Nova Feature Flag'}
+                  </h3>
+                  <p className="text-xs text-ink-soft">
+                    {editingFlag ? 'Atualize o identificador e regras globais' : 'Defina um novo módulo para a plataforma'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-2 rounded-full text-ink-soft hover:text-ink hover:bg-stone-100 transition-colors cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1.5">
+                  Identificador Único (Slug em minúsculas)
+                </label>
+                <input
+                  type="text"
+                  required
+                  disabled={!!editingFlag}
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+                  placeholder="ex: whatsapp_gateway, bi_reports"
+                  className="w-full text-xs font-mono bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand disabled:opacity-50"
+                />
+                <p className="text-[11px] text-ink-soft mt-1">
+                  Usado no código e middleware com requireFeature('nome'). Apenas letras e sublinhados.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1.5">
+                  Descrição do Módulo
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Explique qual recurso ou funcionalidade essa flag controla"
+                  rows="3"
+                  className="w-full text-xs bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand"
+                />
+              </div>
+
+              <div className="p-3.5 rounded-xl border border-line bg-stone-50 flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="chk_active_global"
+                  checked={formData.is_active_global}
+                  onChange={(e) => setFormData({ ...formData, is_active_global: e.target.checked })}
+                  className="w-4 h-4 text-brand rounded border-line mt-0.5"
+                />
+                <label htmlFor="chk_active_global" className="text-xs text-ink cursor-pointer">
+                  <strong className="block text-ink font-semibold">Ativa Globalmente</strong>
+                  <span className="text-ink-soft block text-[11px] mt-0.5">
+                    Se marcado, todos os salões da plataforma recebem acesso imediato sem necessidade de liberação manual.
+                  </span>
+                </label>
+              </div>
+
+              <div className="pt-3 border-t border-line flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2.5 rounded-full border border-stone-300 bg-white hover:bg-stone-50 text-xs font-semibold text-stone-700 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-full bg-brand hover:bg-brand-hover text-white text-xs font-semibold transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Salvar Flag</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,0 +1,220 @@
+name: OperaBeauty CI/CD & Automated Deploy
+
+on:
+  push:
+    branches: [ "main", "staging", "develop" ]
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: 'Ambiente de destino para deploy'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # ============================================================================
+  # 1. GATE DE QUALIDADE: Testes Automatizados e Build de Validação
+  # ============================================================================
+  quality-gate:
+    name: Quality Gate & Testes Automatizados
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Setup do Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar Dependências do Frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Validação do Build do Frontend (Vite)
+        run: npm run build
+        env:
+          VITE_API_URL: /api
+
+      - name: Instalar Dependências do Backend
+        run: npm ci
+        working-directory: ./backend
+
+      - name: Executar Auditoria de Segurança do Backend
+        run: npm audit --audit-level=high || true
+        working-directory: ./backend
+
+      - name: Executar Testes Automatizados do Backend (Jest)
+        run: npm test -- --passWithNoTests
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci-cd-temporary-test-jwt-secret-key-32chars
+          DB_PASSWORD: ci-test-password
+          ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+  # ============================================================================
+  # 2. BUILD E PUSH: Imagens Docker Imutáveis para o GitHub Packages (GHCR)
+  # ============================================================================
+  build-and-push:
+    name: Build & Push GHCR
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    outputs:
+      image_tag: ${{ steps.vars.outputs.tag }}
+      environment: ${{ steps.vars.outputs.env }}
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Determinar Tags e Ambiente
+        id: vars
+        run: |
+          COMMIT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "tag=sha-${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+          
+          if [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.event.inputs.target_env }}" = "production" ]; then
+            echo "env=production" >> "$GITHUB_OUTPUT"
+            echo "env_tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=staging" >> "$GITHUB_OUTPUT"
+            echo "env_tag=staging" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup do Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login no GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2.1 Build da API Express
+      - name: Build & Push da Imagem Backend API
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/api:${{ steps.vars.outputs.tag }}
+            ghcr.io/${{ github.repository }}/api:${{ steps.vars.outputs.env_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 2.2 Build do Frontend Caddy
+      - name: Build & Push da Imagem Frontend Caddy
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/caddy:${{ steps.vars.outputs.tag }}
+            ghcr.io/${{ github.repository }}/caddy:${{ steps.vars.outputs.env_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 2.3 Build do Gateway WhatsApp
+      - name: Build & Push da Imagem Gateway WhatsApp
+        uses: docker/build-push-action@v6
+        with:
+          context: ./gateway-whatsapp
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/wa-gateway:${{ steps.vars.outputs.tag }}
+            ghcr.io/${{ github.repository }}/wa-gateway:${{ steps.vars.outputs.env_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================================
+  # 3. DEPLOY REMOTO NA VPS: Atualização Atômica com Auto-Rollback
+  # ============================================================================
+  deploy-vps:
+    name: Deploy na VPS com Auto-Rollback
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: Deploy Remoto via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        continue-on-error: false
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script_stop: true
+          envs: TARGET_TAG,REPO_NAME,TARGET_ENV,REGISTRY_USER,REGISTRY_TOKEN
+          script: |
+            set -euo pipefail
+            DEPLOY_DIR="${{ secrets.SSH_DEPLOY_DIR || '/home/' || secrets.SSH_USERNAME || '/OperaBeauty' }}"
+            cd "$DEPLOY_DIR"
+
+            echo "=========================================================="
+            echo "🚀 Iniciando deploy automatizado do OperaBeauty..."
+            echo "   Tag de destino: [${{ needs.build-and-push.outputs.image_tag }}]"
+            echo "   Ambiente:       [${{ needs.build-and-push.outputs.environment }}]"
+            echo "=========================================================="
+
+            # 1. Salva a tag anterior para permitir rollback seguro
+            if [ -f .env ]; then
+              OLD_TAG=$(grep -E "^IMAGE_TAG=" .env | cut -d'=' -f2 | tr -d '[:space:]' || echo "latest")
+              echo "$OLD_TAG" > .last_deployed_tag
+              echo "ℹ️ Tag anterior salva para rollback: [$OLD_TAG]"
+            fi
+
+            # 2. Atualiza variáveis no arquivo .env
+            TARGET_TAG="${{ needs.build-and-push.outputs.image_tag }}"
+            REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+            
+            sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${TARGET_TAG}|" .env || echo "IMAGE_TAG=${TARGET_TAG}" >> .env
+            sed -i "s|^API_IMAGE=.*|API_IMAGE=ghcr.io/${REPO_LOWER}/api|" .env || echo "API_IMAGE=ghcr.io/${REPO_LOWER}/api" >> .env
+            sed -i "s|^CADDY_IMAGE=.*|CADDY_IMAGE=ghcr.io/${REPO_LOWER}/caddy|" .env || echo "CADDY_IMAGE=ghcr.io/${REPO_LOWER}/caddy" >> .env
+            sed -i "s|^WA_GATEWAY_IMAGE=.*|WA_GATEWAY_IMAGE=ghcr.io/${REPO_LOWER}/wa-gateway|" .env || echo "WA_GATEWAY_IMAGE=ghcr.io/${REPO_LOWER}/wa-gateway" >> .env
+
+            # 3. Autentica no GitHub Container Registry na VPS
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # 4. Baixa as imagens imutáveis
+            echo "📥 Baixando novas imagens do GHCR..."
+            docker compose pull
+
+            # 5. Reinicia os containers na nova versão
+            echo "🔄 Atualizando containers em produção..."
+            docker compose up -d --remove-orphans
+
+            # 6. Smoke Test / Healthcheck pós-deploy (Auto-Rollback se falhar)
+            echo "🩺 Executando verificação de integridade pós-deploy..."
+            HEALTHY=false
+            for i in $(seq 1 10); do
+              sleep 3
+              API_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5001/health || true)
+              FRONT_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || true)
+              if [ "$API_CODE" = "200" ] && [ "$FRONT_CODE" = "200" ]; then
+                HEALTHY=true
+                break
+              fi
+              echo "   Tentativa $i/10: API=$API_CODE, Front=$FRONT_CODE..."
+            done
+
+            if [ "$HEALTHY" = true ]; then
+              echo "✅ Deploy concluído com 100% de sucesso na versão [$TARGET_TAG]!"
+            else
+              echo "🚨 FALHA CRÍTICA NO HEALTHCHECK! Acionando Auto-Rollback imediato..."
+              ./scripts/rollback.sh "$OLD_TAG"
+              exit 1
+            fi

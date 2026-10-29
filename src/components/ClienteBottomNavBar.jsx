@@ -1,52 +1,46 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useTenant } from '../context/TenantContext';
+import { NavegacaoInferior } from './ui/NavegacaoInferior.jsx';
 
-const ClienteBottomNavBar = ({ activeTab, tenantSlug }) => {
+export const ClienteBottomNavBar = ({ activeTab, tenantSlug }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { tenant } = useTenant();
 
-  const tabs = [
-    { id: 'home', label: 'Início', icon: 'spa', path: `/${tenantSlug}/home` },
-    { id: 'agenda', label: 'Agenda', icon: 'calendar_month', path: `/${tenantSlug}/historico` },
-    { id: 'perfil', label: 'Perfil', icon: 'person', path: `/${tenantSlug}/perfil` }
-  ];
+  // Verifica se o salão possui o módulo de Clube no plano (ou feature flag ativa)
+  const hasClube = tenant?.features?.clube !== false;
+
+  // Não exibir durante o funil de agendamento (conforme DoD do plano)
+  const isBookingFlow = location.pathname.includes('/agendar/');
+  if (isBookingFlow) {
+    return null;
+  }
+
+  const rotas = {
+    home: `/${tenantSlug}/home`,
+    agenda: `/${tenantSlug}/historico`,
+    clube: `/${tenantSlug}/clube`,
+    perfil: `/${tenantSlug}/perfil`,
+  };
+
+  const handleMudarAba = (aba) => {
+    if (activeTab !== aba && rotas[aba]) {
+      navigate(rotas[aba]);
+    }
+  };
+
+  const handleClicarAgendar = () => {
+    navigate(`/${tenantSlug}/agendar/servicos`);
+  };
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] bg-surface/95 backdrop-blur-lg shadow-[0px_-4px_24px_rgba(0,0,0,0.06)] rounded-t-2xl border-t border-outline-variant/10">
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => !isActive && navigate(tab.path)}
-            className="flex flex-col items-center justify-center w-20 py-1 transition-all duration-200 relative"
-          >
-            {/* Ícone Minimalista */}
-            <div className={`mb-1 flex items-center justify-center transition-all duration-200 ${
-              isActive 
-                ? 'text-primary scale-110' 
-                : 'text-secondary/60 hover:text-secondary'
-            }`}>
-              <span 
-                className="material-symbols-outlined text-[26px]" 
-                style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}
-              >
-                {tab.icon}
-              </span>
-            </div>
-            {/* Texto */}
-            <span className={`font-label-sm text-[11px] font-semibold tracking-wide transition-colors ${
-              isActive ? 'text-primary' : 'text-secondary/60'
-            }`}>
-              {tab.label}
-            </span>
-            {/* Sutil indicador de linha ativo embaixo do texto */}
-            {isActive && (
-              <div className="absolute -bottom-1 w-6 h-[3px] bg-primary rounded-full animate-fade-in"></div>
-            )}
-          </button>
-        );
-      })}
-    </nav>
+    <NavegacaoInferior
+      abaAtiva={activeTab}
+      aoMudarAba={handleMudarAba}
+      aoClicarAgendar={handleClicarAgendar}
+      temClube={hasClube}
+    />
   );
 };
 

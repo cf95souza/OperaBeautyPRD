@@ -12,13 +12,13 @@ dotenv.config();
 
 const router = express.Router();
 
-// Autenticação necessária, mas sem restrição de role (tanto cliente quanto staff podem ter push)
-router.use(authMiddleware);
-
-// Obter a chave pública para o frontend
+// Obter a chave pública para o frontend (Pública por definição técnica do protocolo VAPID)
 router.get('/vapid-public-key', (req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
+
+// A partir daqui, autenticação necessária (tanto cliente quanto staff)
+router.use(authMiddleware);
 
 // Registrar assinatura de um dispositivo
 router.post('/subscribe', async (req, res) => {

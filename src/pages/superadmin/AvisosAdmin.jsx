@@ -1,14 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useNotification } from '../../context/NotificationProvider';
+import { 
+  Bell, 
+  Plus, 
+  Edit3, 
+  Trash2, 
+  X, 
+  Check, 
+  AlertTriangle, 
+  Info, 
+  CheckCircle2, 
+  AlertCircle,
+  Clock,
+  Sparkles
+} from 'lucide-react';
+import { EstadoVazio } from '../../components/ui/EstadoVazio';
+import { formatDate, formatDateTime } from '../../utils/formatters';
 
+/**
+ * Mural de Avisos Globais da Plataforma (Broadcast para Salões) - Rosé Editorial
+ */
 const AvisosAdmin = () => {
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const { showSuccess, showError, confirm } = useNotification();
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,11 +39,6 @@ const AvisosAdmin = () => {
     expires_at: ''
   });
 
-  const handleLogout = () => {
-    api.auth.logout();
-    navigate('/superadmin/login');
-  };
-
   useEffect(() => {
     fetchAnnouncements();
   }, []);
@@ -38,7 +49,7 @@ const AvisosAdmin = () => {
       const data = await api.superadmin.listAnnouncements();
       setAnnouncements(data || []);
     } catch (err) {
-      showError('Erro ao carregar avisos.');
+      showError('Erro ao carregar comunicados da plataforma.');
       console.error(err);
       setAnnouncements([]);
     } finally {
@@ -52,8 +63,8 @@ const AvisosAdmin = () => {
       setFormData({
         title: announcement.title,
         content: announcement.content,
-        type: announcement.type,
-        is_active: announcement.is_active,
+        type: announcement.type || 'info',
+        is_active: Boolean(announcement.is_active),
         expires_at: announcement.expires_at ? new Date(announcement.expires_at).toISOString().slice(0, 16) : ''
       });
     } else {
@@ -75,301 +86,304 @@ const AvisosAdmin = () => {
       const payload = { ...formData, expires_at: formData.expires_at || null };
       if (editingAnnouncement) {
         await api.superadmin.updateAnnouncement(editingAnnouncement.id, payload);
-        showSuccess('Aviso atualizado com sucesso!');
+        showSuccess('Comunicado atualizado com sucesso!');
       } else {
         await api.superadmin.createAnnouncement(payload);
-        showSuccess('Aviso criado com sucesso!');
+        showSuccess('Comunicado transmitido com sucesso!');
       }
       setIsModalOpen(false);
       fetchAnnouncements();
     } catch (err) {
-      showError(err.message || 'Erro ao salvar aviso.');
+      showError(err.message || 'Erro ao salvar comunicado.');
     }
   };
 
   const handleDelete = async (id) => {
-    if (await confirm('Tem certeza?', 'O aviso será excluído permanentemente.')) {
+    if (await confirm('Excluir Comunicado?', 'O aviso será removido permanentemente de todos os painéis dos salões.')) {
       try {
         await api.superadmin.deleteAnnouncement(id);
-        showSuccess('Aviso excluído com sucesso!');
+        showSuccess('Comunicado excluído com sucesso!');
         fetchAnnouncements();
       } catch (err) {
-        showError(err.message || 'Erro ao excluir aviso.');
+        showError(err.message || 'Erro ao excluir comunicado.');
       }
     }
   };
 
-  const getTypeColor = (type) => {
+  const renderTypeBadge = (type) => {
     switch (type) {
-      case 'info': return 'bg-blue-100 text-blue-800';
-      case 'warning': return 'bg-yellow-100 text-yellow-800';
-      case 'success': return 'bg-green-100 text-green-800';
-      case 'error': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'warning':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+            <AlertTriangle className="w-3 h-3 text-amber-600" />
+            Atenção
+          </span>
+        );
+      case 'success':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            Novidade
+          </span>
+        );
+      case 'error':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-200">
+            <AlertCircle className="w-3 h-3 text-rose-600" />
+            Crítico / Urgente
+          </span>
+        );
+      case 'info':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200">
+            <Info className="w-3 h-3 text-blue-600" />
+            Informativo
+          </span>
+        );
     }
   };
 
   return (
-    <div className="font-body-md text-body-md antialiased overflow-x-hidden min-h-screen flex bg-surface text-on-surface animate-fade-in-up">
-      
-      {/* Mobile Drawer Overlay */}
-      {isDrawerOpen && (
-        <div 
-          className="md:hidden fixed inset-0 bg-black/50 z-40 transition-opacity"
-          onClick={() => setIsDrawerOpen(false)}
-        ></div>
-      )}
-
-      {/* Navigation Drawer */}
-      <aside className={`flex flex-col h-screen w-80 fixed top-0 bg-surface-container-lowest border-r border-outline-variant/30 z-50 transition-all duration-300 ${isDrawerOpen ? 'left-0' : '-left-80'} md:left-0`}>
-        <div className="p-xl border-b border-outline-variant/30 bg-surface-container-lowest flex flex-col gap-4">
-          <h1 className="font-serif text-[28px] text-primary font-bold">OperaBeauty</h1>
-          <div className="flex items-center gap-md">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-sm">
-              <span className="material-symbols-outlined text-on-primary" style={{ fontVariationSettings: "'FILL' 1" }}>admin_panel_settings</span>
-            </div>
-            <div>
-              <h2 className="font-title-md text-title-md font-semibold text-on-surface tracking-tight">Super Admin</h2>
-              <p className="font-body-sm text-body-sm text-on-surface-variant">Gestão da Plataforma</p>
-            </div>
-          </div>
+    <div className="space-y-8 animate-fade-in pb-16 max-w-5xl mx-auto">
+      {/* Cabeçalho Editorial Rosé */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display font-bold text-3xl sm:text-4xl text-ink tracking-tight">
+            Mural de Avisos (Broadcast)
+          </h1>
+          <p className="text-sm text-ink-soft mt-1">
+            Transmita comunicados, alertas de manutenção e novidades diretamente para o painel de todos os salões parceiros.
+          </p>
         </div>
-        <nav className="flex flex-col gap-xs flex-1 py-md">
-          <Link to="/superadmin" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>dashboard</span>
-            Painel Geral
-          </Link>
-          <Link to="/superadmin/tenants" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>storefront</span>
-            Salões e Clientes
-          </Link>
-          <Link to="/superadmin/planos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>subscriptions</span>
-            Gestão de Planos
-          </Link>
-          <Link to="/superadmin/equipe" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>admin_panel_settings</span>
-            Equipe SaaS
-          </Link>
-          <Link to="/superadmin/features" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>toggle_on</span>
-            Feature Flags
-          </Link>
-          <Link to="/superadmin/avisos" className="flex items-center gap-md py-3 px-4 bg-primary-container text-on-primary-container rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>campaign</span>
-            Mural de Avisos
-          </Link>
-          <Link to="/superadmin/auditoria" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>security</span>
-            Auditoria e Saúde
-          </Link>
-          <Link to="/superadmin/configuracoes" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>settings</span>
-            Configurações
-          </Link>
-        </nav>
-        <div className="px-md mt-auto flex flex-col gap-2 pb-md">
-          <button onClick={handleLogout} className="flex items-center gap-md py-3 px-4 text-error hover:bg-error-container rounded-lg font-label-md text-label-md transition-colors w-full text-left">
-            <span className="material-symbols-outlined">logout</span>
-            Sair do Sistema
-          </button>
-          <div className="flex items-center gap-sm p-4 bg-surface-container-low rounded-xl">
-            <div className="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden">
-              <span className="material-symbols-outlined text-secondary">person</span>
+
+        <button 
+          onClick={() => openModal()} 
+          className="px-5 py-2.5 rounded-full bg-brand hover:bg-brand-hover text-white text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Novo Comunicado</span>
+        </button>
+      </div>
+
+      {/* Lista de Avisos */}
+      <div className="rounded-[22px] border border-line bg-white shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-line flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-brand-tint flex items-center justify-center text-brand">
+              <Bell className="w-4 h-4" />
             </div>
-            <div className="flex flex-col">
-              <span className="font-label-md text-label-md text-on-surface">Super Admin</span>
-              <span className="font-label-sm text-label-sm text-secondary">Administrador do Sistema</span>
-            </div>
+            <h2 className="font-display font-bold text-lg text-ink">Comunicados Registrados</h2>
           </div>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-ink-soft tabular-nums">
+            {announcements.length} comunicados
+          </span>
         </div>
-      </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 md:ml-72 flex flex-col min-h-screen bg-background">
-        
-        {/* Top App Bar (Mobile) */}
-        <header className="md:hidden flex justify-between items-center px-gutter py-3 w-full max-w-full bg-surface shadow-sm sticky top-0 z-30 pt-[max(env(safe-area-inset-top),_0.75rem)] min-h-[4rem]">
-          <div className="flex items-center gap-sm">
-            <button onClick={() => setIsDrawerOpen(true)} className="material-symbols-outlined text-primary p-2">menu</button>
-            <div className="flex items-center gap-xs cursor-pointer active:opacity-80">
-              <span className="material-symbols-outlined text-primary font-headline-md text-headline-md">spa</span>
-              <span className="font-headline-md text-[20px] text-primary tracking-tight">Admin Mestre</span>
-            </div>
-          </div>
-          <div className="w-8 h-8"></div>
-        </header>
-
-        <div className="p-container-margin md:p-xl flex-1 flex flex-col gap-xl">
-          
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-lg">
-            <div>
-              <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-xs">Mural de Avisos (Broadcast)</h1>
-              <p className="font-body-md text-body-md text-secondary">Gerencie os comunicados que aparecem no painel de todos os clientes simultaneamente.</p>
-            </div>
-            <button onClick={() => openModal()} className="bg-primary text-on-primary font-label-md text-label-md py-3 px-6 rounded-full flex items-center gap-sm hover:opacity-90 transition-opacity shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-              <span className="material-symbols-outlined text-[20px]">add</span>
-              Novo Aviso
-            </button>
-          </div>
-
-          <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/30 overflow-hidden shadow-sm">
-            {loading ? (
-              <div className="p-xl flex justify-center">
-                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-surface-container-lowest border-b border-outline-variant/30">
-                      <th className="py-4 px-6 font-label-sm text-label-sm font-medium text-on-surface-variant uppercase tracking-wider">Aviso</th>
-                      <th className="py-4 px-6 font-label-sm text-label-sm font-medium text-on-surface-variant uppercase tracking-wider">Tipo</th>
-                      <th className="py-4 px-6 font-label-sm text-label-sm font-medium text-on-surface-variant uppercase tracking-wider">Status</th>
-                      <th className="py-4 px-6 font-label-sm text-label-sm font-medium text-on-surface-variant uppercase tracking-wider">Expiração</th>
-                      <th className="py-4 px-6 font-label-sm text-label-sm font-medium text-on-surface-variant uppercase tracking-wider text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/30">
-                    {announcements.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="py-8 text-center text-on-surface-variant">Nenhum aviso cadastrado.</td>
-                      </tr>
-                    ) : (
-                      announcements.map((item) => (
-                        <tr key={item.id} className="hover:bg-surface-container-lowest/50 transition-colors group">
-                          <td className="py-4 px-6">
-                            <p className="font-label-lg text-label-lg text-on-surface font-medium">{item.title}</p>
-                            <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 line-clamp-1">{item.content}</p>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${getTypeColor(item.type)}`}>
-                              {item.type}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${item.is_active ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
-                              {item.is_active ? 'Ativo' : 'Inativo'}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className="text-sm text-on-surface-variant">
-                              {item.expires_at ? new Date(item.expires_at).toLocaleString() : 'Sem validade'}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => openModal(item)} className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-full transition-colors" title="Editar">
-                                <span className="material-symbols-outlined text-[20px]">edit</span>
-                              </button>
-                              <button onClick={() => handleDelete(item.id)} className="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-full transition-colors" title="Excluir">
-                                <span className="material-symbols-outlined text-[20px]">delete</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-stone-50 border-b border-line text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                <th className="p-4">Comunicado</th>
+                <th className="p-4">Tipo</th>
+                <th className="p-4 text-center">Status</th>
+                <th className="p-4">Expiração</th>
+                <th className="p-4 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line/60">
+              {loading ? (
+                <tr>
+                  <td colSpan="5" className="p-12 text-center text-xs text-ink-soft italic">
+                    Carregando avisos da plataforma...
+                  </td>
+                </tr>
+              ) : announcements.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="p-8 text-center">
+                    <EstadoVazio
+                      icone={<Bell className="w-7 h-7 text-brand" />}
+                      titulo="Nenhum comunicado cadastrado"
+                      descricao="Envie comunicados gerais, alertas de manutenção ou novidades a todos os salões da plataforma."
+                      textoAcao="+ Criar Primeiro Comunicado"
+                      aoClicarAcao={() => openModal()}
+                      className="my-2 border-0 shadow-none bg-transparent"
+                    />
+                  </td>
+                </tr>
+              ) : (
+                announcements.map((item) => (
+                  <tr key={item.id} className="hover:bg-stone-50/60 transition-colors">
+                    <td className="p-4 max-w-sm">
+                      <p className="text-xs font-bold text-ink leading-tight">{item.title}</p>
+                      <p className="text-[11px] text-ink-soft line-clamp-1 mt-1 leading-relaxed">{item.content}</p>
+                    </td>
+                    <td className="p-4">
+                      {renderTypeBadge(item.type)}
+                    </td>
+                    <td className="p-4 text-center">
+                      {item.is_active ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E8F5E9] text-[#2E7D32]">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Visível
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-stone-100 text-stone-600">
+                          Pausado
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 text-xs text-ink-soft">
+                      {item.expires_at ? (
+                        <span className="flex items-center gap-1 text-[11px]">
+                          <Clock className="w-3 h-3 text-stone-400" />
+                          {formatDateTime(item.expires_at)}
+                        </span>
+                      ) : (
+                        <span className="text-stone-400 text-[11px] italic">Sem validade</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button 
+                          onClick={() => openModal(item)} 
+                          className="p-1.5 rounded-lg text-ink-soft hover:text-brand hover:bg-stone-100 transition-colors cursor-pointer" 
+                          title="Editar"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(item.id)} 
+                          className="p-1.5 rounded-lg text-ink-soft hover:text-rose-600 hover:bg-stone-100 transition-colors cursor-pointer" 
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      </main>
+      </div>
 
-      {/* Modal de Criação/Edição */}
+      {/* Modal de Criação / Edição */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
-          <div className="bg-surface rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-6 border-b border-surface-variant bg-surface">
-              <h3 className="font-headline-sm text-headline-sm">
-                {editingAnnouncement ? 'Editar Aviso' : 'Novo Aviso'}
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-secondary hover:text-error transition-colors p-1 rounded-full hover:bg-surface-container">
-                <span className="material-symbols-outlined">close</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div 
+            className="relative w-full max-w-lg bg-white rounded-[26px] shadow-2xl border border-line overflow-hidden flex flex-col max-h-[90vh]" 
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="bg-[#FAF7F5] px-6 py-5 border-b border-line flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-brand-tint flex items-center justify-center text-brand">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-xl text-ink leading-tight">
+                    {editingAnnouncement ? 'Editar Comunicado' : 'Novo Comunicado Broadcast'}
+                  </h3>
+                  <p className="text-xs text-ink-soft">
+                    {editingAnnouncement ? 'Altere o teor ou data de expiração' : 'Será transmitido nos dashboards de todos os salões'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="p-2 rounded-full text-ink-soft hover:text-ink hover:bg-stone-100 transition-colors cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto bg-surface">
-              <div className="p-6 space-y-5">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1.5">Título do Comunicado</label>
+                <input 
+                  type="text" 
+                  value={formData.title} 
+                  onChange={e => setFormData({...formData, title: e.target.value})}
+                  className="w-full text-xs bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand font-medium" 
+                  placeholder="Ex: Manutenção Programada dos Servidores"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1.5">Mensagem / Conteúdo</label>
+                <textarea 
+                  value={formData.content} 
+                  onChange={e => setFormData({...formData, content: e.target.value})}
+                  className="w-full text-xs bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand min-h-[110px]" 
+                  placeholder="Escreva a mensagem clara que aparecerá no topo do painel das gestoras..."
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-label-sm text-secondary mb-1">Título do Aviso</label>
-                  <input 
-                    type="text" 
-                    value={formData.title} 
-                    onChange={e => setFormData({...formData, title: e.target.value})}
-                    className="w-full bg-surface-container-lowest border border-surface-variant px-4 py-3 rounded-lg text-on-surface focus:ring-2 focus:ring-primary outline-none transition-shadow" 
-                    placeholder="Ex: Sistema em Manutenção"
-                    required
-                  />
+                  <label className="block text-xs font-semibold text-ink mb-1.5">Tipo de Comunicado</label>
+                  <select 
+                    value={formData.type} 
+                    onChange={e => setFormData({...formData, type: e.target.value})}
+                    className="w-full text-xs bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand cursor-pointer"
+                  >
+                    <option value="info">Informativo (Azul)</option>
+                    <option value="warning">Aviso / Atenção (Âmbar)</option>
+                    <option value="success">Novidade / Release (Verde)</option>
+                    <option value="error">Alerta Crítico (Vermelho)</option>
+                  </select>
                 </div>
                 
                 <div>
-                  <label className="block font-label-sm text-secondary mb-1">Conteúdo / Mensagem</label>
-                  <textarea 
-                    value={formData.content} 
-                    onChange={e => setFormData({...formData, content: e.target.value})}
-                    className="w-full bg-surface-container-lowest border border-surface-variant px-4 py-3 rounded-lg text-on-surface focus:ring-2 focus:ring-primary outline-none transition-shadow min-h-[120px]" 
-                    placeholder="Escreva a mensagem que aparecerá para os clientes..."
-                    required
-                  ></textarea>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-label-sm text-secondary mb-1">Tipo de Aviso</label>
-                    <select 
-                      value={formData.type} 
-                      onChange={e => setFormData({...formData, type: e.target.value})}
-                      className="w-full bg-surface-container-lowest border border-surface-variant px-4 py-3 rounded-lg text-on-surface focus:ring-2 focus:ring-primary outline-none"
-                    >
-                      <option value="info">Info (Azul)</option>
-                      <option value="warning">Aviso (Amarelo)</option>
-                      <option value="success">Sucesso (Verde)</option>
-                      <option value="error">Alerta Crítico (Vermelho)</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block font-label-sm text-secondary mb-1">Data de Expiração</label>
-                    <input 
-                      type="datetime-local" 
-                      value={formData.expires_at} 
-                      onChange={e => setFormData({...formData, expires_at: e.target.value})}
-                      className="w-full bg-surface-container-lowest border border-surface-variant px-4 py-3 rounded-lg text-on-surface focus:ring-2 focus:ring-primary outline-none transition-shadow" 
-                    />
-                    <p className="text-xs text-on-surface-variant mt-1">Opcional. Se vazio, não expira.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 pt-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={formData.is_active} 
-                      onChange={e => setFormData({...formData, is_active: e.target.checked})} 
-                      className="w-5 h-5 rounded text-primary focus:ring-primary border-surface-variant"
-                    />
-                    <span className="font-label-md text-label-md text-on-surface">Aviso Ativo (Visível)</span>
-                  </label>
+                  <label className="block text-xs font-semibold text-ink mb-1.5">Data de Expiração (Opcional)</label>
+                  <input 
+                    type="datetime-local" 
+                    value={formData.expires_at} 
+                    onChange={e => setFormData({...formData, expires_at: e.target.value})}
+                    className="w-full text-xs bg-stone-50 border border-line rounded-xl px-3.5 py-2.5 text-ink outline-none focus:border-brand" 
+                  />
+                  <p className="text-[11px] text-ink-soft mt-1">Se vazio, o aviso não expira automaticamente.</p>
                 </div>
               </div>
-              
-              <div className="p-6 border-t border-surface-variant bg-surface flex justify-end gap-3 sticky bottom-0">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 rounded-full font-label-md border border-surface-variant text-secondary hover:bg-surface-container-low transition-colors">
+
+              <div className="p-3.5 rounded-xl border border-line bg-stone-50 flex items-center gap-3">
+                <input 
+                  type="checkbox" 
+                  id="chk_aviso_ativo"
+                  checked={formData.is_active} 
+                  onChange={e => setFormData({...formData, is_active: e.target.checked})} 
+                  className="w-4 h-4 text-brand rounded border-line"
+                />
+                <label htmlFor="chk_aviso_ativo" className="text-xs text-ink cursor-pointer">
+                  <strong className="block text-ink font-semibold">Comunicado Ativo</strong>
+                  <span className="text-[11px] text-ink-soft block mt-0.5">Visível para todas as gestoras e recepcionistas no dashboard.</span>
+                </label>
+              </div>
+
+              <div className="pt-3 border-t border-line flex items-center justify-end gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsModalOpen(false)} 
+                  className="px-4 py-2.5 rounded-full border border-stone-300 bg-white hover:bg-stone-50 text-xs font-semibold text-stone-700 transition-colors cursor-pointer"
+                >
                   Cancelar
                 </button>
-                <button type="submit" className="px-6 py-2.5 rounded-full font-label-md bg-primary text-on-primary hover:opacity-90 transition-colors shadow-sm">
-                  {editingAnnouncement ? 'Salvar Alterações' : 'Criar Aviso'}
+                <button 
+                  type="submit" 
+                  className="px-5 py-2.5 rounded-full bg-brand hover:bg-brand-hover text-white text-xs font-semibold transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{editingAnnouncement ? 'Salvar Alterações' : 'Publicar Comunicado'}</span>
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 };

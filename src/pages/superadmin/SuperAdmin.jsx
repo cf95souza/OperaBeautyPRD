@@ -1,680 +1,464 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import CreateTenantModal from '../../components/superadmin/CreateTenantModal';
+import { formatCurrency } from '../../utils/formatters';
 
 const SuperAdmin = () => {
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const navigate = useNavigate();
+
+  // Estados principais
   const [tenants, setTenants] = useState([]);
-  const [overdueTenants, setOverdueTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const itemsPerPage = 5;
+  const [period, setPeriod] = useState('month'); // 'month' | '3months' | 'year'
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
+  // Métricas do SaaS
   const [metrics, setMetrics] = useState({
+    total_tenants: 0,
     active_tenants: 0,
+    suspended_tenants: 0,
+    unique_clients: 0,
     earnings_paid: 0,
     earnings_pending: 0,
-    unique_clients: 0,
-    mrr: 0
+    mrr: 0,
+    churn_rate: '0%',
+    revenue_by_plan: [],
+    attention_items: []
   });
 
-  const [selectedTenant, setSelectedTenant] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const [plans, setPlans] = useState([]);
-
-  // Debounce search
+  // Carregar dados na montagem e ao trocar período
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-      setCurrentPage(1); // Reset page on search
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [searchQuery]);
+    fetchDashboardData();
+  }, [period]);
 
-  useEffect(() => {
-    fetchTenants();
-    fetchMetrics();
-    fetchPlans();
-    fetchOverdueTenants();
-  }, [debouncedSearch, currentPage]);
-
-  const fetchOverdueTenants = async () => {
-    try {
-      const data = await api.superadmin.getOverdueTenants();
-      if (data) setOverdueTenants(data);
-    } catch (err) {
-      console.error('Erro ao buscar inadimplentes', err);
-    }
-  };
-
-  const fetchPlans = async () => {
-    try {
-      const data = await api.plans.list();
-      if (data) setPlans(data);
-    } catch (err) {
-      console.error('Erro ao buscar planos', err);
-    }
-  };
-
-  const getPlanName = (price) => {
-    if (!price) return 'Personalizado';
-    const plan = plans.find(p => Number(p.price) === Number(price));
-    return plan ? plan.name : `R$ ${Number(price).toFixed(2)}`;
-  };
-
-  const fetchMetrics = async () => {
-    try {
-      const data = await api.superadmin.getDashboardMetrics();
-      if (data) setMetrics(data);
-    } catch (err) {
-      console.error('Erro ao buscar métricas', err);
-    }
-  };
-
-  const fetchTenants = async () => {
+  const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const data = await api.superadmin.listTenants();
-      
-      // Filtrar localmente por debouncedSearch
-      let filtered = data || [];
-      if (debouncedSearch) {
-        const query = debouncedSearch.toLowerCase();
-        filtered = filtered.filter(t => 
-          (t.name && t.name.toLowerCase().includes(query)) || 
-          (t.slug && t.slug.toLowerCase().includes(query))
-        );
+      const [metricsData, tenantsData] = await Promise.all([
+        api.superadmin.getDashboardMetrics(period),
+        api.superadmin.listTenants()
+      ]);
+
+      if (metricsData) {
+        setMetrics(metricsData);
       }
-      
-      // Ordenar alfabeticamente por name
-      filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      
-      setTotalCount(filtered.length);
-      
-      // Paginação
-      const from = (currentPage - 1) * itemsPerPage;
-      const to = from + itemsPerPage;
-      setTenants(filtered.slice(from, to));
+
+      if (tenantsData) {
+        setTenants(tenantsData);
+      }
     } catch (err) {
-      console.error('Erro ao buscar salões:', err);
+      console.error('Erro ao carregar dados do painel do Super Admin:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const navigate = useNavigate();
-
-  const handleOpenModal = (tenant) => {
-    setSelectedTenant(tenant);
-    setIsModalOpen(true);
-  };
-
-  const handleDeleteTenant = async () => {
-    if (!selectedTenant) return;
-    setIsDeleting(true);
-    try {
-      await api.superadmin.deleteTenant(selectedTenant.id);
-      setIsDeleteDialogOpen(false);
-      setIsModalOpen(false);
-      setSelectedTenant(null);
-      fetchTenants();
-      fetchMetrics();
-    } catch (err) {
-      console.error('Erro ao deletar salão', err);
-      alert('Erro ao deletar salão: ' + (err.message || 'Tente novamente.'));
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleLogout = () => {
-    api.auth.logout();
-    navigate('/superadmin/login');
-  };
-
-  const handleSuspendTenant = async (tenantId) => {
-    if (!window.confirm('Tem certeza que deseja suspender o acesso deste salão?')) return;
-    try {
-      await api.superadmin.updateTenant(tenantId, { status: 'suspended' });
-      fetchTenants();
-      fetchOverdueTenants();
-      fetchMetrics();
-    } catch (err) {
-      console.error('Erro ao suspender salão', err);
-      alert('Erro ao suspender salão.');
-    }
-  };
+  // Filtragem em tempo real pelo campo de busca
+  const filteredTenants = useMemo(() => {
+    if (!searchQuery.trim()) return tenants;
+    const q = searchQuery.toLowerCase().trim();
+    return tenants.filter(
+      (t) =>
+        (t.name && t.name.toLowerCase().includes(q)) ||
+        (t.slug && t.slug.toLowerCase().includes(q)) ||
+        (t.plan_name && t.plan_name.toLowerCase().includes(q))
+    );
+  }, [tenants, searchQuery]);
 
   return (
-    <div className="font-body-md text-body-md antialiased overflow-x-hidden min-h-screen flex bg-surface text-on-surface animate-fade-in-up">
+    <div className="flex flex-col gap-6 animate-fade-in max-w-7xl mx-auto pb-10">
       
-      {/* Mobile Drawer Overlay */}
-      {isDrawerOpen && (
-        <div 
-          className="md:hidden fixed inset-0 bg-black/50 z-40 transition-opacity"
-          onClick={() => setIsDrawerOpen(false)}
-        ></div>
-      )}
-
-      {/* Navigation Drawer (Responsive) */}
-      <aside className={`flex flex-col h-screen w-80 fixed top-0 bg-surface-container-lowest border-r border-outline-variant/30 z-50 transition-all duration-300 ${isDrawerOpen ? 'left-0' : '-left-80'} md:left-0`}>
-        <div className="p-xl border-b border-outline-variant/30 bg-surface-container-lowest flex flex-col gap-4">
-          <h1 className="font-serif text-[28px] text-primary font-bold">OperaBeauty</h1>
-          <div className="flex items-center gap-md">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-sm">
-              <span className="material-symbols-outlined text-on-primary" style={{ fontVariationSettings: "'FILL' 1" }}>admin_panel_settings</span>
-            </div>
-            <div>
-              <h2 className="font-title-md text-title-md font-semibold text-on-surface tracking-tight">Super Admin</h2>
-              <p className="font-body-sm text-body-sm text-on-surface-variant">Gestão da Plataforma</p>
-            </div>
-          </div>
+      {/* 1. TOPO: TÍTULO, SUBTÍTULO, SELETOR DE PERÍODO E NOVO SALÃO */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="font-display font-bold text-3xl md:text-[34px] text-stone-900 leading-tight">
+            Visão geral
+          </h1>
+          <p className="text-stone-500 text-sm mt-1">
+            Desempenho e faturamento de todos os salões.
+          </p>
         </div>
-        <nav className="flex-1 overflow-y-auto py-md space-y-xs">
-          <Link to="/superadmin" className="flex items-center gap-md py-3 px-4 bg-primary-container text-on-primary-container rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>dashboard</span>
-            Painel Geral
-          </Link>
-          <Link to="/superadmin/tenants" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>storefront</span>
-            Salões e Clientes
-          </Link>
-          <Link to="/superadmin/planos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>subscriptions</span>
-            Gestão de Planos
-          </Link>
-          <Link to="/superadmin/equipe" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>admin_panel_settings</span>
-            Equipe SaaS
-          </Link>
-          <Link to="/superadmin/features" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>toggle_on</span>
-            Feature Flags
-          </Link>
-          <Link to="/superadmin/avisos" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>campaign</span>
-            Mural de Avisos
-          </Link>
-          <Link to="/superadmin/auditoria" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>security</span>
-            Auditoria e Saúde
-          </Link>
-          <Link to="/superadmin/configuracoes" className="flex items-center gap-md py-3 px-4 text-on-surface-variant hover:bg-surface-container-high rounded-lg mx-md font-label-md text-label-md transition-all duration-200 ease-in-out">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>settings</span>
-            Configurações
-          </Link>
-        </nav>
-        <div className="px-md mt-auto flex flex-col gap-2">
-          <button onClick={handleLogout} className="flex items-center gap-md py-3 px-4 text-error hover:bg-error-container rounded-lg font-label-md text-label-md transition-colors w-full text-left">
-            <span className="material-symbols-outlined">logout</span>
-            Sair do Sistema
-          </button>
-          <div className="flex items-center gap-sm p-4 bg-surface-container-low rounded-xl">
-            <div className="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden">
-              <span className="material-symbols-outlined text-secondary">person</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-label-md text-label-md text-on-surface">Super Admin</span>
-              <span className="font-label-sm text-label-sm text-secondary">Administrador do Sistema</span>
-            </div>
-          </div>
-        </div>
-      </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 md:ml-72 flex flex-col min-h-screen bg-background">
-        
-        {/* Top App Bar (Mobile) */}
-        <header className="md:hidden flex justify-between items-center px-gutter py-3 w-full max-w-full bg-surface shadow-sm sticky top-0 z-30 pt-[max(env(safe-area-inset-top),_0.75rem)] min-h-[4rem]">
-          <div className="flex items-center gap-sm">
-            <button onClick={() => setIsDrawerOpen(true)} className="material-symbols-outlined text-primary p-2">menu</button>
-            <div className="flex items-center gap-xs cursor-pointer active:opacity-80">
-              <span className="material-symbols-outlined text-primary font-headline-md text-headline-md">spa</span>
-              <span className="font-headline-md text-[20px] text-primary tracking-tight">Admin Mestre</span>
-            </div>
-          </div>
-          <div className="w-8 h-8"></div> {/* Placeholder to keep flex-between balanced */}
-        </header>
-
-        <div className="p-container-margin md:p-xl flex-1 flex flex-col gap-xl">
-          
-          {/* Page Header & Quick Actions */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-lg">
-            <div>
-              <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-xs">Visão Geral</h1>
-              <p className="font-body-md text-body-md text-secondary">Monitore o desempenho e faturamento de todos os salões.</p>
-            </div>
-            <button 
-              onClick={() => setIsCreateModalOpen(true)}
-              className="bg-primary text-on-primary font-label-md text-label-md py-3 px-6 rounded-full flex items-center gap-sm hover:opacity-90 transition-opacity shadow-[0_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0_10px_30px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transform duration-300"
+        <div className="flex items-center gap-3">
+          {/* Seletor de Período em Pílula */}
+          <div className="bg-white border border-stone-200/90 rounded-full p-1 flex items-center shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setPeriod('month')}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                period === 'month'
+                  ? 'bg-[#7C3A4D] text-white shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
             >
-              <span className="material-symbols-outlined">add</span>
-              Novo Salão
+              Mês
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriod('3months')}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                period === '3months'
+                  ? 'bg-[#7C3A4D] text-white shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              3 meses
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriod('year')}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                period === 'year'
+                  ? 'bg-[#7C3A4D] text-white shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Ano
             </button>
           </div>
 
-          {/* Bento Grid: Global Overview Cards */}
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-lg">
-            
-            {/* Total Active Salons */}
-            <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px]">
-              <div className="flex justify-between items-start">
-                <span className="font-label-md text-label-md text-secondary">Salões Ativos</span>
-                <div className="bg-surface-container-low p-2 rounded-full text-primary">
-                  <span className="material-symbols-outlined">storefront</span>
-                </div>
-              </div>
-              <div>
-                <div className="font-display-lg text-display-lg text-on-surface">{metrics.active_tenants}</div>
-                <div className="flex items-center gap-xs mt-1 text-on-primary-container font-label-sm text-label-sm">
-                  <span className="material-symbols-outlined text-[16px]">trending_up</span>
-                  <span>Na plataforma</span>
-                </div>
-              </div>
+          {/* Botão Primário: + Novo salão */}
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="bg-[#7C3A4D] hover:bg-[#682F40] text-white font-medium text-xs md:text-sm px-5 py-2.5 rounded-full flex items-center gap-1.5 shadow-sm hover:shadow transition-all"
+          >
+            <span className="material-symbols-outlined text-base">add</span>
+            <span>Novo salão</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. GRADE DE 5 KPIS COMPACTOS */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        
+        {/* KPI 1: RECEITA RECORRENTE (MRR) */}
+        <div className="bg-white rounded-[22px] border border-stone-200/80 p-5 shadow-2xs flex flex-col justify-between min-h-[136px]">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+            RECEITA RECORRENTE (MRR)
+          </span>
+          <div className="my-1">
+            <div className="font-display font-bold text-2xl lg:text-[28px] text-stone-900 tabular-nums lining-nums leading-none">
+              {formatCurrency(metrics.mrr || 0)}
             </div>
+          </div>
+          <div className="text-xs text-stone-500">
+            {metrics.active_tenants || 0} {metrics.active_tenants === 1 ? 'salão pagante' : 'salões pagantes'}
+          </div>
+        </div>
 
-            {/* Total MRR */}
-            <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px] relative overflow-hidden">
-              <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 100% 0%, var(--color-primary) 0%, transparent 50%)" }}></div>
-              <div className="flex justify-between items-start relative z-10">
-                <span className="font-label-md text-label-md text-secondary">Faturamento (Pago)</span>
-                <div className="bg-surface-container-low p-2 rounded-full text-primary">
-                  <span className="material-symbols-outlined">payments</span>
-                </div>
-              </div>
-              <div className="relative z-10">
-                <div className="font-display-lg text-display-lg text-on-surface">R$ {Number(metrics.earnings_paid).toFixed(2).replace('.', ',')}</div>
-                <div className="flex items-center gap-xs mt-1 text-on-primary-container font-label-sm text-label-sm">
-                  <span className="material-symbols-outlined text-[16px]">trending_up</span>
-                  <span>Receita já recebida</span>
-                </div>
-              </div>
+        {/* KPI 2: SALÕES ATIVOS */}
+        <div className="bg-white rounded-[22px] border border-stone-200/80 p-5 shadow-2xs flex flex-col justify-between min-h-[136px]">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+            SALÕES ATIVOS
+          </span>
+          <div className="my-1">
+            <div className="font-display font-bold text-2xl lg:text-[28px] text-stone-900 tabular-nums leading-none">
+              {metrics.active_tenants || 0}
             </div>
+          </div>
+          <div className="text-xs text-stone-500">
+            Na plataforma
+          </div>
+        </div>
 
-            {/* Total MRR (Receita Mensal Recorrente) */}
-            <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px] relative overflow-hidden">
-              <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 100% 0%, var(--color-primary) 0%, transparent 50%)" }}></div>
-              <div className="flex justify-between items-start relative z-10">
-                <span className="font-label-md text-label-md text-secondary">Receita Mensal Recorrente</span>
-                <div className="bg-surface-container-low p-2 rounded-full text-primary">
-                  <span className="material-symbols-outlined">analytics</span>
-                </div>
-              </div>
-              <div className="relative z-10">
-                <div className="font-display-lg text-display-lg text-on-surface">R$ {Number(metrics.mrr || 0).toFixed(2).replace('.', ',')}</div>
-                <div className="flex items-center gap-xs mt-1 text-on-primary-container font-label-sm text-label-sm">
-                  <span className="material-symbols-outlined text-[16px]">verified</span>
-                  <span>MRR (Ativos)</span>
-                </div>
-              </div>
+        {/* KPI 3: FATURAS PENDENTES (Regra 9.1.4: Neutro quando zero) */}
+        <div className="bg-white rounded-[22px] border border-stone-200/80 p-5 shadow-2xs flex flex-col justify-between min-h-[136px]">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+            FATURAS PENDENTES
+          </span>
+          <div className="my-1">
+            <div className={`font-display font-bold text-2xl lg:text-[28px] tabular-nums lining-nums leading-none ${
+              (metrics.earnings_pending || 0) > 0 ? 'text-amber-800' : 'text-stone-900'
+            }`}>
+              {formatCurrency(metrics.earnings_pending || 0)}
             </div>
+          </div>
+          <div>
+            {(metrics.earnings_pending || 0) === 0 ? (
+              <span className="inline-block bg-emerald-50 text-emerald-700 text-xs px-2.5 py-0.5 rounded-full font-medium">
+                Tudo em dia
+              </span>
+            ) : (
+              <span className="inline-block bg-amber-50 text-amber-700 text-xs px-2.5 py-0.5 rounded-full font-medium">
+                A regularizar
+              </span>
+            )}
+          </div>
+        </div>
 
-            {/* Cancelamentos (Churn) */}
-            <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px]">
-              <div className="flex justify-between items-start">
-                <span className="font-label-md text-label-md text-secondary">Cancelamentos (Churn)</span>
-                <div className="bg-surface-container-low p-2 rounded-full text-secondary">
-                  <span className="material-symbols-outlined">trending_down</span>
-                </div>
-              </div>
-              <div>
-                <div className="font-display-lg text-display-lg text-on-surface">0%</div>
-                <div className="flex items-center gap-xs mt-1 text-secondary font-label-sm text-label-sm">
-                  <span>Nenhuma evasão este mês</span>
-                </div>
-              </div>
+        {/* KPI 4: CHURN DO MÊS */}
+        <div className="bg-white rounded-[22px] border border-stone-200/80 p-5 shadow-2xs flex flex-col justify-between min-h-[136px]">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+            CHURN DO MÊS
+          </span>
+          <div className="my-1">
+            <div className="font-display font-bold text-2xl lg:text-[28px] text-stone-900 tabular-nums leading-none">
+              {metrics.churn_rate || '0%'}
             </div>
+          </div>
+          <div className="text-xs text-stone-500">
+            {parseInt(metrics.churn_rate) > 0 
+              ? (metrics.suspended_tenants === 1 ? '1 cancelamento' : `${metrics.suspended_tenants} cancelamentos`) 
+              : 'Nenhum cancelamento'}
+          </div>
+        </div>
 
-            {/* Inadimplência */}
-            <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px]">
-              <div className="flex justify-between items-start">
-                <span className="font-label-md text-label-md text-secondary">Faturas Pendentes</span>
-                <div className="bg-error-container p-2 rounded-full text-on-error-container">
-                  <span className="material-symbols-outlined">warning</span>
-                </div>
-              </div>
-              <div>
-                <div className="font-display-lg text-display-lg text-error">R$ {Number(metrics.earnings_pending).toFixed(2).replace('.', ',')}</div>
-                <div className="flex items-center gap-xs mt-1 text-secondary font-label-sm text-label-sm">
-                  <span>A receber / Em aberto</span>
-                </div>
-              </div>
+        {/* KPI 5: CLIENTES ÚNICOS */}
+        <div className="bg-white rounded-[22px] border border-stone-200/80 p-5 shadow-2xs flex flex-col justify-between min-h-[136px]">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+            CLIENTES ÚNICOS
+          </span>
+          <div className="my-1">
+            <div className="font-display font-bold text-2xl lg:text-[28px] text-stone-900 tabular-nums leading-none">
+              {metrics.unique_clients || 0}
             </div>
+          </div>
+          <div className="text-xs text-stone-500">
+            Sem duplicidade
+          </div>
+        </div>
 
-            {/* Clientes Únicos */}
-            <div className="bg-surface-container-lowest rounded-xl p-lg shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col justify-between min-h-[160px] relative overflow-hidden">
-              <div className="flex justify-between items-start">
-                <span className="font-label-md text-label-md text-secondary">Clientes Únicos (Plataforma)</span>
-                <div className="bg-surface-container-low p-2 rounded-full text-primary">
-                  <span className="material-symbols-outlined">groups</span>
-                </div>
-              </div>
-              <div>
-                <div className="font-display-lg text-display-lg text-on-surface">{metrics.unique_clients}</div>
-                <div className="flex items-center gap-xs mt-1 text-secondary font-label-sm text-label-sm">
-                  <span>Base consolidada sem duplicações</span>
-                </div>
-              </div>
+      </section>
+
+      {/* 3. CORPO PRINCIPAL (2 COLUNAS: SALÕES + CARDS LATERAIS) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* COLUNA ESQUERDA (TABELA DE SALÕES) */}
+        <div className="lg:col-span-8 bg-white rounded-[24px] border border-stone-200/80 p-6 shadow-2xs">
+          
+          {/* Topo do Card de Salões: Título e Busca */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <h2 className="font-display font-bold text-2xl text-stone-900">
+              Salões
+            </h2>
+            <div className="relative w-full sm:w-64">
+              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-lg pointer-events-none">
+                search
+              </span>
+              <input
+                type="text"
+                placeholder="Buscar salão..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-stone-50/80 border border-stone-200/80 rounded-full py-2 pl-10 pr-4 text-xs text-stone-800 placeholder:text-stone-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7C3A4D]/20 focus:border-[#7C3A4D] transition-all"
+              />
             </div>
+          </div>
 
-          </section>
-
-          {/* Overdue Tenants Section */}
-          {overdueTenants.length > 0 && (
-            <section className="bg-error-container/20 border border-error/20 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-md gap-md">
-                <div>
-                  <h2 className="font-headline-md text-headline-md text-error flex items-center gap-2">
-                    <span className="material-symbols-outlined">warning</span>
-                    Salões Inadimplentes
-                  </h2>
-                  <p className="font-body-md text-secondary mt-1">Salões com faturas atrasadas e que exigem atenção.</p>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-error/20">
-                      <th className="py-sm px-md font-label-md text-secondary">Salão</th>
-                      <th className="py-sm px-md font-label-md text-secondary">Faturas Atrasadas</th>
-                      <th className="py-sm px-md font-label-md text-secondary">Valor em Atraso</th>
-                      <th className="py-sm px-md font-label-md text-secondary">Status</th>
-                      <th className="py-sm px-md font-label-md text-secondary text-right">Ação Mestre</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overdueTenants.map(t => (
-                      <tr key={t.id} className="border-b border-error/10 hover:bg-error/5 transition-colors">
-                        <td className="py-md px-md font-label-md text-on-surface">{t.name}</td>
-                        <td className="py-md px-md text-error font-label-md">{t.overdue_invoices} pendência(s)</td>
-                        <td className="py-md px-md text-error font-label-md">R$ {Number(t.overdue_amount).toFixed(2).replace('.', ',')}</td>
-                        <td className="py-md px-md">
-                          <span className={`px-3 py-1 rounded-full text-[12px] font-label-sm ${t.status === 'suspended' ? 'bg-error-container text-error' : 'bg-surface-container-high text-on-surface'}`}>
-                            {t.status === 'suspended' ? 'Suspenso' : 'Ativo'}
-                          </span>
-                        </td>
-                        <td className="py-md px-md text-right">
-                          {t.status !== 'suspended' && (
-                            <button 
-                              onClick={() => handleSuspendTenant(t.id)}
-                              className="px-4 py-2 bg-error text-on-error rounded-full font-label-sm hover:opacity-90 flex items-center gap-2 ml-auto"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">gavel</span>
-                              Suspender Conta
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-          {/* Salon Directory (Tenants) */}
-          <section className="bg-surface-container-lowest rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-lg gap-md">
-              <h2 className="font-headline-md text-headline-md text-on-surface">Diretório de Salões</h2>
-              <div className="flex items-center gap-md w-full md:w-auto">
-                <div className="relative flex-1 md:w-64">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary">search</span>
-                  <input 
-                    className="w-full bg-surface-container-low border-none rounded-full py-2 pl-10 pr-4 font-body-md text-body-md focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all outline-none" 
-                    placeholder="Buscar salão..." 
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                <button className="bg-surface-container-high p-2 rounded-full text-on-surface-variant hover:bg-surface-variant transition-colors">
-                  <span className="material-symbols-outlined">filter_list</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-surface-variant">
-                    <th className="py-sm px-md font-label-md text-label-md text-secondary whitespace-nowrap">Nome do Salão</th>
-                    <th className="py-sm px-md font-label-md text-label-md text-secondary whitespace-nowrap">Plano</th>
-                    <th className="py-sm px-md font-label-md text-label-md text-secondary whitespace-nowrap">Status</th>
-                    <th className="py-sm px-md font-label-md text-label-md text-secondary text-right whitespace-nowrap">Ações</th>
+          {/* Tabela de Salões */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-stone-100 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+                  <th className="pb-3 px-3">SALÃO</th>
+                  <th className="pb-3 px-3">PLANO</th>
+                  <th className="pb-3 px-3">MRR</th>
+                  <th className="pb-3 px-3">FATURA</th>
+                  <th className="pb-3 px-3">STATUS</th>
+                  <th className="pb-3 px-3 text-right"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100/80">
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="py-12 text-center text-xs text-stone-400">
+                      Carregando salões...
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="font-body-md text-body-md">
-                  {loading ? (
-                    <tr><td colSpan="4" className="text-center py-8 text-secondary">Carregando...</td></tr>
-                  ) : tenants.length === 0 ? (
-                    <tr><td colSpan="4" className="text-center py-8 text-secondary">Nenhum salão encontrado.</td></tr>
-                  ) : (
-                    tenants.map(t => (
-                      <tr key={t.id} className="border-b border-surface-variant hover:bg-surface-container-low transition-colors group cursor-pointer" onClick={() => handleOpenModal(t)}>
-                        <td className="py-md px-md">
-                          <div className="flex items-center gap-md">
-                            <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary overflow-hidden shrink-0" style={{ backgroundColor: t.primary_color ? `${t.primary_color}20` : undefined, color: t.primary_color }}>
-                              <span className="material-symbols-outlined">storefront</span>
+                ) : filteredTenants.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="py-12 text-center text-xs text-stone-400">
+                      Nenhum salão encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTenants.map((t) => {
+                    const initial = (t.name || 'S').trim().charAt(0).toUpperCase();
+                    const isOverdue = Number(t.overdue_invoices_count) > 0;
+                    const isSuspended = t.status === 'suspended' || t.status === 'inactive';
+
+                    return (
+                      <tr
+                        key={t.id}
+                        onClick={() => navigate(`/superadmin/tenants/${t.id}`)}
+                        className="hover:bg-stone-50/70 cursor-pointer transition-colors group"
+                      >
+                        {/* Nome do Salão e Slug */}
+                        <td className="py-3.5 px-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-[#F6E4E4] text-[#7C3A4D] flex items-center justify-center font-bold text-sm shrink-0 border border-rose-100">
+                              {initial}
                             </div>
                             <div>
-                              <div className="font-label-md text-label-md text-on-surface">{t.name}</div>
-                              <div className="font-label-sm text-label-sm text-secondary">{t.slug}</div>
+                              <div className="font-semibold text-sm text-stone-900 group-hover:text-[#7C3A4D] transition-colors">
+                                {t.name}
+                              </div>
+                              <div className="text-xs text-stone-400 font-normal">
+                                /{t.slug}
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td className="py-md px-md">
-                          <span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-sm text-label-sm">
-                            {getPlanName(t.plan_price)}
+
+                        {/* Plano */}
+                        <td className="py-3.5 px-3">
+                          <span className="inline-block bg-rose-50/70 border border-rose-200/50 text-rose-800 text-xs px-3 py-0.5 rounded-full font-medium">
+                            {t.plan_name || 'Enterprise'}
                           </span>
                         </td>
-                        <td className="py-md px-md">
-                          <div className="flex items-center gap-xs">
-                            <div className={`w-2 h-2 rounded-full ${t.status === 'active' ? 'bg-[#10b981]' : 'bg-error'}`}></div>
-                            <span className="text-on-surface-variant text-sm capitalize">{t.status === 'active' ? 'Ativo' : t.status || 'Inativo'}</span>
-                          </div>
+
+                        {/* MRR */}
+                        <td className="py-3.5 px-3 font-semibold text-stone-800 text-sm tabular-nums lining-nums">
+                          {formatCurrency(t.plan_price || 99.90)}
                         </td>
-                        <td className="py-md px-md text-right">
-                          <button className="text-secondary hover:text-primary transition-colors p-2" onClick={(e) => { e.stopPropagation(); handleOpenModal(t); }}>
-                            <span className="material-symbols-outlined">more_vert</span>
-                          </button>
+
+                        {/* Fatura */}
+                        <td className="py-3.5 px-3">
+                          {isOverdue ? (
+                            <span className="inline-block bg-rose-50 text-rose-700 text-xs px-3 py-0.5 rounded-full font-medium">
+                              Vencida
+                            </span>
+                          ) : (
+                            <span className="inline-block bg-emerald-50 text-emerald-700 text-xs px-3 py-0.5 rounded-full font-medium">
+                              Em dia
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-3">
+                          {isSuspended ? (
+                            <span className="inline-block bg-rose-50 text-rose-700 text-xs px-3 py-0.5 rounded-full font-medium">
+                              Suspenso
+                            </span>
+                          ) : (
+                            <span className="inline-block bg-emerald-50 text-emerald-700 text-xs px-3 py-0.5 rounded-full font-medium">
+                              Ativo
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Seta */}
+                        <td className="py-3.5 px-3 text-right text-stone-300 group-hover:text-stone-600 transition-colors">
+                          <span className="material-symbols-outlined text-lg">
+                            chevron_right
+                          </span>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-            {/* Mobile Cards View */}
-            <div className="md:hidden flex flex-col gap-sm mt-4">
-              {loading ? (
-                 <div className="text-center py-8 text-secondary">Carregando...</div>
-              ) : tenants.length === 0 ? (
-                 <div className="text-center py-8 text-secondary">Nenhum salão encontrado.</div>
-              ) : (
-                tenants.map(t => (
-                  <div key={t.id} className="bg-surface border border-surface-variant rounded-xl p-md flex flex-col gap-sm cursor-pointer" onClick={() => handleOpenModal(t)}>
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-md">
-                        <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary overflow-hidden shrink-0" style={{ backgroundColor: t.primary_color ? `${t.primary_color}20` : undefined, color: t.primary_color }}>
-                          <span className="material-symbols-outlined">storefront</span>
-                        </div>
-                        <div>
-                          <div className="font-label-md text-label-md text-on-surface">{t.name}</div>
-                          <div className="font-label-sm text-label-sm text-secondary">{t.slug}</div>
-                        </div>
-                      </div>
-                      <button className="text-secondary hover:text-primary transition-colors p-2 -mr-2" onClick={(e) => { e.stopPropagation(); handleOpenModal(t); }}>
-                        <span className="material-symbols-outlined">more_vert</span>
-                      </button>
-                    </div>
-                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-surface-variant">
-                      <span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full font-label-sm text-label-sm">
-                        {getPlanName(t.plan_price)}
-                      </span>
-                      <div className="flex items-center gap-xs">
-                        <div className={`w-2 h-2 rounded-full ${t.status === 'active' ? 'bg-[#10b981]' : 'bg-error'}`}></div>
-                        <span className="text-on-surface-variant text-sm capitalize">{t.status === 'active' ? 'Ativo' : t.status || 'Inativo'}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            
-            {/* Pagination Controls */}
-            {!loading && totalCount > itemsPerPage && (
-              <div className="mt-lg flex justify-between items-center">
-                <span className="text-secondary font-label-sm text-sm">
-                  Mostrando {(currentPage - 1) * itemsPerPage + 1} a {Math.min(currentPage * itemsPerPage, totalCount)} de {totalCount}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button 
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(p => p - 1)}
-                    className="p-2 rounded-lg border border-surface-variant text-secondary hover:bg-surface-container disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-                  </button>
-                  <button 
-                    disabled={currentPage * itemsPerPage >= totalCount}
-                    onClick={() => setCurrentPage(p => p + 1)}
-                    className="p-2 rounded-lg border border-surface-variant text-secondary hover:bg-surface-container disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-                  </button>
+        {/* COLUNA DIREITA (CARDS LATERAIS DE GESTÃO) */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          
+          {/* Card 1: Precisa de atenção */}
+          <div className="bg-white rounded-[24px] border border-stone-200/80 p-6 shadow-2xs">
+            <h3 className="font-display font-bold text-xl text-stone-900 mb-4">
+              Precisa de atenção
+            </h3>
+
+            {(!metrics.attention_items || metrics.attention_items.length === 0) ? (
+              <div className="py-8 px-4 flex flex-col items-center justify-center text-center">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+                  <span className="material-symbols-outlined text-xl">check</span>
                 </div>
+                <p className="text-xs text-stone-500 leading-relaxed max-w-xs">
+                  Nada pendente. Faturas vencidas e salões sem acesso há 7 dias aparecem aqui.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {metrics.attention_items.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => navigate(`/superadmin/tenants/${item.id}`)}
+                    className="p-3.5 rounded-xl border border-rose-100 bg-rose-50/40 hover:bg-rose-50 cursor-pointer transition-all flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="font-semibold text-xs text-stone-900">{item.name}</div>
+                      <div className="text-[11px] text-rose-600">{item.issue_description}</div>
+                    </div>
+                    <span className="material-symbols-outlined text-stone-400 text-base">
+                      chevron_right
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
-            
-            <div className="mt-md flex justify-center">
-              <button onClick={() => {setSearchQuery(''); setCurrentPage(1);}} className="text-primary font-label-md text-label-md hover:underline py-2">Limpar Busca e Ver Todos</button>
-            </div>
-          </section>
+          </div>
+
+          {/* Card 2: Receita por plano */}
+          <div className="bg-white rounded-[24px] border border-stone-200/80 p-6 shadow-2xs">
+            <h3 className="font-display font-bold text-xl text-stone-900 mb-4">
+              Receita por plano
+            </h3>
+
+            {(!metrics.revenue_by_plan || metrics.revenue_by_plan.length === 0) ? (
+              <div>
+                <div className="flex justify-between items-center text-xs font-semibold text-stone-800">
+                  <span>Enterprise</span>
+                  <span className="tabular-nums lining-nums font-bold text-stone-900">
+                    {formatCurrency(metrics.mrr || 199.80)}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-[#7C3A4D] w-full my-2.5"></div>
+                <div className="text-xs text-stone-500 mt-2">
+                  Premium e Básico · 0 assinantes
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {metrics.revenue_by_plan.map((p, idx) => {
+                  const maxMrr = Math.max(...metrics.revenue_by_plan.map((r) => r.total_mrr), 1);
+                  const percentage = Math.max(12, Math.round((p.total_mrr / maxMrr) * 100));
+
+                  return (
+                    <div key={idx}>
+                      <div className="flex justify-between items-center text-xs font-semibold text-stone-800">
+                        <span>{p.plan_name}</span>
+                        <span className="tabular-nums lining-nums font-bold text-stone-900">
+                          {formatCurrency(p.total_mrr)}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-stone-100 w-full overflow-hidden my-2">
+                        <div
+                          className="h-full bg-[#7C3A4D] rounded-full transition-all duration-500"
+                          style={{ width: `${percentage}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-[11px] text-stone-500">
+                        {p.subscribers_count} {p.subscribers_count === 1 ? 'assinante' : 'assinantes'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
         </div>
 
+      </div>
 
-
-        {/* MODAL DE DETALHES DO SALÃO */}
-        {isModalOpen && selectedTenant && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
-            <div className="bg-surface rounded-2xl w-full max-w-[500px] flex flex-col p-lg shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-start mb-6">
-                <div className="flex items-center gap-md">
-                  <div className="w-14 h-14 rounded-xl bg-surface-container-high flex items-center justify-center text-primary overflow-hidden shrink-0" style={{ backgroundColor: selectedTenant.primary_color ? `${selectedTenant.primary_color}20` : undefined, color: selectedTenant.primary_color }}>
-                    <span className="material-symbols-outlined text-[32px]">storefront</span>
-                  </div>
-                  <div>
-                    <h3 className="font-headline-sm text-headline-sm text-on-surface">{selectedTenant.name}</h3>
-                    <p className="font-body-sm text-secondary">/{selectedTenant.slug}</p>
-                  </div>
-                </div>
-                <button onClick={() => setIsModalOpen(false)} className="text-secondary hover:text-error transition-colors p-1">
-                  <span className="material-symbols-outlined">close</span>
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="bg-surface-container-lowest p-md rounded-xl border border-surface-variant">
-                  <span className="block font-label-sm text-secondary mb-1">Status da Conta</span>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${selectedTenant.status === 'active' ? 'bg-[#10b981]' : 'bg-error'}`}></div>
-                    <span className="font-label-md text-on-surface capitalize">{selectedTenant.status === 'active' ? 'Ativo' : selectedTenant.status || 'Inativo'}</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-surface-container-lowest p-md rounded-xl border border-surface-variant">
-                    <span className="block font-label-sm text-secondary mb-1">Plano Assinado</span>
-                    <span className="font-label-md text-on-surface">{getPlanName(selectedTenant.plan_price)}</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-md rounded-xl border border-surface-variant">
-                    <span className="block font-label-sm text-secondary mb-1">Faturamento</span>
-                    <span className="font-label-md text-on-surface">Em dia</span>
-                  </div>
-                </div>
-
-                <div className="bg-surface-container-lowest p-md rounded-xl border border-surface-variant">
-                  <span className="block font-label-sm text-secondary mb-3">Identidade Visual (White Label)</span>
-                  <div className="flex gap-4">
-                    <div>
-                      <span className="text-[12px] text-secondary block mb-1">Cor Primária</span>
-                      <div className="w-10 h-10 rounded-full border border-surface-variant" style={{ backgroundColor: selectedTenant.primary_color || '#7c5357' }}></div>
-                    </div>
-                    <div>
-                      <span className="text-[12px] text-secondary block mb-1">Cor Secundária</span>
-                      <div className="w-10 h-10 rounded-full border border-surface-variant" style={{ backgroundColor: selectedTenant.secondary_color || '#f3eaeb' }}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8 flex flex-col gap-3">
-                <a href={`/${selectedTenant.slug}`} target="_blank" rel="noopener noreferrer" className="px-6 py-2.5 text-sm font-label-md bg-primary-container text-on-primary-container rounded-full hover:brightness-95 transition-all flex items-center gap-2 w-full justify-center">
-                  <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-                  Acessar Salão
-                </a>
-                <button onClick={() => setIsDeleteDialogOpen(true)} className="px-6 py-2.5 text-sm font-label-md bg-error-container text-error rounded-full hover:brightness-95 transition-all flex items-center gap-2 w-full justify-center">
-                  <span className="material-symbols-outlined text-[18px]">delete_forever</span>
-                  Deletar Salão
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* MODAL DE CONFIRMAÇÃO DE DELEÇÃO */}
-        {isDeleteDialogOpen && selectedTenant && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md" onClick={() => setIsDeleteDialogOpen(false)}>
-            <div className="bg-surface rounded-2xl w-full max-w-[400px] flex flex-col p-lg shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-              <div className="flex flex-col items-center text-center mb-6">
-                <div className="w-16 h-16 rounded-full bg-error-container text-error flex items-center justify-center mb-4">
-                  <span className="material-symbols-outlined text-[32px]">warning</span>
-                </div>
-                <h3 className="font-headline-sm text-headline-sm text-on-surface mb-2">Excluir Salão?</h3>
-                <p className="font-body-md text-secondary">
-                  Você está prestes a excluir o salão <strong>{selectedTenant.name}</strong>. Esta ação apagará TODOS os clientes, agendamentos, profissionais e configurações associadas a este salão e <strong>NÃO PODE SER DESFEITA</strong>.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setIsDeleteDialogOpen(false)} 
-                  disabled={isDeleting}
-                  className="flex-1 py-3 font-label-md bg-surface-container-high text-on-surface-variant rounded-full hover:bg-surface-variant transition-colors disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={handleDeleteTenant} 
-                  disabled={isDeleting}
-                  className="flex-1 py-3 font-label-md bg-error text-on-error rounded-full hover:brightness-90 transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
-                >
-                  {isDeleting ? 'Deletando...' : 'Excluir'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </main>
-      
-      <CreateTenantModal 
-        isOpen={isCreateModalOpen} 
-        onClose={() => setIsCreateModalOpen(false)} 
+      {/* 4. MODAL DE CRIAÇÃO DE SALÃO */}
+      <CreateTenantModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
         onSuccess={(newTenant) => {
-          fetchTenants();
-          navigate(`/superadmin/tenants/${newTenant.id}`);
-        }} 
+          setIsCreateModalOpen(false);
+          fetchDashboardData();
+          if (newTenant && newTenant.id) {
+            navigate(`/superadmin/tenants/${newTenant.id}`);
+          }
+        }}
       />
     </div>
   );

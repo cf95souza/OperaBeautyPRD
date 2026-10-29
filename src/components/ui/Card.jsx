@@ -1,16 +1,13 @@
 import React from 'react';
-import { cn } from './Button.jsx';
+import { Cartao } from './Cartao.jsx';
 
+// Reexportação com adaptador para manter compatibilidade com componentes legados
 export function Card({ className, children, ...props }) {
   return (
-    <div
-      className={cn(
-        'rounded-3xl border border-outline-variant bg-surface p-6 shadow-card transition-all duration-300',
-        className
-      )}
-      {...props}
-    >
+    <Cartao className={className} {...props}>
       {children}
-    </div>
+    </Cartao>
   );
 }
+
+export default Card;

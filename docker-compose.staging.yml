@@ -1,0 +1,199 @@
+# ==============================================================================
+# OperaBeauty SaaS - Docker Compose de Homologação / Staging (Item G2 - P1)
+# ==============================================================================
+# - Permite subir ambiente isolado de Staging sem colidir com Produção
+# - Portas alternativas: Frontend 8081 (HTTP) e 8444 (HTTPS), API 5002
+# - Volumes persistentes isolados: operabeauty-staging-*
+# - Consome imagens imutáveis ou :staging do GHCR
+# ==============================================================================
+
+name: operabeauty-staging
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: operabeauty-staging-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${STAGING_DB_PASSWORD:-StagingSecretPass2026!}
+      POSTGRES_DB: operabeauty_staging
+      TZ: America/Sao_Paulo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+    volumes:
+      - operabeauty-staging-pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+        reservations:
+          cpus: '0.20'
+          memory: 128M
+    networks:
+      - operabeauty-staging-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: operabeauty-staging-redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 128M
+        reservations:
+          cpus: '0.10'
+          memory: 32M
+    networks:
+      - operabeauty-staging-net
+
+  api:
+    image: ${API_IMAGE:-operabeauty-api}:${IMAGE_TAG:-staging}
+    build: ./backend
+    container_name: operabeauty-staging-api
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${STAGING_API_PORT:-5002}:5000"
+    environment:
+      NODE_ENV: staging
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${STAGING_DB_PASSWORD:-StagingSecretPass2026!}
+      DB_NAME: operabeauty_staging
+      PORT: 5000
+      TZ: America/Sao_Paulo
+      JWT_SECRET: ${STAGING_JWT_SECRET:-staging-jwt-secret-operabeauty-32chars}
+      REDIS_URL: redis://redis:6379
+      ENCRYPTION_KEY: ${STAGING_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      ALLOWED_ORIGINS: ${STAGING_ALLOWED_ORIGINS:-http://localhost:8081,http://localhost:5173}
+      WA_GATEWAY_URL: http://wa-gateway:4000
+      INTERNAL_SECRET: ${STAGING_INTERNAL_SECRET:-operabeauty-m2m-staging-internal-secret}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+    volumes:
+      - operabeauty-staging-uploads:/usr/src/app/public/uploads
+      - operabeauty-staging-private-uploads:/usr/src/app/private_uploads
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 384M
+        reservations:
+          cpus: '0.15'
+          memory: 64M
+    networks:
+      - operabeauty-staging-net
+
+  wa-gateway:
+    image: ${WA_GATEWAY_IMAGE:-operabeauty-wa-gateway}:${IMAGE_TAG:-staging}
+    build: ./gateway-whatsapp
+    container_name: operabeauty-staging-wa-gateway
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      NODE_ENV: staging
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ${STAGING_DB_PASSWORD:-StagingSecretPass2026!}
+      DB_NAME: operabeauty_staging
+      PORT: 4000
+      TZ: America/Sao_Paulo
+      REDIS_URL: redis://redis:6379
+      WHATSAPP_ENCRYPTION_KEY: ${STAGING_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      INTERNAL_SECRET: ${STAGING_INTERNAL_SECRET:-operabeauty-m2m-staging-internal-secret}
+      API_WEBHOOK_URL: http://api:5000/api/whatsapp/webhook
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+    networks:
+      - operabeauty-staging-net
+
+  caddy:
+    image: ${CADDY_IMAGE:-operabeauty-caddy}:${IMAGE_TAG:-staging}
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: operabeauty-staging-caddy
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    ports:
+      - "${STAGING_PORT_HTTP:-8081}:80"
+      - "${STAGING_PORT_HTTPS:-8444}:443"
+    environment:
+      DOMAIN: ${STAGING_DOMAIN:-:80}
+      TZ: America/Sao_Paulo
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 128M
+        reservations:
+          cpus: '0.10'
+          memory: 32M
+    volumes:
+      - caddy_staging_data:/data
+      - caddy_staging_config:/config
+      - ./dist:/srv/dist:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+    networks:
+      - operabeauty-staging-net
+
+volumes:
+  operabeauty-staging-pgdata:
+  caddy_staging_data:
+  caddy_staging_config:
+  operabeauty-staging-uploads:
+  operabeauty-staging-private-uploads:
+
+networks:
+  operabeauty-staging-net:
+    driver: bridge

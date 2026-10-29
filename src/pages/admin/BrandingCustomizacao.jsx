@@ -1,35 +1,74 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
 import { api } from '../../lib/api';
 import { useNotification } from '../../context/NotificationProvider';
+import { 
+  WHITE_LABEL_THEMES, 
+  generateCustomPalette, 
+  getContrastRatio, 
+  getThemeTokens 
+} from '../../lib/themeTokens';
+import { ModalRecorteImagem } from '../../components/ui/ModalRecorteImagem';
+import { PlaceholderImagem } from '../../components/ui/PlaceholderImagem';
+
+const THEME_LIST = [
+  WHITE_LABEL_THEMES.rose,
+  WHITE_LABEL_THEMES.nude,
+  WHITE_LABEL_THEMES.lavender,
+  WHITE_LABEL_THEMES.sage,
+  WHITE_LABEL_THEMES.noir,
+  WHITE_LABEL_THEMES.bordeaux
+];
 
 const BrandingCustomizacao = () => {
   const { tenant_slug } = useParams();
-  const { tenant } = useTenant();
+  const { tenant, setTenant, applyLiveTheme } = useTenant();
   const { showSuccess, showError } = useNotification();
   
+  const [selectedThemeId, setSelectedThemeId] = useState('rose');
+  const [customBrandHex, setCustomBrandHex] = useState('#8E3B4E');
+  const [isCustomMode, setIsCustomMode] = useState(false);
+
+  // Estados do Modal de Recorte Guiado de Imagens (Item A6)
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropModalFile, setCropModalFile] = useState(null);
+  const [cropTarget, setCropTarget] = useState('logo'); // 'logo' ou 'banner'
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const logoInputRef = useRef(null);
+  const bannerInputRef = useRef(null);
+
   const [branding, setBranding] = useState({
     name: 'Salão',
     slug: '',
-    primary_color: '#7c5357',
-    secondary_color: '#eeb9bd',
-    tertiary_color: '#f9f9f9',
+    primary_color: '#8E3B4E',
+    secondary_color: '#F6E4E4',
+    tertiary_color: '#FBF7F5',
     logo_url: '',
     banners: [],
     welcome_message: 'Bem-vindo ao salão. Agende seu próximo momento de tranquilidade abaixo.'
   });
+
   const [saving, setSaving] = useState(false);
   const [selectedBannerIndex, setSelectedBannerIndex] = useState(0);
 
+  // Inicializa com os dados do tenant
   useEffect(() => {
     if (tenant) {
+      const themeId = tenant.theme_id || 'rose';
+      const brandHex = tenant.brand_hex || tenant.primary_color || '#8E3B4E';
+      
+      setSelectedThemeId(themeId);
+      setCustomBrandHex(brandHex);
+      setIsCustomMode(themeId === 'custom');
+
       setBranding({
         name: tenant.name || 'Salão',
         slug: tenant.slug || '',
-        primary_color: tenant.primary_color || '#7c5357',
-        secondary_color: tenant.secondary_color || '#eeb9bd',
-        tertiary_color: tenant.tertiary_color || '#f9f9f9',
+        primary_color: tenant.primary_color || '#8E3B4E',
+        secondary_color: tenant.secondary_color || '#F6E4E4',
+        tertiary_color: tenant.tertiary_color || '#FBF7F5',
         logo_url: tenant.logo_url || '',
         banners: Array.isArray(tenant.banners) && tenant.banners.length > 0 
           ? tenant.banners 
@@ -37,14 +76,126 @@ const BrandingCustomizacao = () => {
               {
                 id: 'default',
                 url: tenant.banner_url || '',
-                title: tenant.banner_title || 'Pacote Rejuvenescimento',
-                subtitle: tenant.banner_subtitle || '20% off em todas as massagens nesta estação.'
+                title: tenant.banner_title || 'Pacote Especial',
+                subtitle: tenant.banner_subtitle || 'Reserve seu momento de cuidado hoje mesmo.'
               }
             ],
         welcome_message: tenant.welcome_message || 'Bem-vindo ao salão. Agende seu próximo momento de tranquilidade abaixo.'
       });
     }
   }, [tenant]);
+
+  // Cálculos do modo personalizado
+  const customPalette = React.useMemo(() => {
+    try {
+      return generateCustomPalette(customBrandHex);
+    } catch {
+      return null;
+    }
+  }, [customBrandHex]);
+
+  const customContrast = React.useMemo(() => {
+    return Math.round(getContrastRatio(customBrandHex, '#FFFFFF') * 10) / 10;
+  }, [customBrandHex]);
+
+  const isCustomContrastOk = customContrast >= 4.5;
+
+  // Seleciona um tema pronto da lista
+  const handleSelectPredefinedTheme = (themeId) => {
+    setSelectedThemeId(themeId);
+    setIsCustomMode(false);
+    if (applyLiveTheme) {
+      applyLiveTheme(themeId);
+    }
+  };
+
+  // Ativa o modo de cor livre
+  const handleEnableCustomMode = () => {
+    setIsCustomMode(true);
+    setSelectedThemeId('custom');
+    if (applyLiveTheme && customPalette) {
+      applyLiveTheme('custom', customBrandHex);
+    }
+  };
+
+  // Atualiza a cor personalizada com live preview
+  const handleCustomColorChange = (newHex) => {
+    setCustomBrandHex(newHex);
+    if (applyLiveTheme) {
+      try {
+        applyLiveTheme('custom', newHex);
+      } catch (e) {
+        // Ignora hex incompleto enquanto digita
+      }
+    }
+  };
+
+  // Auto-ajusta para cor segura com contraste >= 4.5:1
+  const handleApplySuggestedColor = () => {
+    if (customPalette && customPalette.suggestedBrandHex) {
+      setCustomBrandHex(customPalette.suggestedBrandHex);
+      if (applyLiveTheme) {
+        applyLiveTheme('custom', customPalette.suggestedBrandHex);
+      }
+    }
+  };
+
+  // Funções de Recorte Guiado e Upload de Imagens (Item A6)
+  const handleTriggerLogoUpload = () => {
+    if (logoInputRef.current) {
+      logoInputRef.current.click();
+    }
+  };
+
+  const handleTriggerBannerUpload = () => {
+    if (bannerInputRef.current) {
+      bannerInputRef.current.click();
+    }
+  };
+
+  const handleLogoFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCropTarget('logo');
+    setCropModalFile(file);
+    setCropModalOpen(true);
+    e.target.value = '';
+  };
+
+  const handleBannerFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCropTarget('banner');
+    setCropModalFile(file);
+    setCropModalOpen(true);
+    e.target.value = '';
+  };
+
+  const handleCropComplete = async ({ blob, filename }) => {
+    setUploadingImage(true);
+    try {
+      const res = await api.upload.image(blob, filename);
+      if (cropTarget === 'logo') {
+        setBranding(prev => ({ ...prev, logo_url: res.url }));
+        showSuccess('Logo recortada e convertida para WebP com sucesso!');
+      } else if (cropTarget === 'banner') {
+        const updated = [...branding.banners];
+        if (updated[selectedBannerIndex]) {
+          updated[selectedBannerIndex] = {
+            ...updated[selectedBannerIndex],
+            url: res.url
+          };
+          setBranding(prev => ({ ...prev, banners: updated }));
+          showSuccess('Banner recortado (16:9) e convertido para WebP com sucesso!');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showError(err.message || 'Erro ao enviar imagem.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleCreateBanner = () => {
     const maxBanners = tenant?.max_banners || 1;
@@ -88,336 +239,671 @@ const BrandingCustomizacao = () => {
 
   const handleSave = async () => {
     if (!tenant) return;
+
+    // Bloqueio obrigatório de contraste ruim no modo personalizado
+    if (isCustomMode && !isCustomContrastOk) {
+      showError(`A cor personalizada (${customBrandHex}) não possui contraste suficiente (mínimo 4,5:1). Ajuste para um tom mais escuro antes de salvar.`);
+      return;
+    }
+
     setSaving(true);
     try {
+      const finalThemeId = isCustomMode ? 'custom' : selectedThemeId;
+      const finalBrandHex = isCustomMode 
+        ? customBrandHex 
+        : (WHITE_LABEL_THEMES[selectedThemeId]?.brand || '#8E3B4E');
+
       const payload = {
         name: branding.name,
-        primary_color: branding.primary_color,
-        secondary_color: branding.secondary_color,
-        tertiary_color: branding.tertiary_color,
+        theme_id: finalThemeId,
+        brand_hex: finalBrandHex,
         logo_url: branding.logo_url,
         banners: branding.banners,
         welcome_message: branding.welcome_message
       };
 
-      await api.tenants.updateBranding(payload);
+      const updatedTenant = await api.tenants.updateBranding(payload);
       
-      // Update local CSS vars for immediate feedback
-      document.documentElement.style.setProperty('--color-primary', branding.primary_color);
-      document.documentElement.style.setProperty('--color-primary-container', branding.secondary_color);
-      document.documentElement.style.setProperty('--color-surface-container-lowest', branding.tertiary_color);
-      showSuccess('Configurações salvas com sucesso!');
+      // Atualiza o estado global e aplica os tokens imediatamente
+      if (setTenant) {
+        setTenant(updatedTenant);
+      }
+      if (applyLiveTheme) {
+        applyLiveTheme(finalThemeId, finalBrandHex);
+      }
+
+      showSuccess('Identidade visual e temas salvos com sucesso!');
     } catch (err) {
       console.error(err);
-      showError('Erro ao salvar configurações.');
+      showError(err.message || 'Erro ao salvar configurações de identidade visual.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleReset = () => {
-    setBranding({
-      ...branding,
-      primary_color: '#7c5357',
-      secondary_color: '#eeb9bd',
-      tertiary_color: '#f9f9f9'
-    });
-  };
-
   return (
-    <>
-      <div className="flex-1 p-container-margin md:p-xl max-w-[1200px] mx-auto w-full animate-fade-in-up pb-32 md:pb-xl">
-        <header className="mb-xl flex justify-between items-end">
+    <div className="flex-1 p-4 md:p-8 max-w-[1240px] mx-auto w-full animate-fade-in-up pb-32">
+      {/* Cabeçalho da Página */}
+      <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-[#EADFDC]/60 pb-6">
+        <div>
+          <span className="text-[11px] font-semibold tracking-wider uppercase text-[#8E3B4E] bg-[#F6E4E4] px-3 py-1 rounded-full mb-2 inline-block">
+            Personalização White-Label
+          </span>
+          <h1 className="font-serif text-3xl md:text-4xl text-[#2B2327] tracking-tight">
+            Branding & Temas
+          </h1>
+          <p className="text-sm md:text-base text-[#6F6168] mt-1">
+            Escolha uma paleta de alta costura ou personalize a cor da sua marca com acessibilidade garantida.
+          </p>
+        </div>
+        <button 
+          onClick={handleSave} 
+          disabled={saving || (isCustomMode && !isCustomContrastOk)}
+          className="hidden md:flex items-center gap-2 bg-[#8E3B4E] text-white px-6 py-3 rounded-full font-medium text-sm hover:opacity-95 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[18px]">{saving ? 'sync' : 'check'}</span> 
+          {saving ? 'Salvando...' : 'Salvar Alterações'}
+        </button>
+      </header>
+
+      {/* SEÇÃO PRINCIPAL: 6 TEMAS WHITE-LABEL (1:1 COM Temas white-label@2x.png) */}
+      <section className="bg-white rounded-3xl p-6 md:p-8 border border-[#EADFDC]/80 shadow-[0_4px_24px_rgba(142,59,78,0.04)] mb-8">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-3">
           <div>
-            <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary mb-2">Branding & Customização</h1>
-            <p className="font-body-lg text-body-lg text-secondary">Molde a identidade digital e a experiência do cliente do {tenant?.name || 'Salão'}.</p>
+            <h2 className="font-serif text-2xl md:text-3xl text-[#2B2327]">
+              Temas prontos para cada salão
+            </h2>
+            <p className="text-sm text-[#6F6168] mt-1">
+              O salão escolhe um tema ou uma cor de marca; o sistema gera os tons e bloqueia combinações com contraste ruim.
+            </p>
           </div>
-          <button 
-            onClick={handleSave} 
-            disabled={saving}
-            className="hidden md:flex items-center gap-2 bg-primary text-on-primary px-lg py-3 rounded-lg font-label-md text-label-md hover:bg-on-primary-container transition-colors shadow-sm disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined">{saving ? 'sync' : 'save'}</span> {saving ? 'Salvando...' : 'Salvar Alterações'}
-          </button>
-        </header>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleSelectPredefinedTheme('rose')}
+              className={`text-xs font-medium px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+                !isCustomMode 
+                  ? 'bg-[#8E3B4E] text-white' 
+                  : 'bg-[#F6E4E4] text-[#8E3B4E] hover:bg-[#F6E4E4]/80'
+              }`}
+            >
+              Temas Prontos (6)
+            </button>
+            <button
+              type="button"
+              onClick={handleEnableCustomMode}
+              className={`text-xs font-medium px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+                isCustomMode 
+                  ? 'bg-[#8E3B4E] text-white' 
+                  : 'bg-[#F6E4E4] text-[#8E3B4E] hover:bg-[#F6E4E4]/80'
+              }`}
+            >
+              Cor Personalizada
+            </button>
+          </div>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-lg">
-          
-          {/* Identidade e Link Card */}
-          <section className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg flex flex-col">
-            <h2 className="font-headline-md text-headline-md text-on-surface mb-md flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">storefront</span> Identidade e Link
-            </h2>
-            <div className="mb-4">
-               <label className="font-label-sm text-label-sm text-secondary block mb-1">Nome do Salão</label>
-               <input 
-                  className="w-full border border-outline-variant rounded-lg p-2 font-body-md text-body-md focus:border-primary outline-none" 
-                  type="text" 
-                  placeholder="Nome do Salão"
-                  value={branding.name}
-                  onChange={e => setBranding({...branding, name: e.target.value})}
-               />
-            </div>
-            <div className="mb-4">
-               <label className="font-label-sm text-label-sm text-secondary block mb-1">Link do Salão (Slug)</label>
-               <div className="flex items-center border border-outline-variant rounded-lg overflow-hidden bg-surface-variant/20 transition-colors">
-                 <span className="bg-surface-variant text-secondary px-3 py-2 font-body-md text-body-md border-r border-outline-variant select-none">
-                   app.com/
-                 </span>
-                 <input 
-                    disabled
-                    className="w-full p-2 font-body-md text-body-md outline-none bg-transparent text-secondary cursor-not-allowed" 
-                    type="text" 
-                    placeholder="meu-salao"
-                    value={branding.slug}
-                 />
-               </div>
-            </div>
-            
-            <div className="mt-auto bg-primary-container/10 border border-primary-container/20 p-3 rounded-lg flex items-start gap-2">
-              <span className="material-symbols-outlined text-primary text-[18px] mt-0.5">info</span>
-              <p className="font-body-sm text-[12px] text-primary">
-                A alteração do link único (slug) do seu salão é restrita para garantir a estabilidade das suas rotas. Caso precise alterá-lo, entre em contato com o suporte do sistema.
-              </p>
-            </div>
-          </section>
+        {/* Mostruário dos 6 Temas */}
+        {!isCustomMode ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            {THEME_LIST.map((th) => {
+              const isSelected = selectedThemeId === th.id;
+              return (
+                <div
+                  key={th.id}
+                  onClick={() => handleSelectPredefinedTheme(th.id)}
+                  style={{ backgroundColor: th.bg }}
+                  className={`rounded-2xl p-4 flex flex-col justify-between transition-all cursor-pointer border ${
+                    isSelected 
+                      ? 'border-[#8E3B4E] ring-2 ring-[#8E3B4E]/30 shadow-md scale-[1.02]' 
+                      : 'border-[#EADFDC]/80 hover:border-[#8E3B4E]/50 hover:shadow-sm'
+                  }`}
+                >
+                  {/* Nome do Tema */}
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-serif text-lg font-semibold text-[#2B2327]">
+                      {th.name}
+                    </h3>
+                    {isSelected && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-[#2B2327] text-white px-2 py-0.5 rounded-full">
+                        Ativo
+                      </span>
+                    )}
+                  </div>
 
-          {/* Logo URL Card */}
-          <section className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg flex flex-col">
-            <h2 className="font-headline-md text-headline-md text-on-surface mb-md flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">image</span> Logo
-            </h2>
-            <p className="text-sm text-secondary mb-4">Insira o link (URL) direto da imagem da sua logo para economizar armazenamento.</p>
-            <div className="mb-4">
-               <label className="font-label-sm text-label-sm text-secondary block mb-1">URL da Logo</label>
-               <input 
-                  className="w-full border border-outline-variant rounded-lg p-2 font-body-md text-body-md focus:border-primary outline-none" 
-                  type="url" 
-                  placeholder="https://exemplo.com/logo.png"
-                  value={branding.logo_url}
-                  onChange={e => setBranding({...branding, logo_url: e.target.value})}
-               />
-            </div>
-            
-            <div className="mt-auto flex items-center gap-md p-4 bg-surface-bright rounded-lg border border-outline-variant">
-              <div className="w-16 h-16 rounded-lg bg-surface-variant flex items-center justify-center overflow-hidden">
-                {branding.logo_url ? (
-                   <img src={branding.logo_url} alt="Logo Preview" className="w-full h-full object-cover" onError={(e) => e.target.style.display='none'} />
-                ) : (
-                   <span className="font-bold text-tertiary">LG</span>
+                  {/* Mini-Cartão de Serviço */}
+                  <div className="bg-white rounded-xl p-2.5 mb-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)] border border-[#EADFDC]/40 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-7 h-7 rounded-lg shrink-0" 
+                        style={{ backgroundColor: th.tint }}
+                      />
+                      <span className="text-xs font-semibold text-[#2B2327]">Corte</span>
+                    </div>
+                    <span 
+                      className="font-serif text-xs font-bold"
+                      style={{ color: th.brand }}
+                    >
+                      R$ 45
+                    </span>
+                  </div>
+
+                  {/* Chips: Manhã e 11:00 */}
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <span 
+                      className="text-[11px] font-medium px-2 py-0.5 rounded-md text-[#2B2327]"
+                      style={{ backgroundColor: th.tint }}
+                    >
+                      Manhã
+                    </span>
+                    <span 
+                      className="text-[11px] font-medium px-2 py-0.5 rounded-md text-white"
+                      style={{ backgroundColor: th.brand }}
+                    >
+                      11:00
+                    </span>
+                  </div>
+
+                  {/* Botão Agendar Horário */}
+                  <button
+                    type="button"
+                    style={{ 
+                      backgroundColor: th.brand, 
+                      color: th.on_brand || '#FFFFFF' 
+                    }}
+                    className="w-full py-2 rounded-xl text-xs font-medium mb-3 shadow-sm transition-transform active:scale-95"
+                  >
+                    Agendar horário
+                  </button>
+
+                  {/* Paleta no rodapé: 4 círculos (bg, tint, accent, brand) */}
+                  <div className="flex items-center gap-1.5 pt-2 border-t border-black/5">
+                    <div 
+                      className="w-4 h-4 rounded-full border border-black/10" 
+                      style={{ backgroundColor: th.bg }} 
+                      title="Fundo (bg)"
+                    />
+                    <div 
+                      className="w-4 h-4 rounded-full" 
+                      style={{ backgroundColor: th.tint }} 
+                      title="Suave (tint)"
+                    />
+                    <div 
+                      className="w-4 h-4 rounded-full" 
+                      style={{ backgroundColor: th.accent }} 
+                      title="Acento (accent)"
+                    />
+                    <div 
+                      className="w-4 h-4 rounded-full" 
+                      style={{ backgroundColor: th.brand }} 
+                      title="Marca (brand)"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* MODO COR LIVRE (PERSONALIZADO COM VALIDAÇÃO WCAG) */
+          <div className="p-6 rounded-2xl bg-[#FBF7F5] border border-[#EADFDC] flex flex-col lg:flex-row gap-8 items-start">
+            {/* Controles de Cor */}
+            <div className="flex-1 w-full space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#6F6168] block mb-2">
+                  Escolha a cor principal da sua marca
+                </label>
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="color" 
+                    value={customBrandHex}
+                    onChange={(e) => handleCustomColorChange(e.target.value)}
+                    className="w-12 h-12 rounded-xl cursor-pointer border border-[#EADFDC] p-1 bg-white"
+                  />
+                  <div className="relative flex-1">
+                    <input 
+                      type="text" 
+                      value={customBrandHex}
+                      onChange={(e) => handleCustomColorChange(e.target.value)}
+                      placeholder="#8E3B4E"
+                      maxLength={7}
+                      className="w-full border border-[#EADFDC] rounded-xl px-4 py-3 font-mono text-sm uppercase bg-white focus:outline-none focus:border-[#8E3B4E]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Selo de Contraste WCAG 2.1 */}
+              <div className="p-4 rounded-xl border bg-white flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-[#2B2327]">
+                    Aferição de Acessibilidade (WCAG AA)
+                  </span>
+                  <span 
+                    className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${
+                      isCustomContrastOk 
+                        ? 'bg-[#E2EBDF] text-[#3F6B55]' 
+                        : 'bg-[#F1DDE0] text-[#B3261E]'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[14px]">
+                      {isCustomContrastOk ? 'check_circle' : 'warning'}
+                    </span>
+                    {isCustomContrastOk ? `Contraste OK (${customContrast}:1)` : `Contraste Ruim (${customContrast}:1)`}
+                  </span>
+                </div>
+                
+                <p className="text-xs text-[#6F6168]">
+                  {isCustomContrastOk 
+                    ? 'A cor selecionada garante legibilidade em botões, cartões e numerais de preços segundo a norma W3C.'
+                    : 'A cor escolhida é muito clara e tornará textos ilegíveis. Bloqueamos cores com contraste inferior a 4,5:1.'}
+                </p>
+
+                {!isCustomContrastOk && customPalette?.suggestedBrandHex && (
+                  <button
+                    type="button"
+                    onClick={handleApplySuggestedColor}
+                    className="mt-2 text-xs font-medium text-[#8E3B4E] bg-[#F6E4E4] hover:bg-[#F6E4E4]/80 px-3 py-2 rounded-lg self-start flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">auto_fix_high</span>
+                    Ajustar automaticamente para tom seguro ({customPalette.suggestedBrandHex})
+                  </button>
                 )}
               </div>
-              <div className="flex-1">
-                <p className="font-label-sm text-label-sm text-secondary">Visualização</p>
-                <p className="font-body-md text-body-md text-on-surface truncate">{branding.logo_url ? 'Logo Ativa' : 'Sem logo configurada'}</p>
-              </div>
             </div>
-          </section>
 
-          {/* Brand Colors Card */}
-          <section className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg">
-            <h2 className="font-headline-md text-headline-md text-on-surface mb-md flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">colors</span> Paleta de Cores
-            </h2>
-            <div className="space-y-md">
-              <div>
-                <label className="font-label-md text-label-md text-on-surface block mb-2">Cor Primária</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    className="h-10 w-10 rounded cursor-pointer border-0 p-0" 
-                    type="color" 
-                    value={branding.primary_color}
-                    onChange={e => setBranding({...branding, primary_color: e.target.value})}
-                  />
-                  <input 
-                    className="flex-1 border-b border-outline-variant bg-transparent py-2 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors uppercase" 
-                    type="text" 
-                    value={branding.primary_color}
-                    onChange={e => setBranding({...branding, primary_color: e.target.value})}
-                  />
+            {/* Preview do Card Personalizado */}
+            {customPalette && (
+              <div 
+                style={{ backgroundColor: customPalette.bg }}
+                className="w-full lg:w-72 rounded-2xl p-5 border border-[#EADFDC] shadow-sm shrink-0"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-serif text-lg font-semibold text-[#2B2327]">
+                    Personalizado
+                  </h3>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-[#8E3B4E] text-white px-2 py-0.5 rounded-full">
+                    Preview
+                  </span>
                 </div>
-              </div>
-              <div>
-                <label className="font-label-md text-label-md text-on-surface block mb-2">Cor Secundária</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    className="h-10 w-10 rounded cursor-pointer border-0 p-0" 
-                    type="color" 
-                    value={branding.secondary_color}
-                    onChange={e => setBranding({...branding, secondary_color: e.target.value})}
-                  />
-                  <input 
-                    className="flex-1 border-b border-outline-variant bg-transparent py-2 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors uppercase" 
-                    type="text" 
-                    value={branding.secondary_color}
-                    onChange={e => setBranding({...branding, secondary_color: e.target.value})}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="font-label-md text-label-md text-on-surface block mb-2">Background (Terciária)</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    className="h-10 w-10 rounded cursor-pointer border-0 p-0" 
-                    type="color" 
-                    value={branding.tertiary_color}
-                    onChange={e => setBranding({...branding, tertiary_color: e.target.value})}
-                  />
-                  <input 
-                    className="flex-1 border-b border-outline-variant bg-transparent py-2 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors uppercase" 
-                    type="text" 
-                    value={branding.tertiary_color}
-                    onChange={e => setBranding({...branding, tertiary_color: e.target.value})}
-                  />
-                </div>
-              </div>
-            </div>
-            <button onClick={handleReset} className="mt-lg w-full bg-surface-variant text-on-surface px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-secondary-container transition-colors">
-              Restaurar Padrões
-            </button>
-          </section>
 
-          {/* Client App Home Screen Editor */}
-          <section className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-lg lg:col-span-2">
-            <h2 className="font-headline-md text-headline-md text-on-surface mb-2 flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">view_quilt</span> App do Cliente
-            </h2>
-            <p className="font-body-md text-body-md text-secondary mb-lg">Gerencie o banner promocional e a mensagem de boas-vindas exibida aos clientes na tela inicial.</p>
-            
-            <div className="space-y-lg">
-              {/* Seletor de Banners */}
-              <div className="flex flex-wrap items-center gap-2 p-md border border-surface-variant rounded-lg bg-surface-bright">
-                <div className="flex flex-wrap items-center gap-2 flex-1">
-                  {(branding.banners || []).map((b, idx) => (
-                    <div key={b.id || idx} className="flex items-center bg-surface-container-high rounded-full overflow-hidden border border-outline-variant/30 pl-3 pr-1 py-1 shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedBannerIndex(idx)}
-                        className={`font-label-md text-label-md transition-colors pr-2 ${
-                          selectedBannerIndex === idx
-                            ? 'text-primary font-bold'
-                            : 'text-on-surface hover:text-primary'
-                        }`}
-                      >
-                        Banner {idx + 1}
-                      </button>
-                      {(branding.banners || []).length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteBanner(idx)}
-                          className="text-error hover:bg-error-container hover:text-on-error-container p-1 rounded-full transition-colors flex items-center justify-center"
-                          title="Excluir este banner"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">close</span>
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {(branding.banners || []).length < (tenant?.max_banners || 1) && (
-                    <button
-                      type="button"
-                      onClick={handleCreateBanner}
-                      className="flex items-center gap-1 px-4 py-1.5 border border-dashed border-primary text-primary hover:bg-primary/5 rounded-full font-label-md text-label-md transition-colors shadow-sm"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">add</span>
-                      Novo Banner
-                    </button>
-                  )}
-                </div>
-                <div className="font-label-sm text-label-sm text-secondary shrink-0 pl-md">
-                  Plano: {(branding.banners || []).length}/{(tenant?.max_banners || 1)} banner(s)
-                </div>
-              </div>
-
-              {/* Banner Item Editor */}
-              {branding.banners && branding.banners[selectedBannerIndex] && (
-                <div className="flex flex-col md:flex-row gap-lg p-md border border-surface-variant rounded-lg bg-surface-bright items-start relative group">
-                  <div 
-                    className="w-full md:w-48 h-32 rounded-lg overflow-hidden relative flex items-center justify-center shrink-0"
-                    style={{
-                      background: !branding.banners[selectedBannerIndex].url 
-                        ? `linear-gradient(135deg, ${branding.primary_color || '#7c5357'}, ${branding.secondary_color || '#eeb9bd'})`
-                        : 'var(--color-surface-variant, #e5e5e5)'
-                    }}
+                <div className="bg-white rounded-xl p-3 mb-3 border border-[#EADFDC]/60 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-7 h-7 rounded-lg shrink-0" 
+                      style={{ backgroundColor: customPalette.tint }}
+                    />
+                    <span className="text-xs font-semibold text-[#2B2327]">Corte</span>
+                  </div>
+                  <span 
+                    className="font-serif text-xs font-bold"
+                    style={{ color: customPalette.brand }}
                   >
-                    {branding.banners[selectedBannerIndex].url ? (
-                       <img src={branding.banners[selectedBannerIndex].url} alt="Banner" className="w-full h-full object-cover" onError={(e) => e.target.style.display='none'} />
-                    ) : (
-                       <div className="absolute inset-0 flex flex-col justify-end p-2 text-white bg-black/30">
-                         <span className="font-headline-sm text-[12px] font-bold truncate">{branding.banners[selectedBannerIndex].title || ''}</span>
-                         <span className="text-[10px] opacity-90 truncate">{branding.banners[selectedBannerIndex].subtitle || ''}</span>
-                       </div>
-                    )}
-                    {branding.banners[selectedBannerIndex].url && (
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-2 pointer-events-none">
-                        <span className="font-label-sm text-label-sm text-white">Banner {selectedBannerIndex + 1}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 w-full space-y-4">
-                    <div>
-                      <label className="font-label-sm text-label-sm text-secondary block mb-1">URL da Imagem do Banner</label>
-                      <input 
-                         className="w-full border-b border-outline-variant bg-transparent py-1 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors" 
-                         type="url" 
-                         placeholder="https://exemplo.com/banner.jpg"
-                         value={branding.banners[selectedBannerIndex].url || ''}
-                         onChange={e => handleUpdateActiveBanner('url', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="font-label-sm text-label-sm text-secondary block mb-1">Título da Promoção</label>
-                      <input 
-                         className="w-full border-b border-outline-variant bg-transparent py-1 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors" 
-                         type="text" 
-                         placeholder="Ex: Pacote Rejuvenescimento"
-                         value={branding.banners[selectedBannerIndex].title || ''}
-                         onChange={e => handleUpdateActiveBanner('title', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="font-label-sm text-label-sm text-secondary block mb-1">Subtítulo / Mensagem</label>
-                      <input 
-                         className="w-full border-b border-outline-variant bg-transparent py-1 font-body-md text-body-md focus:border-primary focus:outline-none transition-colors" 
-                         type="text" 
-                         placeholder="Ex: 20% off em todas as massagens nesta estação."
-                         value={branding.banners[selectedBannerIndex].subtitle || ''}
-                         onChange={e => handleUpdateActiveBanner('subtitle', e.target.value)}
-                      />
-                    </div>
-                  </div>
+                    R$ 45
+                  </span>
                 </div>
-              )}
 
-              {/* Welcome Message */}
-              <div className="p-md border border-surface-variant rounded-lg bg-surface-bright">
-                <label className="font-label-md text-label-md text-on-surface block mb-2 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-sm">edit_note</span> Mensagem de Boas-vindas
-                </label>
-                <textarea 
-                   className="w-full border border-outline-variant rounded-lg p-3 bg-transparent font-body-md text-body-md focus:border-primary focus:outline-none transition-colors resize-none h-24" 
-                   placeholder="Digite a saudação..." 
-                   value={branding.welcome_message}
-                   onChange={e => setBranding({...branding, welcome_message: e.target.value})}
+                <div className="flex items-center gap-2 mb-3">
+                  <span 
+                    className="text-[11px] font-medium px-2 py-0.5 rounded-md text-[#2B2327]"
+                    style={{ backgroundColor: customPalette.tint }}
+                  >
+                    Manhã
+                  </span>
+                  <span 
+                    className="text-[11px] font-medium px-2 py-0.5 rounded-md text-white"
+                    style={{ backgroundColor: customPalette.brand }}
+                  >
+                    11:00
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  style={{ 
+                    backgroundColor: customPalette.brand, 
+                    color: customPalette.on_brand || '#FFFFFF' 
+                  }}
+                  className="w-full py-2.5 rounded-xl text-xs font-medium mb-3 shadow-sm"
+                >
+                  Agendar horário
+                </button>
+
+                <div className="flex items-center gap-1.5 pt-2 border-t border-black/5">
+                  <div className="w-4 h-4 rounded-full border border-black/10" style={{ backgroundColor: customPalette.bg }} />
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: customPalette.tint }} />
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: customPalette.accent }} />
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: customPalette.brand }} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* SEÇÃO INFERIOR: IDENTIDADE, LOGO, BANNERS E MENSAGENS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Identidade e Slug */}
+        <section className="bg-white rounded-2xl border border-[#EADFDC]/80 p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <h2 className="font-serif text-xl text-[#2B2327] mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#8E3B4E]">storefront</span> Identidade do Salão
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-[#6F6168] block mb-1">Nome do Estabelecimento</label>
+                <input 
+                  type="text" 
+                  value={branding.name}
+                  onChange={e => setBranding({...branding, name: e.target.value})}
+                  className="w-full border border-[#EADFDC] rounded-xl p-3 text-sm focus:outline-none focus:border-[#8E3B4E]"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#6F6168] block mb-1">Link Exclusivo (Slug)</label>
+                <div className="flex items-center border border-[#EADFDC] rounded-xl overflow-hidden bg-[#FBF7F5]">
+                  <span className="bg-[#F6E4E4] text-[#8E3B4E] px-3 py-2.5 text-xs font-semibold select-none border-r border-[#EADFDC]">
+                    app.com/
+                  </span>
+                  <input 
+                    disabled
+                    type="text" 
+                    value={branding.slug}
+                    className="w-full p-2.5 text-sm bg-transparent text-[#6F6168] cursor-not-allowed outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-4 bg-[#F6E4E4]/50 border border-[#F6E4E4] p-3 rounded-xl flex items-start gap-2">
+            <span className="material-symbols-outlined text-[#8E3B4E] text-[18px] mt-0.5">info</span>
+            <p className="text-[11px] text-[#8E3B4E] leading-relaxed">
+              O link exclusivo (slug) é a chave de acesso do seu salão e não deve ser alterado sem alinhamento prévio.
+            </p>
+          </div>
+        </section>
+
+        {/* Logo da Marca (Item A6) */}
+        <section className="bg-white rounded-2xl border border-[#EADFDC]/80 p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-serif text-xl text-[#2B2327] flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#8E3B4E]">image</span> Logo da Marca
+              </h2>
+              <span className="text-[10px] font-semibold text-[#8E3B4E] bg-[#F6E4E4] px-2.5 py-0.5 rounded-full">
+                1:1 · Quadrada
+              </span>
+            </div>
+            <p className="text-xs text-[#6F6168] mb-4">
+              Envie a imagem da sua logo. O sistema fará o recorte guiado em proporção 1:1 e conversão WebP.
+            </p>
+
+            {/* Input de Arquivo Oculto */}
+            <input 
+              ref={logoInputRef}
+              type="file"
+              accept="image/png, image/jpeg, image/webp"
+              onChange={handleLogoFileChange}
+              className="hidden"
+            />
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleTriggerLogoUpload}
+                disabled={uploadingImage}
+                className="w-full py-2.5 px-4 bg-[#F6E4E4] hover:bg-[#F6E4E4]/80 text-[#8E3B4E] rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer border border-[#EADFDC]"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {uploadingImage ? 'sync' : 'upload_file'}
+                </span>
+                {uploadingImage ? 'Enviando WebP...' : 'Fazer Upload e Recortar Logo (1:1)'}
+              </button>
+
+              <div>
+                <label className="text-[11px] font-medium text-[#6F6168] block mb-1">Ou informe uma URL direta</label>
+                <input 
+                  type="url" 
+                  placeholder="https://exemplo.com/logo.png"
+                  value={branding.logo_url || ''}
+                  onChange={e => setBranding({...branding, logo_url: e.target.value})}
+                  className="w-full border border-[#EADFDC] rounded-xl p-2.5 text-xs focus:outline-none focus:border-[#8E3B4E]"
                 />
               </div>
             </div>
-          </section>
+          </div>
 
-        </div>
-        
-        {/* Mobile Save Button Sticky Bottom */}
-        <div className="md:hidden fixed bottom-0 left-0 w-full p-4 pb-safe bg-surface/90 backdrop-blur-md border-t border-surface-variant z-40">
-          <button 
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full bg-primary text-on-primary px-lg py-3 rounded-lg font-label-md text-label-md flex justify-center items-center gap-2 shadow-sm disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined">{saving ? 'sync' : 'save'}</span> {saving ? 'Salvando...' : 'Salvar Alterações'}
-          </button>
-        </div>
+          <div className="mt-4 flex items-center gap-4 p-3 bg-[#FBF7F5] rounded-xl border border-[#EADFDC]">
+            <div className="w-14 h-14 rounded-full bg-white border border-[#EADFDC] flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+              {branding.logo_url ? (
+                <img 
+                  src={branding.logo_url} 
+                  alt="Logo Preview" 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                  }} 
+                />
+              ) : null}
+              <div style={{ display: branding.logo_url ? 'none' : 'flex' }} className="w-full h-full items-center justify-center">
+                <PlaceholderImagem 
+                  tipo="logo" 
+                  nome={branding.name || 'O'} 
+                  aspectRatio="circle" 
+                  className="w-full h-full border-0" 
+                  iconSize="20px" 
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-xs font-semibold text-[#2B2327]">Visualização do Topo</p>
+              <p className="text-xs text-[#6F6168] truncate">
+                {branding.logo_url ? 'Logo personalizada ativa' : 'Monograma editorial automático'}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Mensagem de Boas-vindas */}
+        <section className="bg-white rounded-2xl border border-[#EADFDC]/80 p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <h2 className="font-serif text-xl text-[#2B2327] mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#8E3B4E]">edit_note</span> Boas-vindas
+            </h2>
+            <p className="text-xs text-[#6F6168] mb-3">Frase de saudação editorial apresentada aos clientes no topo da tela inicial.</p>
+            <textarea 
+              value={branding.welcome_message}
+              onChange={e => setBranding({...branding, welcome_message: e.target.value})}
+              rows={4}
+              placeholder="Digite a saudação acolhedora..."
+              className="w-full border border-[#EADFDC] rounded-xl p-3 text-sm focus:outline-none focus:border-[#8E3B4E] resize-none"
+            />
+          </div>
+          <p className="text-[11px] text-[#6F6168] mt-2">
+            A saudação inicial é complementada automaticamente com o primeiro nome da cliente logada.
+          </p>
+        </section>
+
       </div>
-    </>
+
+      {/* SEÇÃO BANNERS PROMOCIONAIS */}
+      <section className="mt-6 bg-white rounded-2xl border border-[#EADFDC]/80 p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
+          <div>
+            <h2 className="font-serif text-xl text-[#2B2327] flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#8E3B4E]">view_carousel</span> Banners Promocionais
+            </h2>
+            <p className="text-xs text-[#6F6168] mt-0.5">
+              Destaque pacotes, lançamentos ou estações no carrossel superior do cliente.
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {(branding.banners || []).length < (tenant?.max_banners || 3) && (
+              <button
+                type="button"
+                onClick={handleCreateBanner}
+                className="flex items-center gap-1.5 px-4 py-2 border border-[#8E3B4E] text-[#8E3B4E] hover:bg-[#F6E4E4] rounded-full text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                Novo Banner
+              </button>
+            )}
+            <span className="text-xs text-[#6F6168] font-medium bg-[#FBF7F5] px-3 py-1.5 rounded-full border border-[#EADFDC]">
+              {(branding.banners || []).length} / {tenant?.max_banners || 3} cadastrado(s)
+            </span>
+          </div>
+        </div>
+
+        {/* Abas dos Banners */}
+        <div className="flex flex-wrap gap-2 mb-4 pb-3 border-b border-[#EADFDC]">
+          {(branding.banners || []).map((b, idx) => (
+            <div 
+              key={b.id || idx} 
+              className={`flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full text-xs transition-all ${
+                selectedBannerIndex === idx 
+                  ? 'bg-[#8E3B4E] text-white font-semibold shadow-sm' 
+                  : 'bg-[#FBF7F5] text-[#2B2327] hover:bg-[#F6E4E4]'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedBannerIndex(idx)}
+                className="cursor-pointer"
+              >
+                Banner {idx + 1}
+              </button>
+              {(branding.banners || []).length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteBanner(idx)}
+                  className="w-4 h-4 rounded-full flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
+                  title="Excluir banner"
+                >
+                  <span className="material-symbols-outlined text-[14px]">close</span>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Editor do Banner Selecionado */}
+        {branding.banners && branding.banners[selectedBannerIndex] && (
+          <div className="flex flex-col md:flex-row gap-6 items-start">
+            <div 
+              className="w-full md:w-64 h-36 rounded-2xl overflow-hidden relative flex items-center justify-center shrink-0 border border-[#EADFDC]"
+              style={{
+                background: !branding.banners[selectedBannerIndex].url 
+                  ? 'linear-gradient(135deg, #8E3B4E, #B76E79)' 
+                  : '#2B2327'
+              }}
+            >
+              {branding.banners[selectedBannerIndex].url ? (
+                <img 
+                  src={branding.banners[selectedBannerIndex].url} 
+                  alt="Banner" 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => e.target.style.display='none'} 
+                />
+              ) : (
+                <div className="p-4 text-center text-white">
+                  <span className="font-serif text-sm font-semibold block truncate">
+                    {branding.banners[selectedBannerIndex].title || 'Título da Promoção'}
+                  </span>
+                  <span className="text-[11px] opacity-80 block truncate mt-1">
+                    {branding.banners[selectedBannerIndex].subtitle || 'Descrição breve'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Input de Arquivo Oculto para Banner */}
+            <input 
+              ref={bannerInputRef}
+              type="file"
+              accept="image/png, image/jpeg, image/webp"
+              onChange={handleBannerFileChange}
+              className="hidden"
+            />
+
+            <div className="flex-1 w-full space-y-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleTriggerBannerUpload}
+                  disabled={uploadingImage}
+                  className="py-2 px-4 bg-[#F6E4E4] hover:bg-[#F6E4E4]/80 text-[#8E3B4E] rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer border border-[#EADFDC]"
+                >
+                  <span className="material-symbols-outlined text-[16px]">crop</span>
+                  Fazer Upload e Recortar (16:9)
+                </button>
+                <span className="text-[11px] text-[#6F6168] self-center">
+                  Proporção widescreen ideal para o carrossel do aplicativo.
+                </span>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-[#6F6168] block mb-1">URL da Imagem de Fundo</label>
+                <input 
+                  type="url" 
+                  value={branding.banners[selectedBannerIndex].url || ''}
+                  onChange={e => handleUpdateActiveBanner('url', e.target.value)}
+                  placeholder="https://exemplo.com/banner.jpg"
+                  className="w-full border border-[#EADFDC] rounded-xl p-2.5 text-sm focus:outline-none focus:border-[#8E3B4E]"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-[#6F6168] block mb-1">Título do Banner</label>
+                  <input 
+                    type="text" 
+                    value={branding.banners[selectedBannerIndex].title || ''}
+                    onChange={e => handleUpdateActiveBanner('title', e.target.value)}
+                    placeholder="Ex: Primavera Rosé"
+                    className="w-full border border-[#EADFDC] rounded-xl p-2.5 text-sm focus:outline-none focus:border-[#8E3B4E]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[#6F6168] block mb-1">Subtítulo / Oferta</label>
+                  <input 
+                    type="text" 
+                    value={branding.banners[selectedBannerIndex].subtitle || ''}
+                    onChange={e => handleUpdateActiveBanner('subtitle', e.target.value)}
+                    placeholder="Ex: 20% off no combo"
+                    className="w-full border border-[#EADFDC] rounded-xl p-2.5 text-sm focus:outline-none focus:border-[#8E3B4E]"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Modal de Recorte Guiado de Imagens (Item A6) */}
+      <ModalRecorteImagem 
+        isOpen={cropModalOpen}
+        onClose={() => setCropModalOpen(false)}
+        file={cropModalFile}
+        aspectRatio={cropTarget === 'logo' ? 1 : 16 / 9}
+        isLogo={cropTarget === 'logo'}
+        title={cropTarget === 'logo' ? 'Recorte da Logo da Marca (1:1)' : 'Recorte do Banner Promocional (16:9)'}
+        onCropComplete={handleCropComplete}
+      />
+
+      {/* Barra Fixa Inferior Mobile */}
+      <div className="md:hidden fixed bottom-0 left-0 w-full p-4 pb-safe bg-white/95 backdrop-blur-md border-t border-[#EADFDC] z-40">
+        <button 
+          onClick={handleSave}
+          disabled={saving || (isCustomMode && !isCustomContrastOk)}
+          className="w-full bg-[#8E3B4E] text-white py-3.5 rounded-full font-medium text-sm flex justify-center items-center gap-2 shadow-sm disabled:opacity-50"
+        >
+          <span className="material-symbols-outlined text-[18px]">{saving ? 'sync' : 'check'}</span> 
+          {saving ? 'Salvando...' : 'Salvar Alterações'}
+        </button>
+      </div>
+    </div>
   );
 };
 

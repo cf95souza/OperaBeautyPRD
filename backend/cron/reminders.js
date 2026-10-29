@@ -8,18 +8,18 @@ export const initCronJobs = () => {
     console.log('⏳ [CRON] Iniciando rotinas diárias (Lembretes, Aniversários, Manutenção)...');
     
     try {
-      // 1. Lembretes de 24h (Agendamentos marcados para amanhã)
+      // 1. Lembretes de 24h (Agendamentos marcados para amanhã - Fallback safety net)
       const appts24h = await pool.query(`
-        SELECT a.id, a.tenant_id, a.client_id, a.appointment_time, c.name as client_name, s.name as service_name
+        SELECT a.id, a.tenant_id, a.client_id, a.start_time, c.name as client_name, s.name as service_name
         FROM public.cap_appointments a
         JOIN public.cap_clients c ON a.client_id = c.id
         JOIN public.cap_services s ON a.service_id = s.id
-        WHERE a.appointment_date = CURRENT_DATE + INTERVAL '1 day'
-        AND a.status = 'confirmed'
+        WHERE (a.start_time AT TIME ZONE 'America/Sao_Paulo')::date = (CURRENT_DATE + INTERVAL '1 day')
+        AND a.status IN ('scheduled', 'confirmed')
       `);
 
       for (const appt of appts24h.rows) {
-        const time = appt.appointment_time.substring(0, 5); // HH:MM
+        const time = new Date(appt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
         await notifyClient(
           appt.tenant_id, 
           appt.client_id, 
@@ -29,46 +29,16 @@ export const initCronJobs = () => {
         );
       }
       
-      // 2. Aniversariantes do dia
-      const bdays = await pool.query(`
-        SELECT c.id, c.tenant_id, c.name
-        FROM public.cap_clients c
-        WHERE EXTRACT(MONTH FROM c.birth_date) = EXTRACT(MONTH FROM CURRENT_DATE)
-        AND EXTRACT(DAY FROM c.birth_date) = EXTRACT(DAY FROM CURRENT_DATE)
-      `);
-
-      for (const client of bdays.rows) {
-        await notifyClient(
-          client.tenant_id,
-          client.id,
-          'Feliz Aniversário! 🎂',
-          `Parabéns ${client.name.split(' ')[0]}! O salão deseja que seu dia seja repleto de beleza e alegrias. Que tal comemorar agendando um horário com a gente?`,
-          '/agendar/servicos'
-        );
+      // 2. Campanhas Automáticas Parametrizadas (D15: Aniversário, Manutenção e Reativação 60d)
+      try {
+        const { runCampaignScan } = await import('../services/campaignService.js');
+        const campaignResults = await runCampaignScan();
+        console.log('📢 [CRON] Campanhas Automáticas executadas:', campaignResults);
+      } catch (campErr) {
+        console.error('❌ [CRON] Erro ao executar campanhas automáticas:', campErr);
       }
 
-      // 3. Manutenção (Retorno Automático)
-      const maintenance = await pool.query(`
-        SELECT a.tenant_id, a.client_id, c.name as client_name, s.name as service_name
-        FROM public.cap_appointments a
-        JOIN public.cap_clients c ON a.client_id = c.id
-        JOIN public.cap_services s ON a.service_id = s.id
-        WHERE a.status = 'completed'
-        AND s.maintenance_days > 0
-        AND a.appointment_date = CURRENT_DATE - (s.maintenance_days * INTERVAL '1 day')
-      `);
-
-      for (const item of maintenance.rows) {
-        await notifyClient(
-          item.tenant_id,
-          item.client_id,
-          'Hora do seu Retoque! ✨',
-          `Olá ${item.client_name.split(' ')[0]}, já faz um tempo que você fez ${item.service_name}. Que tal agendar seu retorno?`,
-          '/agendamento'
-        );
-      }
-
-      // 4. Renovação do Clube de Assinaturas (30 dias)
+      // 3. Renovação do Clube de Assinaturas (30 dias)
       const expiredMemberships = await pool.query(`
         SELECT cm.id, cm.current_period_end, sm.usage_limit
         FROM public.cap_client_memberships cm
@@ -102,17 +72,17 @@ export const initCronJobs = () => {
     
     try {
       const appts2h = await pool.query(`
-        SELECT a.id, a.tenant_id, a.client_id, a.appointment_time, c.name as client_name, s.name as service_name
+        SELECT a.id, a.tenant_id, a.client_id, a.start_time, c.name as client_name, s.name as service_name
         FROM public.cap_appointments a
         JOIN public.cap_clients c ON a.client_id = c.id
         JOIN public.cap_services s ON a.service_id = s.id
-        WHERE a.appointment_date = CURRENT_DATE
-        AND a.status = 'confirmed'
-        AND EXTRACT(HOUR FROM a.appointment_time) = EXTRACT(HOUR FROM CURRENT_TIME) + 2
+        WHERE (a.start_time AT TIME ZONE 'America/Sao_Paulo')::date = CURRENT_DATE
+        AND a.status IN ('scheduled', 'confirmed')
+        AND EXTRACT(HOUR FROM (a.start_time AT TIME ZONE 'America/Sao_Paulo')) = EXTRACT(HOUR FROM (CURRENT_TIME AT TIME ZONE 'America/Sao_Paulo')) + 2
       `);
 
       for (const appt of appts2h.rows) {
-        const time = appt.appointment_time.substring(0, 5);
+        const time = new Date(appt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
         await notifyClient(
           appt.tenant_id, 
           appt.client_id, 
@@ -124,5 +94,45 @@ export const initCronJobs = () => {
     } catch (err) {
       console.error('❌ [CRON] Erro nos lembretes de 2h:', err);
     }
+  });
+
+  // Expiração de Ofertas da Lista de Espera (D6 P1): Roda a cada 2 minutos
+  cron.schedule('*/2 * * * *', async () => {
+    try {
+      const { expireOffersAndAdvance } = await import('../services/waitlistService.js');
+      await expireOffersAndAdvance();
+    } catch (err) {
+      console.error('❌ [CRON] Erro ao expirar ofertas da lista de espera:', err);
+    }
+  });
+
+  // Notificação do Relatório Mensal "Impacto OperaBeauty" (D9 P1): Roda todo dia 1º às 08:00
+  cron.schedule('0 8 1 * *', async () => {
+    console.log('📊 [CRON] Notificando gestores sobre o Relatório Mensal de Impacto...');
+    try {
+      const activeTenants = await pool.query(`
+        SELECT id, name, slug FROM public.cap_tenants WHERE is_active = true
+      `);
+      for (const t of activeTenants.rows) {
+        const managers = await pool.query(`
+          SELECT id FROM public.cap_staff WHERE tenant_id = $1 AND role IN ('manager', 'superadmin') AND is_active = true
+        `, [t.id]);
+        
+        for (const m of managers.rows) {
+          await pool.query(`
+            INSERT INTO public.cap_notifications (tenant_id, recipient_id, recipient_type, title, message, link, is_read, created_at)
+            VALUES ($1, $2, 'staff', 'Relatório Mensal de Impacto Disponível! 📊', 
+                    'O relatório consolidado do mês anterior já está pronto. Confira as horas economizadas e faturamento protegido pelo OperaBeauty.',
+                    '/' || $3 || '/staff/admin/relatorios-bi', false, NOW())
+          `, [t.id, m.id, t.slug]);
+        }
+      }
+      console.log('✅ [CRON] Notificações do Relatório Mensal disparadas com sucesso.');
+    } catch (err) {
+      console.error('❌ [CRON] Erro ao disparar notificações de relatório mensal:', err);
+    }
+  }, {
+    scheduled: true,
+    timezone: "America/Sao_Paulo"
   });
 };

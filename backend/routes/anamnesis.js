@@ -15,13 +15,20 @@ const updateTemplateSchema = z.object({
       label: z.string(),
       options: z.array(z.string()).optional(),
       required: z.boolean().optional()
-    }))
+    })),
+    terms_text: z.string().optional(),
+    terms_version: z.number().int().positive().optional(),
+    require_terms: z.boolean().optional(),
+    require_signature: z.boolean().optional()
   })
 });
 
 const submitAnamnesisSchema = z.object({
   body: z.object({
-    answers: z.record(z.any())
+    answers: z.record(z.any()),
+    terms_accepted: z.boolean().optional(),
+    terms_version: z.number().int().positive().optional(),
+    signature_data: z.string().nullable().optional()
   })
 });
 
@@ -40,14 +47,20 @@ router.get('/template/:tenantId', async (req, res) => {
 // 2. Atualizar template do salão (Apenas Gestor/Admin)
 router.put('/template', authMiddleware, validate(updateTemplateSchema), async (req, res) => {
   const { tenant_id, role } = req.user;
-  const { fields_schema } = req.body;
+  const { fields_schema, terms_text, terms_version, require_terms, require_signature } = req.body;
   
   if (role !== 'admin' && role !== 'manager' && role !== 'superadmin') {
     return res.status(403).json({ error: 'Acesso negado. Apenas gestores podem editar a ficha.' });
   }
 
   try {
-    const updated = await updateTemplate(tenant_id, fields_schema);
+    const updated = await updateTemplate(tenant_id, {
+      fields_schema,
+      terms_text,
+      terms_version,
+      require_terms,
+      require_signature
+    });
     return res.json(updated);
   } catch (error) {
     req.log.error(error, 'Erro ao atualizar template de anamnese');
@@ -55,19 +68,18 @@ router.put('/template', authMiddleware, validate(updateTemplateSchema), async (r
   }
 });
 
-// 3. Obter a ficha de um cliente específico (Gestor/Profissional/Cliente)
+// 3. Obter a ficha de um cliente específico (Gestor/Profissional vinculado/Cliente)
 router.get('/client/:clientId', authMiddleware, async (req, res) => {
-  const { tenant_id, role, id: loggedUserId } = req.user;
+  const { tenant_id } = req.user;
   const { clientId } = req.params;
 
-  if (role === 'client' && loggedUserId !== clientId) {
-    return res.status(403).json({ error: 'Você só pode ver sua própria ficha.' });
-  }
-
   try {
-    const anamnesis = await getClientAnamnesis(tenant_id, clientId);
+    const anamnesis = await getClientAnamnesis(tenant_id, clientId, req.user, req);
     return res.json(anamnesis);
   } catch (error) {
+    if (error.statusCode === 403) {
+      return res.status(403).json({ error: error.message });
+    }
     req.log.error(error, 'Erro ao carregar ficha do cliente');
     return res.status(500).json({ error: 'Erro ao buscar ficha de anamnese.' });
   }
@@ -76,14 +88,24 @@ router.get('/client/:clientId', authMiddleware, async (req, res) => {
 // 4. Submeter/Atualizar as respostas da ficha (Apenas o próprio cliente)
 router.post('/client', authMiddleware, validate(submitAnamnesisSchema), async (req, res) => {
   const { tenant_id, role, id: clientId } = req.user;
-  const { answers } = req.body;
+  const { answers, terms_accepted, terms_version, signature_data } = req.body;
 
   if (role !== 'client') {
     return res.status(403).json({ error: 'Apenas clientes podem preencher a ficha de anamnese.' });
   }
 
+  const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null;
+  const userAgent = req.headers['user-agent'] || null;
+
   try {
-    const updated = await submitClientAnamnesis(tenant_id, clientId, answers);
+    const updated = await submitClientAnamnesis(tenant_id, clientId, {
+      answers,
+      terms_accepted,
+      terms_version,
+      signature_data,
+      client_ip: typeof clientIp === 'string' ? clientIp.split(',')[0].trim() : clientIp,
+      user_agent: userAgent
+    });
     return res.json({ message: 'Ficha salva com sucesso.', ...updated });
   } catch (error) {
     req.log.error(error, 'Erro ao salvar respostas da anamnese');

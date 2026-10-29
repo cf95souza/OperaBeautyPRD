@@ -9,9 +9,9 @@ export const validate = (schema) => (req, res, next) => {
     });
     
     // Atualiza o request com os dados validados/sanitizados (strip, coerce)
-    req.body = validatedData.body;
-    req.query = validatedData.query;
-    req.params = validatedData.params;
+    if (validatedData.body !== undefined) req.body = validatedData.body;
+    if (validatedData.query !== undefined) req.query = validatedData.query;
+    if (validatedData.params !== undefined) req.params = validatedData.params;
     
     next();
   } catch (error) {

@@ -1,9 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import {
+  User,
+  Lock,
+  Calendar,
+  Gift,
+  Share2,
+  FileText,
+  Download,
+  Trash2,
+  LogOut,
+  CheckCircle,
+  AlertCircle,
+  Check,
+  ChevronRight,
+  ShieldCheck,
+  Sparkles
+} from 'lucide-react';
 import { useTenant } from '../context/TenantContext';
 import { api } from '../lib/api';
 import { useNotification } from '../context/NotificationProvider';
 import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
+import { TelaCliente } from '../components/ui/TelaCliente';
 
 const PerfilCliente = () => {
   const { tenant_slug } = useParams();
@@ -19,28 +37,9 @@ const PerfilCliente = () => {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
-  const [anamnesisStatus, setAnamnesisStatus] = useState(null); // { isExpired: boolean, expiresAt: Date }
+  const [anamnesisStatus, setAnamnesisStatus] = useState(null);
 
-  const getVipBadge = (tier) => {
-    const styles = {
-      Prata: 'bg-slate-100 text-slate-700 border border-slate-200/80 shadow-[0_2px_4px_rgba(148,163,184,0.06)]',
-      Ouro: 'bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A]/60 shadow-[0_2px_4px_rgba(180,83,9,0.04)]',
-      VIP: 'bg-[#FAF5FF] text-[#6B21A8] border border-[#E9D5FF]/60 shadow-[0_2px_4px_rgba(107,33,168,0.04)]',
-      Black: 'bg-neutral-900 text-amber-200 border border-neutral-800 shadow-[0_2px_6px_rgba(0,0,0,0.12)] font-bold'
-    };
-    
-    const label = tier || 'Prata';
-    const styleClass = styles[label] || styles.Prata;
-    
-    return (
-      <span className={`inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-all duration-300 ${styleClass}`}>
-        <span className="material-symbols-outlined text-[12px] filled" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
-        {label}
-      </span>
-    );
-  };
-
-  // Fetch client data
+  // Carrega os dados cadastrais do cliente
   useEffect(() => {
     if (loadingTenant) return;
     if (!session || session.role !== 'client') {
@@ -48,77 +47,95 @@ const PerfilCliente = () => {
       return;
     }
 
+    let isMounted = true;
     const fetchProfile = async () => {
       try {
         const data = await api.clients.get(session.id);
-        
-        if (data) {
+        if (data && isMounted) {
           setNome(data.name || '');
           setTelefone(data.phone || '');
-          
+
           let birthDateStr = '';
           if (data.birth_date) {
-            birthDateStr = String(data.birth_date).includes('T') 
-              ? data.birth_date.split('T')[0] 
+            birthDateStr = String(data.birth_date).includes('T')
+              ? data.birth_date.split('T')[0]
               : data.birth_date;
           }
           setDataNascimento(birthDateStr);
         }
 
-        // Busca o status da Ficha de Anamnese
-        const token = localStorage.getItem('operabeauty_token');
-        const resAnamnesis = await fetch(`/api/anamnesis/client/${session.id}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (resAnamnesis.ok) {
-          const anamnesis = await resAnamnesis.json();
-          if (anamnesis && anamnesis.expires_at) {
-            const isExpired = new Date(anamnesis.expires_at) < new Date();
-            setAnamnesisStatus({
-              isExpired,
-              expiresAt: anamnesis.expires_at,
-              updatedAt: anamnesis.updated_at
-            });
-          } else {
-            setAnamnesisStatus({ isExpired: true }); // Missing = expired
+        // Status da Ficha de Anamnese
+        try {
+          const token = localStorage.getItem('operabeauty_token');
+          const resAnamnesis = await fetch(`/api/anamnesis/client/${session.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (resAnamnesis.ok && isMounted) {
+            const anamnesis = await resAnamnesis.json();
+            if (anamnesis && anamnesis.expires_at) {
+              const isExpired = new Date(anamnesis.expires_at) < new Date();
+              setAnamnesisStatus({
+                isExpired,
+                expiresAt: anamnesis.expires_at,
+                updatedAt: anamnesis.updated_at
+              });
+            } else {
+              setAnamnesisStatus({ isExpired: true });
+            }
           }
+        } catch (e) {
+          // Ignora caso endpoint de anamnese não esteja ativo
         }
       } catch (err) {
-        console.error("Erro ao buscar perfil do cliente", err);
+        console.error('Erro ao buscar perfil do cliente:', err);
       } finally {
-        setInitialLoad(false);
+        if (isMounted) setInitialLoad(false);
       }
     };
+
     fetchProfile();
+    return () => {
+      isMounted = false;
+    };
   }, [session, loadingTenant, navigate, tenant_slug]);
 
-  const handleLogout = () => {
-    logout();
-    navigate(`/${tenant_slug}/login`);
+  const handleLogout = async () => {
+    const confirmed = await confirm('Deseja realmente sair da sua conta?');
+    if (confirmed) {
+      logout();
+      navigate(`/${tenant_slug}/login`);
+    }
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!nome.trim()) { showError("O nome é obrigatório."); return; }
-    
+    if (!nome.trim()) {
+      showError('O seu nome é obrigatório.');
+      return;
+    }
+
     if (novaSenha || confirmarSenha) {
       if (novaSenha !== confirmarSenha) {
-        showError("As senhas não coincidem."); return;
+        showError('As senhas digitadas não coincidem.');
+        return;
       }
-      if (novaSenha.length > 0 && (novaSenha.length < 6 || !/[a-zA-Z]/.test(novaSenha) || !/[0-9]/.test(novaSenha))) {
-        showError("A nova senha não atende aos requisitos mínimos."); return;
+      if (
+        novaSenha.length < 6 ||
+        !/[a-zA-Z]/.test(novaSenha) ||
+        !/[0-9]/.test(novaSenha)
+      ) {
+        showError('A nova senha deve ter no mínimo 6 caracteres, contendo letras e números.');
+        return;
       }
     }
 
     setLoading(true);
     try {
-      // Update name and birth_date
       await api.clients.updateMe({
         name: nome,
         birth_date: dataNascimento || null
       });
 
-      // Update password via API if provided
       if (novaSenha) {
         await api.clients.updateMyPassword(novaSenha);
         setNovaSenha('');
@@ -126,329 +143,416 @@ const PerfilCliente = () => {
       }
 
       setSaved(true);
+      showSuccess('Informações atualizadas com sucesso!');
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error(err);
-      showError("Erro ao salvar alterações: " + err.message);
+      showError('Erro ao salvar alterações: ' + (err.message || 'Tente novamente'));
     } finally {
       setLoading(false);
     }
   };
 
+  const handleExportData = async () => {
+    try {
+      const data = await api.clients.exportData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Meus_Dados_OperaBeauty_${tenant_slug}.json`;
+      a.click();
+      showSuccess('Arquivo com seus dados exportado com sucesso!');
+    } catch (e) {
+      showError('Erro ao exportar dados da conta.');
+    }
+  };
+
+  const handleAnonymize = async () => {
+    const confirmed = await confirm(
+      'ATENÇÃO: Isso removerá permanentemente seu nome, histórico e telefone dos nossos registros. Esta ação é IRREVERSÍVEL. Deseja continuar?'
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.clients.anonymizeAccount();
+      showSuccess('Sua conta foi excluída e anonimizada com sucesso.');
+      logout();
+      navigate(`/${tenant_slug}/login`);
+    } catch (e) {
+      showError('Erro ao solicitar anonimização da conta.');
+    }
+  };
+
   return (
-    <div className="bg-background text-on-background min-h-screen pb-32 font-body-md text-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
-      
-      {/* Top App Bar */}
-      <header className="w-full top-0 sticky z-50 bg-surface shadow-sm transition-all duration-300 ease-in-out pt-[calc(env(safe-area-inset-top,0px)+28px)] pb-2 md:pt-4">
-        <div className="flex justify-between items-center px-gutter py-sm w-full max-w-7xl mx-auto">
-          <div className="w-10"></div>{/* Spacer to keep title centered */}
-          <div className="flex items-center justify-center gap-2 flex-1">
-            {tenant?.logo_url ? (
-              <img 
-                src={tenant.logo_url} 
-                alt={tenant.name} 
-                className="h-8 md:h-10 object-contain rounded-md" 
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            ) : (
-              <span className="material-symbols-outlined text-primary font-headline-md text-headline-md shrink-0">spa</span>
-            )}
-            <h1 className="font-headline-md text-headline-md-mobile md:text-headline-md text-primary tracking-tight">
-              {tenant?.name || 'Carregando...'}
-            </h1>
+    <TelaCliente temNavegacaoInferior className="selection:bg-brand-tint selection:text-brand">
+      {/* 1. Cabeçalho Sticky */}
+      <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur-md border-b border-line/60 pt-3 pb-3 px-5">
+        <div className="max-w-[420px] mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-brand-tint text-brand flex items-center justify-center font-serif text-sm font-bold overflow-hidden shrink-0">
+              {tenant?.logo_url ? (
+                <img
+                  src={tenant.logo_url}
+                  alt={tenant.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                (tenant?.name || 'O').charAt(0)
+              )}
+            </div>
+            <span className="font-serif text-lg font-bold text-ink truncate max-w-[200px]">
+              {tenant?.name || 'OperaBeauty'}
+            </span>
           </div>
-          <div className="w-10"></div>{/* Spacer to keep title centered */}
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-9 h-9 rounded-full border border-line bg-surface text-ink-soft hover:text-danger hover:border-danger/30 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs"
+            title="Sair da conta"
+            aria-label="Sair da conta"
+          >
+            <LogOut size={16} />
+          </button>
         </div>
       </header>
 
-      <main className="w-full px-container-margin mt-lg max-w-[448px] mx-auto animate-fade-in-up">
-        
-        {/* Profile Header */}
-        <section className="flex flex-col items-center mb-xl">
-          <div className="relative group">
-            <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-surface-container-highest shadow-lg mb-md bg-surface-variant flex items-center justify-center">
-               <span className="material-symbols-outlined text-[48px] text-secondary">person</span>
+      {/* 2. Conteúdo Principal Mobile */}
+      <main className="w-full max-w-[420px] mx-auto px-5 pt-6 flex-1 flex flex-col">
+        {/* Profile Card / Header com Monograma Rosé */}
+        <section className="flex flex-col items-center mb-6">
+          <div className="relative mb-3">
+            <div className="w-24 h-24 rounded-full bg-brand-tint border-2 border-gold/40 flex items-center justify-center shadow-xs overflow-hidden">
+              <span className="font-serif text-3xl font-bold text-brand italic">
+                {(nome || 'C').charAt(0)}
+              </span>
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-brand text-white flex items-center justify-center shadow-xs">
+              <Sparkles size={14} />
             </div>
           </div>
-          <h2 className="font-headline-md text-headline-md-mobile text-on-surface">
+
+          <h2 className="font-serif text-2xl font-bold text-ink text-center leading-tight">
             {nome || 'Cliente'}
           </h2>
-          <div className="mt-1">
-            {getVipBadge(session?.vip_tier)}
+          <p className="text-xs text-ink-soft mt-0.5">{telefone || 'Telefone verificado'}</p>
+
+          {/* Badge VIP / Fidelidade */}
+          <div className="mt-2.5">
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-brand-tint/60 text-brand border border-gold/30">
+              <Sparkles size={12} className="text-gold" />
+              <span>{session?.vip_tier || 'Cliente Especial'}</span>
+            </span>
           </div>
         </section>
 
-        {/* Ficha de Anamnese - Alerta e Botão */}
+        {/* Alerta de Ficha de Anamnese (se aplicável) */}
         {!initialLoad && anamnesisStatus && (
-          <section className="mb-xl">
+          <section className="mb-5">
             <button
               type="button"
               onClick={() => navigate(`/${tenant_slug}/anamnese`)}
-              className={`w-full flex items-center justify-between p-md rounded-2xl border transition-colors ${
-                anamnesisStatus.isExpired 
-                ? 'bg-error-container/20 border-error/50 hover:bg-error-container/30' 
-                : 'bg-primary-container/10 border-primary/20 hover:bg-primary-container/20'
+              className={`w-full p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 text-left shadow-xs cursor-pointer ${
+                anamnesisStatus.isExpired
+                  ? 'bg-danger/5 border-danger/30 hover:bg-danger/10'
+                  : 'bg-brand-tint/30 border-brand/20 hover:bg-brand-tint/50'
               }`}
             >
-              <div className="flex items-center gap-3 text-left">
-                <span className={`material-symbols-outlined text-2xl ${anamnesisStatus.isExpired ? 'text-error' : 'text-primary'}`}>
-                  {anamnesisStatus.isExpired ? 'warning' : 'assignment'}
-                </span>
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                    anamnesisStatus.isExpired
+                      ? 'bg-danger/15 text-danger'
+                      : 'bg-brand text-white'
+                  }`}
+                >
+                  <FileText size={18} />
+                </div>
                 <div>
-                  <h3 className={`font-label-lg ${anamnesisStatus.isExpired ? 'text-error' : 'text-primary'}`}>
+                  <h4
+                    className={`text-sm font-bold ${
+                      anamnesisStatus.isExpired ? 'text-danger' : 'text-brand'
+                    }`}
+                  >
                     Ficha de Anamnese
-                  </h3>
-                  <p className="font-body-sm text-secondary">
-                    {anamnesisStatus.isExpired 
-                      ? 'Você precisa atualizar suas informações de saúde.' 
-                      : `Ficha em dia. Última atualização: ${new Date(anamnesisStatus.updatedAt).toLocaleDateString('pt-BR')}`
-                    }
+                  </h4>
+                  <p className="text-xs text-ink-soft mt-0.5">
+                    {anamnesisStatus.isExpired
+                      ? 'Informações de saúde pendentes de atualização.'
+                      : 'Ficha em dia com o salão.'}
                   </p>
                 </div>
               </div>
-              <span className="material-symbols-outlined text-secondary">chevron_right</span>
+              <ChevronRight size={18} className="text-ink-soft shrink-0" />
             </button>
           </section>
         )}
 
-        {/* Form Sections */}
+        {/* Formulário de Edição */}
         {initialLoad ? (
-          <div className="flex justify-center py-10">
-            <span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span>
+          <div className="space-y-4 py-8">
+            <div className="h-44 bg-surface rounded-2xl border border-line/60 animate-pulse" />
+            <div className="h-44 bg-surface rounded-2xl border border-line/60 animate-pulse" />
           </div>
         ) : (
-        <form onSubmit={handleSave} className="space-y-xl">
-          
-          {/* Meus Dados Section */}
-          <section>
-            <div className="flex items-center gap-2 mb-md">
-              <span className="material-symbols-outlined text-primary text-[20px]">badge</span>
-              <h3 className="font-label-md text-label-md text-primary uppercase tracking-widest">Meus Dados</h3>
-            </div>
-            
-            <div className="bg-surface-container-lowest rounded-xl p-md shadow-[0px_4px_20px_rgba(0,0,0,0.04)] space-y-md">
-              <div className="relative focus-within:text-primary text-secondary transition-colors">
-                <label className="block font-label-sm text-label-sm mb-1 ml-1 inherit-color">Nome Completo</label>
-                <input 
-                  className="w-full bg-transparent border-b border-outline-variant py-2 focus:border-primary focus:ring-0 transition-colors outline-none text-on-surface" 
-                  type="text" 
+          <form onSubmit={handleSave} className="space-y-5">
+            {/* Bloco 1: Meus Dados Pessoais */}
+            <div className="bg-surface rounded-2xl border border-line/70 p-5 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-1 border-b border-line/50">
+                <User size={16} className="text-brand" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                  Meus Dados Pessoais
+                </span>
+              </div>
+
+              {/* Nome Completo */}
+              <div>
+                <label
+                  htmlFor="nome-cliente"
+                  className="block text-xs font-semibold text-ink-soft mb-1.5"
+                >
+                  Nome Completo
+                </label>
+                <input
+                  id="nome-cliente"
+                  type="text"
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
+                  className="w-full h-12 bg-bg border border-line rounded-xl px-4 text-sm text-ink focus:outline-none focus:border-brand transition-colors font-medium"
+                  placeholder="Seu nome"
+                  required
                 />
               </div>
-              <div className="relative focus-within:text-primary text-secondary transition-colors">
-                <label className="block font-label-sm text-label-sm mb-1 ml-1 inherit-color">Telefone</label>
-                <input 
-                  className="w-full bg-transparent border-b border-outline-variant py-2 focus:border-primary focus:ring-0 transition-colors outline-none text-on-surface" 
-                  type="tel" 
+
+              {/* Telefone (Somente leitura para integridade de login) */}
+              <div>
+                <label
+                  htmlFor="telefone-cliente"
+                  className="block text-xs font-semibold text-ink-soft mb-1.5"
+                >
+                  Telefone de Acesso (WhatsApp)
+                </label>
+                <input
+                  id="telefone-cliente"
+                  type="tel"
                   value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
                   disabled
+                  className="w-full h-12 bg-line/20 border border-line/60 rounded-xl px-4 text-sm text-ink-soft font-medium cursor-not-allowed"
                 />
+                <span className="text-[11px] text-ink-soft/70 mt-1 block">
+                  Identificador fixo da sua conta neste salão.
+                </span>
               </div>
-              <div className="relative focus-within:text-primary text-secondary transition-colors">
-                <label className="block font-label-sm text-label-sm mb-1 ml-1 inherit-color">Data de Nascimento</label>
-                <input 
-                  className="w-full bg-transparent border-b border-outline-variant py-2 focus:border-primary focus:ring-0 transition-colors outline-none text-on-surface" 
-                  type="date" 
+
+              {/* Data de Nascimento */}
+              <div>
+                <label
+                  htmlFor="nascimento-cliente"
+                  className="block text-xs font-semibold text-ink-soft mb-1.5"
+                >
+                  Data de Nascimento
+                </label>
+                <input
+                  id="nascimento-cliente"
+                  type="date"
                   value={dataNascimento}
                   onChange={(e) => setDataNascimento(e.target.value)}
+                  className="w-full h-12 bg-bg border border-line rounded-xl px-4 text-sm text-ink focus:outline-none focus:border-brand transition-colors font-medium"
                 />
               </div>
             </div>
-          </section>
 
-          {/* Segurança Section */}
-          <section>
-            <div className="flex items-center gap-2 mb-md">
-              <span className="material-symbols-outlined text-primary text-[20px]">lock</span>
-              <h3 className="font-label-md text-label-md text-primary uppercase tracking-widest">Segurança</h3>
-            </div>
-            
-            <div className="bg-surface-container-lowest rounded-xl p-md shadow-[0px_4px_20px_rgba(0,0,0,0.04)] space-y-md">
-              <div className="relative focus-within:text-primary text-secondary transition-colors">
-                <label className="block font-label-sm text-label-sm mb-1 ml-1 inherit-color">Nova Senha</label>
-                <input 
-                  className="w-full bg-transparent border-b border-outline-variant py-2 focus:border-primary focus:ring-0 transition-colors outline-none text-on-surface" 
-                  placeholder="••••••••" 
+            {/* Bloco 2: Segurança e Senha */}
+            <div className="bg-surface rounded-2xl border border-line/70 p-5 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-1 border-b border-line/50">
+                <Lock size={16} className="text-brand" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                  Segurança da Conta
+                </span>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="nova-senha"
+                  className="block text-xs font-semibold text-ink-soft mb-1.5"
+                >
+                  Nova Senha (opcional)
+                </label>
+                <input
+                  id="nova-senha"
                   type="password"
                   value={novaSenha}
                   onChange={(e) => setNovaSenha(e.target.value)}
+                  placeholder="Deixe em branco para manter a atual"
+                  className="w-full h-12 bg-bg border border-line rounded-xl px-4 text-sm text-ink focus:outline-none focus:border-brand transition-colors"
                 />
               </div>
+
+              {/* Requisitos Dinâmicos de Senha */}
+              {novaSenha.length > 0 && (
+                <div className="bg-bg p-3.5 rounded-xl border border-line/80 space-y-1.5">
+                  <span className="text-[11px] font-semibold text-ink-soft block">
+                    Requisitos da nova senha:
+                  </span>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span
+                      className={
+                        novaSenha.length >= 6 ? 'text-success font-semibold' : 'text-ink-soft'
+                      }
+                    >
+                      {novaSenha.length >= 6 ? '✓' : '○'} Mínimo de 6 caracteres
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span
+                      className={
+                        /[a-zA-Z]/.test(novaSenha)
+                          ? 'text-success font-semibold'
+                          : 'text-ink-soft'
+                      }
+                    >
+                      {/[a-zA-Z]/.test(novaSenha) ? '✓' : '○'} Pelo menos 1 letra
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span
+                      className={
+                        /[0-9]/.test(novaSenha)
+                          ? 'text-success font-semibold'
+                          : 'text-ink-soft'
+                      }
+                    >
+                      {/[0-9]/.test(novaSenha) ? '✓' : '○'} Pelo menos 1 número
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {novaSenha.length > 0 && (
-                <div className="flex flex-col gap-2 bg-surface-container-low p-3 rounded-xl border border-surface-variant transition-all mt-2">
-                  <span className="text-label-sm font-label-sm text-secondary mb-1">A nova senha deve conter:</span>
-                  <div className="flex items-center gap-2 transition-colors duration-300">
-                    <span className={`material-symbols-outlined text-[16px] ${novaSenha.length >= 6 ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: novaSenha.length >= 6 ? "'FILL' 1" : "'FILL' 0" }}>
-                      {novaSenha.length >= 6 ? 'check_circle' : 'radio_button_unchecked'}
-                    </span>
-                    <span className={`text-label-sm ${novaSenha.length >= 6 ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Mínimo de 6 caracteres</span>
-                  </div>
-                  <div className="flex items-center gap-2 transition-colors duration-300">
-                    <span className={`material-symbols-outlined text-[16px] ${/[a-zA-Z]/.test(novaSenha) ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: /[a-zA-Z]/.test(novaSenha) ? "'FILL' 1" : "'FILL' 0" }}>
-                      {/[a-zA-Z]/.test(novaSenha) ? 'check_circle' : 'radio_button_unchecked'}
-                    </span>
-                    <span className={`text-label-sm ${/[a-zA-Z]/.test(novaSenha) ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Pelo menos 1 letra</span>
-                  </div>
-                  <div className="flex items-center gap-2 transition-colors duration-300">
-                    <span className={`material-symbols-outlined text-[16px] ${/[0-9]/.test(novaSenha) ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: /[0-9]/.test(novaSenha) ? "'FILL' 1" : "'FILL' 0" }}>
-                      {/[0-9]/.test(novaSenha) ? 'check_circle' : 'radio_button_unchecked'}
-                    </span>
-                    <span className={`text-label-sm ${/[0-9]/.test(novaSenha) ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Pelo menos 1 número</span>
-                  </div>
+                <div>
+                  <label
+                    htmlFor="confirmar-senha"
+                    className="block text-xs font-semibold text-ink-soft mb-1.5"
+                  >
+                    Confirmar Nova Senha
+                  </label>
+                  <input
+                    id="confirmar-senha"
+                    type="password"
+                    value={confirmarSenha}
+                    onChange={(e) => setConfirmarSenha(e.target.value)}
+                    placeholder="Repita a nova senha"
+                    className="w-full h-12 bg-bg border border-line rounded-xl px-4 text-sm text-ink focus:outline-none focus:border-brand transition-colors"
+                  />
                 </div>
               )}
-
-              <div className="relative focus-within:text-primary text-secondary transition-colors mt-md">
-                <label className="block font-label-sm text-label-sm mb-1 ml-1 inherit-color">Confirmar Senha</label>
-                <input 
-                  className="w-full bg-transparent border-b border-outline-variant py-2 focus:border-primary focus:ring-0 transition-colors outline-none text-on-surface" 
-                  placeholder="••••••••" 
-                  type="password"
-                  value={confirmarSenha}
-                  onChange={(e) => setConfirmarSenha(e.target.value)}
-                />
-              </div>
             </div>
-          </section>
 
-          {/* Meus Vales-Presente Section */}
-          <section>
-            <div className="flex items-center gap-2 mb-md">
-              <span className="material-symbols-outlined text-primary text-[20px]">card_giftcard</span>
-              <h3 className="font-label-md text-label-md text-primary uppercase tracking-widest">Meus Presentes</h3>
-            </div>
-            
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] overflow-hidden border border-outline-variant/30 mb-xl">
-              <button 
+            {/* Bloco 3: Atalhos Úteis (Vales-Presente & Indicação) */}
+            <div className="space-y-2.5">
+              <button
                 type="button"
                 onClick={() => navigate(`/${tenant_slug}/presentear`)}
-                className="w-full relative flex items-center justify-between p-lg group active:scale-[0.99] transition-all bg-surface hover:bg-surface-variant/30"
+                className="w-full bg-surface rounded-2xl border border-line/70 p-4 shadow-xs flex items-center justify-between gap-3 hover:border-brand/40 transition-all cursor-pointer"
               >
-                <div className="flex flex-col items-start text-left">
-                  <span className="font-headline-sm text-on-surface mb-1 font-bold">Meus Vales-Presente</span>
-                  <span className="text-sm text-secondary">Acompanhe e envie seus presentes</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-brand-tint text-brand flex items-center justify-center shrink-0">
+                    <Gift size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-ink">Meus Vales-Presente</p>
+                    <p className="text-xs text-ink-soft">
+                      Acompanhe e envie mimos para amigas
+                    </p>
+                  </div>
                 </div>
-                <div className="w-10 h-10 bg-primary/10 text-primary rounded-full shadow-sm flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                  <span className="material-symbols-outlined">arrow_forward</span>
-                </div>
+                <ChevronRight size={18} className="text-ink-soft" />
               </button>
-            </div>
-          </section>
 
-          {/* Indique e Ganhe Section */}
-          {tenant?.features?.referral && (
-            <section>
-              <div className="flex items-center gap-2 mb-md">
-                <span className="material-symbols-outlined text-primary text-[20px]">volunteer_activism</span>
-                <h3 className="font-label-md text-label-md text-primary uppercase tracking-widest">Programa de Indicação</h3>
-              </div>
-              
-              <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] overflow-hidden border border-[#f4c8ce]/30">
-                <button 
+              {tenant?.features?.referral && (
+                <button
                   type="button"
                   onClick={() => navigate(`/${tenant_slug}/indique-e-ganhe`)}
-                  className="w-full relative flex items-center justify-between p-lg group active:scale-[0.99] transition-all bg-gradient-to-r from-[#ffe4e8] to-surface-container-lowest"
+                  className="w-full bg-gradient-to-r from-brand-tint/40 to-surface rounded-2xl border border-brand/20 p-4 shadow-xs flex items-center justify-between gap-3 hover:border-brand/40 transition-all cursor-pointer"
                 >
-                  <div className="flex flex-col items-start text-left">
-                    <span className="font-headline-sm text-on-surface mb-1 font-bold">Indique e Ganhe</span>
-                    <span className="text-sm text-secondary">Convide amigos e ganhe R$ 20</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-brand text-white flex items-center justify-center shrink-0">
+                      <Share2 size={18} />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-ink">Indique e Ganhe</p>
+                      <p className="text-xs text-ink-soft">
+                        Convide amigas e ganhe créditos na carteira
+                      </p>
+                    </div>
                   </div>
-                  <div className="w-10 h-10 bg-white text-[#b0616b] rounded-full shadow-sm flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                    <span className="material-symbols-outlined">arrow_forward</span>
-                  </div>
+                  <ChevronRight size={18} className="text-ink-soft" />
                 </button>
-              </div>
-            </section>
-          )}
-
-          {/* Privacidade / LGPD Section */}
-          <section>
-            <div className="flex items-center gap-2 mb-md">
-              <span className="material-symbols-outlined text-primary text-[20px]">policy</span>
-              <h3 className="font-label-md text-label-md text-primary uppercase tracking-widest">Privacidade (LGPD)</h3>
-            </div>
-            
-            <div className="bg-surface-container-lowest rounded-xl p-md shadow-[0px_4px_20px_rgba(0,0,0,0.04)] space-y-md">
-              <button 
-                type="button"
-                onClick={async () => {
-                  try {
-                    const data = await api.clients.exportData();
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'Meus_Dados_OperaBeauty.json';
-                    a.click();
-                    showSuccess("Dados exportados com sucesso!");
-                  } catch (e) {
-                    showError("Erro ao exportar dados.");
-                  }
-                }}
-                className="w-full text-left flex items-center justify-between text-secondary hover:text-primary transition-colors py-2"
-              >
-                <span className="font-label-sm">Exportar meus dados (JSON)</span>
-                <span className="material-symbols-outlined text-[20px]">download</span>
-              </button>
-              
-              <button 
-                type="button"
-                onClick={async () => {
-                  if (await confirm("ATENÇÃO: Isso apagará permanentemente seu nome, telefone e email. Esta ação é IRREVERSÍVEL. Tem certeza?")) {
-                    try {
-                      await api.clients.anonymizeAccount();
-                      logout();
-                      navigate(`/${tenant_slug}/login`);
-                    } catch(e) {
-                      showError("Erro ao excluir conta.");
-                    }
-                  }
-                }}
-                className="w-full text-left flex items-center justify-between text-error hover:opacity-80 transition-opacity py-2 mt-2"
-              >
-                <span className="font-label-sm">Excluir minha conta</span>
-                <span className="material-symbols-outlined text-[20px]">delete_forever</span>
-              </button>
-            </div>
-          </section>
-
-          {/* Action Button */}
-          <div className="pt-md">
-            <button 
-              type="submit"
-              disabled={loading}
-              className={`w-full py-4 rounded-xl font-label-md text-label-md shadow-lg active:scale-[0.98] transition-all hover:opacity-90 flex items-center justify-center gap-2 ${saved ? 'bg-tertiary text-on-tertiary' : 'bg-primary text-on-primary'}`}
-            >
-              {loading ? (
-                <span className="material-symbols-outlined animate-spin">refresh</span>
-              ) : saved ? (
-                'Alterações Salvas!'
-              ) : (
-                'Salvar Alterações'
               )}
-            </button>
-            <button 
-              type="button"
-              onClick={handleLogout}
-              className="w-full mt-4 text-error font-label-md text-label-md py-2 active:scale-95 transition-transform"
-            >
-              Sair da Conta
-            </button>
-          </div>
+            </div>
 
-        </form>
+            {/* Bloco 4: Privacidade e Direitos LGPD */}
+            <div className="bg-surface rounded-2xl border border-line/70 p-5 shadow-xs space-y-3">
+              <div className="flex items-center gap-2 pb-1 border-b border-line/50">
+                <ShieldCheck size={16} className="text-brand" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                  Privacidade (LGPD)
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleExportData}
+                className="w-full flex items-center justify-between py-2 text-xs font-semibold text-ink hover:text-brand transition-colors cursor-pointer"
+              >
+                <span>Exportar meus dados (JSON)</span>
+                <Download size={16} className="text-ink-soft" />
+              </button>
+
+              <div className="border-t border-line/50" />
+
+              <button
+                type="button"
+                onClick={handleAnonymize}
+                className="w-full flex items-center justify-between py-2 text-xs font-semibold text-danger/80 hover:text-danger transition-colors cursor-pointer"
+              >
+                <span>Excluir permanentemente minha conta</span>
+                <Trash2 size={16} />
+              </button>
+            </div>
+
+            {/* Botão Salvar Alterações */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-[52px] rounded-full bg-brand text-white font-medium text-base hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-60 cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Salvando dados...</span>
+                  </>
+                ) : saved ? (
+                  <>
+                    <Check size={18} />
+                    <span>Alterações salvas!</span>
+                  </>
+                ) : (
+                  <span>Salvar Alterações</span>
+                )}
+              </button>
+            </div>
+          </form>
         )}
-        {/* Espaçador de segurança para a BottomNavBar móvel */}
-        <div className="h-24 md:hidden"></div>
       </main>
 
-      {/* Bottom Navigation Bar */}
+      {/* 3. Navegação Inferior (Ativa em 'perfil') */}
       <ClienteBottomNavBar activeTab="perfil" tenantSlug={tenant_slug} />
-      
-    </div>
+    </TelaCliente>
   );
 };
 

@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { api } from '../lib/api';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Card } from '../components/ui/Card';
+import { Botao } from '../components/ui/Botao';
+import { CampoTexto } from '../components/ui/CampoTexto';
+import { TelaCliente } from '../components/ui/TelaCliente';
+import { ArrowLeft, User, Phone, Calendar, Lock, CheckCircle2, Circle, Gift } from 'lucide-react';
 
 const CadastroCliente = () => {
   const { tenant_slug } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { tenant, login } = useTenant();
-  
+
   const [phone] = useState(location.state?.phone || '');
   const [name, setName] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -19,209 +20,280 @@ const CadastroCliente = () => {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [referralInfo, setReferralInfo] = useState(null);
 
   const queryParams = new URLSearchParams(location.search);
-  const refCode = queryParams.get('ref');
+  const refCode = queryParams.get('ref') || 
+    sessionStorage.getItem(`opera_referral_code:${tenant_slug}`) || 
+    localStorage.getItem(`opera_referral_code:${tenant_slug}`);
 
   useEffect(() => {
     if (!phone) {
       navigate(`/${tenant_slug}/login`);
+      return;
     }
-  }, [phone, navigate, tenant_slug]);
+
+    if (refCode && tenant_slug) {
+      api.referral.validate(refCode, tenant_slug)
+        .then((data) => {
+          if (data && data.valid) {
+            setReferralInfo(data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [phone, navigate, tenant_slug, refCode]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!name.trim()) {
+      setError('Por favor, informe seu nome.');
+      return;
+    }
+    if (!birthDate) {
+      setError('Por favor, informe sua data de nascimento.');
+      return;
+    }
+    if (password.length < 6 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      setError('A senha deve atender a todos os requisitos de segurança.');
+      return;
+    }
+    if (!termsAccepted) {
+      setError('Você precisa concordar com os termos para continuar.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const { token, user } = await api.auth.registerClient(tenant.id, name, phone, password, birthDate || null, refCode);
+      const { token, user } = await api.auth.registerClient(
+        tenant.id,
+        name,
+        phone,
+        password,
+        birthDate || null,
+        refCode
+      );
       login(user, token);
-
+      if (tenant_slug) {
+        sessionStorage.removeItem(`opera_referral_code:${tenant_slug}`);
+        localStorage.removeItem(`opera_referral_code:${tenant_slug}`);
+      }
       navigate(`/${tenant_slug}/home`);
-
     } catch (err) {
       console.error(err);
-      setError("Erro ao realizar cadastro.");
+      setError(err.message || 'Erro ao realizar cadastro. Tente novamente.');
     } finally {
       setLoading(false);
     }
   };
 
+  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : 'T';
+
+  // Validações da senha
+  const hasMinLength = password.length >= 6;
+  const hasLetter = /[a-zA-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const isFormValid =
+    name.trim().length >= 3 &&
+    birthDate &&
+    hasMinLength &&
+    hasLetter &&
+    hasNumber &&
+    termsAccepted;
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-start overflow-x-hidden bg-background font-body-md text-on-surface">
-      <header className="w-full bg-transparent flex items-center justify-between px-container-margin pt-[calc(env(safe-area-inset-top,0px)+32px)] pb-md z-40 max-w-md mx-auto shrink-0">
-        <div className="w-6 flex items-center justify-start">
-          <button 
+    <TelaCliente className="selection:bg-brand-tint selection:text-brand">
+      <main className="w-full max-w-[420px] mx-auto px-6 pt-6 pb-8 flex-grow flex flex-col items-center">
+        {/* Barra Superior com Botão Voltar */}
+        <div className="w-full flex items-center justify-between mb-4">
+          <button
+            type="button"
             onClick={() => navigate(-1)}
-            className="active:scale-95 duration-150 hover:opacity-80 transition-opacity text-primary flex items-center justify-center"
+            aria-label="Voltar"
+            className="w-10 h-10 rounded-full border border-line bg-surface text-ink flex items-center justify-center hover:bg-brand-tint/40 transition-colors active:scale-95 shadow-sm"
           >
-            <span className="material-symbols-outlined">arrow_back</span>
+            <ArrowLeft size={18} />
           </button>
+
+          <span className="font-display text-[17px] font-semibold text-brand tracking-tight">
+            {tenant?.name || 'Studio Thais'}
+          </span>
+
+          <div className="w-10" />
         </div>
-        <div className="flex items-center gap-2 flex-1 justify-center">
+
+        {/* Logo Circular */}
+        <div className="w-[56px] h-[56px] rounded-full bg-ink border-2 border-gold flex items-center justify-center shadow-sm mb-3 overflow-hidden select-none">
           {tenant?.logo_url ? (
-            <img 
-              src={tenant.logo_url} 
-              alt={tenant.name} 
-              className="h-8 object-contain rounded bg-surface p-0.5 shadow-sm" 
-              onError={(e) => { e.target.style.display = 'none'; }}
+            <img
+              src={tenant.logo_url}
+              alt={tenant?.name || 'Logo'}
+              className="w-full h-full object-cover p-1 rounded-full"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
             />
           ) : (
-            <span className="material-symbols-outlined text-primary text-[24px] shrink-0">spa</span>
+            <span className="font-display italic text-gold text-[26px] leading-none select-none">
+              {initialLetter}
+            </span>
           )}
-          <span className="font-serif text-headline-md font-semibold text-primary tracking-tight">
-            {tenant?.name || 'Serene Beauty'}
-          </span>
         </div>
-        <div className="w-6"></div>
-      </header>
 
-      <main className="w-full max-w-md px-container-margin flex-grow flex flex-col pb-xl">
-        <section className="mt-md mb-xl animate-fade-in-up">
-          <div className="grid grid-cols-2 gap-sm h-48">
-            <div className="bg-primary-container rounded-3xl overflow-hidden relative group transition-transform duration-500 hover:scale-[1.02]">
-              <img 
-                alt="Beauty Atmosphere" 
-                className="w-full h-full object-cover opacity-80" 
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBY2D0vDZtjzyiwfZHAfSdcsfMe2eBgerm3GkEy1h9CfY63fh8WGVTjZGNdRzcni39FE13M0kmtTmgPqayJxgNT3XHeGPgetAL38r4C8IK6Nn2ZCm8wezHp_5m4MgbSHZwXUlyP8maVtAYWvPKPYqqVKtibIHPbxpqI_S56CsryrV0_6TqIS3AA-9I1kgLP7h-GhOvTETGtP82vQ-f9gGPmpTSUMbefEituG_cNFoyf0YLT1kB3X6XqNOEdFjSdbF8wF25PNvaUYC1b"
-              />
-              <div className="absolute inset-0 bg-primary/20 mix-blend-multiply"></div>
-            </div>
-            <div className="flex flex-col gap-sm">
-              <div className="h-1/2 bg-surface-variant rounded-3xl flex items-center justify-center p-md">
-                <span className="material-symbols-outlined text-primary text-[40px]">auto_awesome</span>
-              </div>
-              <div className="h-1/2 bg-surface-container rounded-3xl flex items-center justify-center p-md">
-                <span className="material-symbols-outlined text-secondary text-[40px]">spa</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="mb-lg animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+        {/* Título de Boas-Vindas ou Banner de Convite */}
+        <div className="text-center mb-6">
           {refCode ? (
-            <div className="bg-success-container/20 border border-success/30 p-4 rounded-2xl mb-6 text-center animate-pulse">
-              <span className="material-symbols-outlined text-success text-[32px] mb-2">celebration</span>
-              <h2 className="font-headline-sm text-success-on-container font-bold">Você foi convidado(a)!</h2>
-              <p className="text-sm text-secondary">Finalize seu cadastro agora para ganhar <span className="font-bold text-success">R$ 20</span> na sua carteira digital para usar na primeira visita.</p>
+            <div className="bg-brand-tint/60 border border-brand/20 p-4 rounded-[20px] mb-4 text-center animate-fade-in">
+              <Gift size={28} className="text-brand mx-auto mb-1.5" />
+              <h2 className="font-display text-[18px] font-semibold text-brand">
+                {referralInfo?.referrerName 
+                  ? `Convite especial de ${referralInfo.referrerName}!` 
+                  : 'Você recebeu um convite especial!'}
+              </h2>
+              <p className="text-[13px] text-ink-soft mt-1 leading-snug">
+                {referralInfo?.rewardAmount 
+                  ? `Finalize seu cadastro e garanta R$ ${Number(referralInfo.rewardAmount).toFixed(2).replace('.', ',')} de bônus no seu primeiro procedimento!` 
+                  : 'Finalize seu cadastro para garantir seu presente de boas-vindas na primeira visita.'}
+              </p>
             </div>
           ) : (
             <>
-              <h1 className="font-serif text-headline-md font-semibold text-on-surface mb-xs">
-                Parece que você é novo por aqui!
+              <h1 className="font-display text-[26px] font-semibold text-ink leading-tight mb-1">
+                Quase lá!
               </h1>
-              <p className="font-sans text-body-md text-on-surface-variant">
-                Vamos fazer seu cadastro para você aproveitar a melhor experiência de beleza.
+              <p className="font-sans text-[14px] text-ink-soft">
+                Crie seu perfil para agendar e acompanhar seus atendimentos.
               </p>
             </>
           )}
-        </section>
+        </div>
 
-        <section className="animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-          <Card className="p-lg">
-            <form onSubmit={handleSubmit} className="space-y-lg">
-              {error && <p className="text-error text-label-sm">{error}</p>}
-              
-              <Input
-                id="name"
-                label="Nome completo"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                placeholder="Como quer ser chamado(a)?"
-                startIcon="person"
+        {/* Cartão de Cadastro */}
+        <div className="w-full bg-surface rounded-card p-6 shadow-card border border-line text-left">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="p-3 rounded-[14px] bg-danger/10 border border-danger/20 text-danger text-[13px] font-medium leading-snug">
+                {error}
+              </div>
+            )}
+
+            {/* Nome Completo */}
+            <CampoTexto
+              id="name"
+              label="Nome completo"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Como quer ser chamada(o)?"
+              required
+              autoFocus
+              iconeEsquerda={<User size={20} strokeWidth={1.8} />}
+            />
+
+            {/* Telefone (Somente Leitura) */}
+            <CampoTexto
+              id="phone_readonly"
+              label="Telefone verificado"
+              type="text"
+              value={phone}
+              disabled
+              textoAjuda="Número verificado na etapa anterior."
+              iconeEsquerda={<Phone size={20} strokeWidth={1.8} />}
+            />
+
+            {/* Data de Nascimento */}
+            <CampoTexto
+              id="birthDate"
+              label="Data de nascimento"
+              type="date"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              required
+              iconeEsquerda={<Calendar size={20} strokeWidth={1.8} />}
+            />
+
+            {/* Senha */}
+            <CampoTexto
+              id="password"
+              label="Crie sua senha"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+              required
+              iconeEsquerda={<Lock size={20} strokeWidth={1.8} />}
+            />
+
+            {/* Requisitos da Senha */}
+            <div className="p-3.5 rounded-[16px] bg-bg border border-line space-y-2 text-[12px]">
+              <span className="font-semibold text-ink-soft block mb-1">
+                Sua senha deve conter:
+              </span>
+              <div className="flex items-center gap-2">
+                {hasMinLength ? (
+                  <CheckCircle2 size={15} className="text-success shrink-0" />
+                ) : (
+                  <Circle size={15} className="text-ink-soft/40 shrink-0" />
+                )}
+                <span className={hasMinLength ? 'text-success font-medium' : 'text-ink-soft'}>
+                  Mínimo de 6 caracteres
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasLetter ? (
+                  <CheckCircle2 size={15} className="text-success shrink-0" />
+                ) : (
+                  <Circle size={15} className="text-ink-soft/40 shrink-0" />
+                )}
+                <span className={hasLetter ? 'text-success font-medium' : 'text-ink-soft'}>
+                  Pelo menos 1 letra
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasNumber ? (
+                  <CheckCircle2 size={15} className="text-success shrink-0" />
+                ) : (
+                  <Circle size={15} className="text-ink-soft/40 shrink-0" />
+                )}
+                <span className={hasNumber ? 'text-success font-medium' : 'text-ink-soft'}>
+                  Pelo menos 1 número
+                </span>
+              </div>
+            </div>
+
+            {/* Termos de Uso / LGPD */}
+            <div className="flex items-start gap-2.5 pt-1">
+              <input
+                type="checkbox"
+                id="terms"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-line text-brand focus:ring-brand accent-brand cursor-pointer"
               />
+              <label htmlFor="terms" className="text-[12px] text-ink-soft leading-snug cursor-pointer select-none">
+                Li e concordo com os termos de uso e a política de privacidade (LGPD), consentindo com o tratamento dos meus dados cadastrais.
+              </label>
+            </div>
 
-              <div className="relative">
-                <label className="text-label-md text-on-surface block mb-1">Telefone</label>
-                <div className="flex items-center h-12 w-full rounded-2xl border border-outline-variant bg-surface-container-low px-4 text-secondary opacity-70 cursor-not-allowed">
-                  <span className="material-symbols-outlined text-outline text-[20px] mr-2">phone_android</span>
-                  <input 
-                    type="tel" 
-                    value={phone}
-                    readOnly
-                    className="flex-1 bg-transparent focus:outline-none"
-                  />
-                  <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-                </div>
-              </div>
-
-              <Input
-                id="birthDate"
-                label="Data de Nascimento"
-                type="date"
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-                required
-                startIcon="cake"
-              />
-
-              <Input
-                id="password"
-                label="Crie uma Senha"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Mínimo 6 caracteres"
-                startIcon="lock"
-              />
-
-              <div className="flex flex-col gap-2 bg-surface-container-low p-3 rounded-xl border border-surface-variant transition-all">
-                <span className="text-label-sm font-label-sm text-secondary mb-1">Sua senha deve conter:</span>
-                <div className="flex items-center gap-2 transition-colors duration-300">
-                  <span className={`material-symbols-outlined text-[16px] ${password.length >= 6 ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: password.length >= 6 ? "'FILL' 1" : "'FILL' 0" }}>
-                    {password.length >= 6 ? 'check_circle' : 'radio_button_unchecked'}
-                  </span>
-                  <span className={`text-label-sm ${password.length >= 6 ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Mínimo de 6 caracteres</span>
-                </div>
-                <div className="flex items-center gap-2 transition-colors duration-300">
-                  <span className={`material-symbols-outlined text-[16px] ${/[a-zA-Z]/.test(password) ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: /[a-zA-Z]/.test(password) ? "'FILL' 1" : "'FILL' 0" }}>
-                    {/[a-zA-Z]/.test(password) ? 'check_circle' : 'radio_button_unchecked'}
-                  </span>
-                  <span className={`text-label-sm ${/[a-zA-Z]/.test(password) ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Pelo menos 1 letra</span>
-                </div>
-                <div className="flex items-center gap-2 transition-colors duration-300">
-                  <span className={`material-symbols-outlined text-[16px] ${/[0-9]/.test(password) ? 'text-[#10b981]' : 'text-secondary'}`} style={{ fontVariationSettings: /[0-9]/.test(password) ? "'FILL' 1" : "'FILL' 0" }}>
-                    {/[0-9]/.test(password) ? 'check_circle' : 'radio_button_unchecked'}
-                  </span>
-                  <span className={`text-label-sm ${/[0-9]/.test(password) ? 'text-[#10b981] font-medium' : 'text-secondary'}`}>Pelo menos 1 número</span>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-2">
-                <input 
-                  type="checkbox" 
-                  id="terms" 
-                  checked={termsAccepted}
-                  onChange={(e) => setTermsAccepted(e.target.checked)}
-                  className="mt-1 w-4 h-4 text-primary border-outline-variant rounded focus:ring-primary"
-                />
-                <label htmlFor="terms" className="text-label-sm text-on-surface-variant flex-1">
-                  Li e concordo com os <a href="#" className="text-primary hover:underline">Termos de Serviço</a> e a <a href="#" className="text-primary hover:underline">Política de Privacidade (LGPD)</a>, consentindo com o tratamento dos meus dados.
-                </label>
-              </div>
-
-              <div className="pt-md">
-                <Button 
-                  type="submit" 
-                  variant="primary"
-                  size="lg"
-                  className="w-full"
-                  disabled={loading || password.length < 6 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password) || name.length < 3 || !termsAccepted}
-                  isLoading={loading}
-                  endIcon={!loading ? "check_circle" : undefined}
-                >
-                  Finalizar Cadastro
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </section>
+            {/* Botão de Finalizar */}
+            <div className="pt-3">
+              <Botao
+                tipo="submit"
+                variante="primario"
+                tamanho="lg"
+                className="w-full"
+                disabled={!isFormValid || loading}
+                isLoading={loading}
+              >
+                Concluir Cadastro
+              </Botao>
+            </div>
+          </form>
+        </div>
       </main>
-    </div>
+    </TelaCliente>
   );
 };
 

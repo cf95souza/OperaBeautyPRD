@@ -2,21 +2,37 @@ import pool from '../config/db.js';
 import { getActiveFlagsForTenant } from './featureFlagService.js';
 import redisClient from '../config/redis.js';
 
-export const getTenantBySlug = async (slug) => {
+export const resolveDemoSlug = (rawSlug) => {
+  if (!rawSlug) return rawSlug;
+  const lower = String(rawSlug).trim().toLowerCase();
+  if (lower === 'demo' || lower === 'studiodemo' || lower === 'studiodatha') {
+    return 'studiothais';
+  }
+  return lower;
+};
+
+export const getTenantBySlug = async (rawSlug) => {
+  const isDemo = ['demo', 'studiodemo', 'studiothais', 'studiodatha'].includes(String(rawSlug || '').trim().toLowerCase());
+  const slug = resolveDemoSlug(rawSlug);
   const cacheKey = `tenant_slug:${slug}`;
   const cachedData = await redisClient.get(cacheKey);
 
   if (cachedData) {
-    return JSON.parse(cachedData);
+    const parsed = JSON.parse(cachedData);
+    if (isDemo) parsed.is_demo = true;
+    return parsed;
   }
 
   const result = await pool.query(
     `SELECT t.id, t.slug, t.name, t.status, t.plan_price, t.logo_url, t.primary_color, t.secondary_color, t.tertiary_color, 
+            t.theme_id, t.brand_hex,
             t.banner_url, t.banner_title, t.banner_subtitle, t.banners, t.welcome_message, t.created_at, t.plan_id,
             t.address, t.social_instagram, t.social_facebook, t.social_whatsapp,
             t.cashback_percentage, t.cashback_expiration_days,
             t.waiting_menu_enabled, t.waiting_menu_items,
-            p.max_banners, p.max_professionals, p.features as plan_features
+            t.min_cancellation_hours, t.no_show_penalty_action, t.no_show_tolerance_count,
+            t.is_founder, t.frozen_price, t.price_frozen_until, t.founder_badge_label,
+            p.name as plan_name, p.slug as plan_slug, p.max_banners, p.max_professionals, p.max_whatsapp_messages, p.features as plan_features
      FROM public.cap_tenants t
      LEFT JOIN public.cap_plans p ON p.id = t.plan_id
      WHERE t.slug = $1`,
@@ -30,6 +46,9 @@ export const getTenantBySlug = async (slug) => {
   }
 
   const tenant = result.rows[0];
+  if (isDemo) {
+    tenant.is_demo = true;
+  }
 
   if (tenant.status !== 'active') {
     const error = new Error('Este estabelecimento está temporariamente suspenso.');
@@ -44,6 +63,14 @@ export const getTenantBySlug = async (slug) => {
   tenant.features = { ...dbFlags };
   planFeatures.forEach(feat => {
     tenant.features[feat] = true;
+    if (typeof feat === 'string') {
+      const lower = feat.toLowerCase();
+      tenant.features[lower] = true;
+      if (lower.includes('pdv')) tenant.features['pdv'] = true;
+      if (lower.includes('clube')) tenant.features['clube'] = true;
+      if (lower.includes('vale') || lower.includes('gift')) tenant.features['giftcards'] = true;
+      if (lower.includes('whatsapp_gateway') || lower.includes('wa_gateway')) tenant.features['whatsapp_gateway'] = true;
+    }
   });
 
   // Obter média de avaliações do Tenant
@@ -76,7 +103,12 @@ export const updateBranding = async (
   cashback_percentage,
   cashback_expiration_days,
   waiting_menu_enabled,
-  waiting_menu_items
+  waiting_menu_items,
+  theme_id,
+  brand_hex,
+  min_cancellation_hours,
+  no_show_penalty_action,
+  no_show_tolerance_count
 ) => {
   const planCheck = await pool.query(
     `SELECT p.max_banners 
@@ -119,9 +151,14 @@ export const updateBranding = async (
          cashback_percentage = COALESCE($15, cashback_percentage),
          cashback_expiration_days = COALESCE($16, cashback_expiration_days),
          waiting_menu_enabled = COALESCE($17, waiting_menu_enabled),
-         waiting_menu_items = COALESCE($18, waiting_menu_items)
-     WHERE id = $19
-     RETURNING id, slug, name, status, plan_price, plan_id, logo_url, primary_color, secondary_color, tertiary_color, banners, banner_url, banner_title, banner_subtitle, welcome_message, address, social_instagram, social_facebook, social_whatsapp, cashback_percentage, cashback_expiration_days, waiting_menu_enabled, waiting_menu_items, created_at`,
+         waiting_menu_items = COALESCE($18, waiting_menu_items),
+         theme_id = COALESCE($19, theme_id),
+         brand_hex = COALESCE($20, brand_hex),
+         min_cancellation_hours = COALESCE($21, min_cancellation_hours),
+         no_show_penalty_action = COALESCE($22, no_show_penalty_action),
+         no_show_tolerance_count = COALESCE($23, no_show_tolerance_count)
+     WHERE id = $24
+     RETURNING id, slug, name, status, plan_price, plan_id, logo_url, primary_color, secondary_color, tertiary_color, theme_id, brand_hex, banners, banner_url, banner_title, banner_subtitle, welcome_message, address, social_instagram, social_facebook, social_whatsapp, cashback_percentage, cashback_expiration_days, waiting_menu_enabled, waiting_menu_items, min_cancellation_hours, no_show_penalty_action, no_show_tolerance_count, created_at`,
     [
       name, 
       primary_color, 
@@ -141,6 +178,11 @@ export const updateBranding = async (
       cashback_expiration_days !== undefined ? parseInt(cashback_expiration_days) : null,
       waiting_menu_enabled !== undefined ? waiting_menu_enabled : null,
       waiting_menu_items ? JSON.stringify(waiting_menu_items) : null,
+      theme_id,
+      brand_hex,
+      min_cancellation_hours !== undefined && min_cancellation_hours !== null ? parseInt(min_cancellation_hours, 10) : null,
+      no_show_penalty_action !== undefined && no_show_penalty_action !== null ? no_show_penalty_action : null,
+      no_show_tolerance_count !== undefined && no_show_tolerance_count !== null ? parseInt(no_show_tolerance_count, 10) : null,
       tenant_id
     ]
   );

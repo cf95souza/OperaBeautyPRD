@@ -4,6 +4,66 @@ import { useTenant } from '../../context/TenantContext';
 import { api } from '../../lib/api';
 import { format, parseISO } from 'date-fns';
 import { useNotification } from '../../context/NotificationProvider';
+import { 
+  Clock, 
+  MapPin, 
+  Phone, 
+  Wallet, 
+  Sparkles, 
+  Coffee, 
+  Calendar, 
+  Tag, 
+  Plus, 
+  Trash2, 
+  Save, 
+  Info, 
+  X, 
+  Lock, 
+  Check, 
+  AlertCircle,
+  ExternalLink,
+  ChevronDown,
+  MessageSquare,
+  QrCode,
+  Smartphone,
+  RefreshCw,
+  Copy,
+  CreditCard,
+  ShieldCheck
+} from 'lucide-react';
+import { formatCurrency } from '../../utils/formatters';
+
+const InstagramIcon = ({ className = 'w-3.5 h-3.5' }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+  </svg>
+);
+
+const FacebookIcon = ({ className = 'w-3.5 h-3.5' }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+  </svg>
+);
 
 const DAYS_OF_WEEK = [
   { value: 0, label: 'Domingo' },
@@ -26,36 +86,58 @@ const ConfiguracoesOperacionais = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Novos estados para localização e redes sociais
+  // Localização e Redes Sociais
   const [address, setAddress] = useState('');
   const [socialInstagram, setSocialInstagram] = useState('');
   const [socialFacebook, setSocialFacebook] = useState('');
   const [socialWhatsapp, setSocialWhatsapp] = useState('');
 
-  // Estados para cashback
+  // Cashback / Fidelidade
   const [cashbackPercentage, setCashbackPercentage] = useState(0);
   const [cashbackExpirationDays, setCashbackExpirationDays] = useState(30);
 
-  // Estados para Self Check-in (Mimos)
+  // Self Check-in (Mimos)
   const [waitingMenuEnabled, setWaitingMenuEnabled] = useState(false);
   const [waitingMenuItems, setWaitingMenuItems] = useState([]);
   const [newItemInput, setNewItemInput] = useState('');
 
-  // Estados para PIX (Vales-Presente e Recebimentos)
+  // PIX
   const [pixKey, setPixKey] = useState('');
   const [pixKeyType, setPixKeyType] = useState('cpf');
   const [pixHolderName, setPixHolderName] = useState('');
   const [pixHolderDocument, setPixHolderDocument] = useState('');
 
-  // Modal Exception State
+  // Gateway de Pagamento & Sinal por PIX (Fase 44 - D3 P1)
+  const [gatewayProvider, setGatewayProvider] = useState('manual_pix');
+  const [gatewayIsActive, setGatewayIsActive] = useState(false);
+  const [gatewaySandbox, setGatewaySandbox] = useState(false);
+  const [gatewayExpiration, setGatewayExpiration] = useState(15);
+  const [gatewayAccessToken, setGatewayAccessToken] = useState('');
+  const [gatewayApiKey, setGatewayApiKey] = useState('');
+  const [gatewayHasToken, setGatewayHasToken] = useState(false);
+
+  // Modal Exceção
   const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [newException, setNewException] = useState({ date: '', is_closed: true, open_time: '09:00', close_time: '18:00', reason: '' });
 
-  // Coupon State
+  // Cupons
   const [coupons, setCoupons] = useState([]);
   const [services, setServices] = useState([]);
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [newCoupon, setNewCoupon] = useState({ code: '', discount_type: 'percentage', discount_value: 10, max_uses: '', expires_at: '', service_id: '' });
+
+  // WhatsApp Gateway (Fase 44 - D2 P1)
+  const [waStatus, setWaStatus] = useState('DISCONNECTED');
+  const [waPhone, setWaPhone] = useState('');
+  const [waPairingCode, setWaPairingCode] = useState('');
+  const [waQrCode, setWaQrCode] = useState('');
+  const [waConnecting, setWaConnecting] = useState(false);
+  const [waInputPhone, setWaInputPhone] = useState('');
+
+  // Política de Cancelamento e Faltas (Fase 44 - D8 P1)
+  const [minCancellationHours, setMinCancellationHours] = useState(2);
+  const [noShowToleranceCount, setNoShowToleranceCount] = useState(2);
+  const [noShowPenaltyAction, setNoShowPenaltyAction] = useState('warn');
 
   useEffect(() => {
     if (tenant?.id) {
@@ -68,44 +150,43 @@ const ConfiguracoesOperacionais = () => {
       setCashbackExpirationDays(tenant.cashback_expiration_days || 30);
       setWaitingMenuEnabled(tenant.waiting_menu_enabled || false);
       setWaitingMenuItems(tenant.waiting_menu_items || ['Água', 'Café', 'Espumante']);
+      setMinCancellationHours(tenant.min_cancellation_hours !== undefined ? tenant.min_cancellation_hours : 2);
+      setNoShowToleranceCount(tenant.no_show_tolerance_count !== undefined ? tenant.no_show_tolerance_count : 2);
+      setNoShowPenaltyAction(tenant.no_show_penalty_action || 'warn');
     }
   }, [tenant]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch Business Hours
+      // 1. Horários
       const hoursData = await api.settings.getBusinessHours(tenant.id);
-      
-      // Initialize defaults if missing
       let loadedHours = [...(hoursData || [])];
       const missingDays = DAYS_OF_WEEK.filter(d => !loadedHours.some(h => h.day_of_week === d.value));
-      
       missingDays.forEach(d => {
         loadedHours.push({
           day_of_week: d.value,
           open_time: '09:00',
           close_time: '18:00',
-          is_closed: d.value === 0 // default sunday closed
+          is_closed: d.value === 0
         });
       });
-
       loadedHours.sort((a, b) => a.day_of_week - b.day_of_week);
       setBusinessHours(loadedHours);
 
-      // Fetch Exceptions
+      // 2. Exceções
       const exceptionsData = await api.settings.getExceptions(tenant.id);
       setExceptions(exceptionsData || []);
-      
-      // Fetch Coupons
+
+      // 3. Cupons
       const couponsData = await api.coupons.list(tenant.id);
       setCoupons(couponsData || []);
 
-      // Fetch Services for Coupon binding
+      // 4. Serviços para cupons
       const servicesData = await api.services.list(tenant.id);
       setServices((servicesData || []).filter(s => s.is_active));
 
-      // Fetch PIX
+      // 5. PIX e Gateway de Pagamento & Sinal (D3 P1)
       try {
         const pixData = await api.request(`/giftcards/payment-methods?tenant_id=${tenant.id}`);
         if (pixData && pixData.length > 0) {
@@ -114,13 +195,107 @@ const ConfiguracoesOperacionais = () => {
           setPixHolderName(pixData[0].holder_name || '');
           setPixHolderDocument(pixData[0].holder_document || '');
         }
+
+        const gwConfig = await api.payments.getGatewayConfig();
+        if (gwConfig) {
+          setGatewayProvider(gwConfig.provider || 'manual_pix');
+          setGatewayIsActive(gwConfig.is_active || false);
+          setGatewaySandbox(gwConfig.sandbox_mode || false);
+          setGatewayExpiration(gwConfig.deposit_expiration_minutes || 15);
+          setGatewayHasToken(gwConfig.has_access_token || gwConfig.has_api_key || false);
+          if (gwConfig.pix_key && !pixKey) {
+            setPixKey(gwConfig.pix_key);
+            setPixKeyType(gwConfig.pix_key_type || 'cpf');
+            setPixHolderName(gwConfig.holder_name || '');
+          }
+        }
       } catch (err) {
-        console.error("Erro ao carregar PIX:", err);
+        console.error("Erro ao carregar PIX e Gateway:", err);
+      }
+
+      // 6. WhatsApp Gateway Status (apenas se o plano contemplar a feature)
+      if (tenant?.features?.whatsapp_gateway) {
+        try {
+          const waData = await api.whatsapp.getStatus();
+          if (waData) {
+            setWaStatus(waData.status || 'DISCONNECTED');
+            setWaPhone(waData.phone_number || '');
+            setWaPairingCode(waData.pairing_code || '');
+            setWaQrCode(waData.qr_code || '');
+          }
+        } catch (waErr) {
+          console.warn("WhatsApp status unavailable:", waErr);
+        }
       }
     } catch (err) {
       console.error("Erro ao carregar dados operacionais:", err);
     }
     setLoading(false);
+  };
+
+  const handleConnectWhatsApp = async (method = 'pairing_code') => {
+    if (method === 'pairing_code' && !waInputPhone.trim()) {
+      showError('Informe o número de telefone com DDD para gerar o código.');
+      return;
+    }
+
+    setWaConnecting(true);
+    try {
+      const clean = waInputPhone.replace(/\D/g, '');
+      const res = await api.whatsapp.connect(clean, method);
+      if (res.status === 'PAIRING_CODE') {
+        setWaStatus('PAIRING_CODE');
+        setWaPairingCode(res.pairingCode);
+        showSuccess('Código gerado! Digite no seu WhatsApp no celular.');
+      } else if (res.status === 'CONNECTED') {
+        setWaStatus('CONNECTED');
+        setWaPhone(res.phoneNumber || clean);
+        showSuccess('WhatsApp conectado com sucesso!');
+      } else if (res.status === 'SCAN_QR') {
+        setWaStatus('SCAN_QR');
+        setWaQrCode(res.qr);
+        showSuccess('QR Code gerado! Aponte a câmera do WhatsApp.');
+      }
+    } catch (err) {
+      console.error(err);
+      showError(err.message || 'Erro ao conectar WhatsApp.');
+    } finally {
+      setWaConnecting(false);
+    }
+  };
+
+  const handleDisconnectWhatsApp = async () => {
+    if (await confirm('Deseja realmente desconectar o WhatsApp do seu salão? Os lembretes automáticos com confirmação em 1 toque serão pausados.')) {
+      try {
+        await api.whatsapp.disconnect();
+        setWaStatus('DISCONNECTED');
+        setWaPhone('');
+        setWaPairingCode('');
+        setWaQrCode('');
+        showSuccess('WhatsApp desconectado com sucesso.');
+      } catch (err) {
+        showError('Erro ao desconectar WhatsApp.');
+      }
+    }
+  };
+
+  const handleRefreshWhatsApp = async () => {
+    try {
+      const waData = await api.whatsapp.getStatus();
+      if (waData) {
+        setWaStatus(waData.status || 'DISCONNECTED');
+        setWaPhone(waData.phone_number || '');
+        setWaPairingCode(waData.pairing_code || '');
+        setWaQrCode(waData.qr_code || '');
+        if (waData.status === 'CONNECTED') {
+          showSuccess('WhatsApp está ativo e conectado!');
+        } else {
+          showSuccess('Status atualizado.');
+        }
+      }
+    } catch (err) {
+      showError('Não foi possível atualizar o status do WhatsApp.');
+    }
   };
 
   const handleHourChange = (dayOfWeek, field, value) => {
@@ -135,19 +310,22 @@ const ConfiguracoesOperacionais = () => {
   const handleSaveAll = async () => {
     setSaving(true);
     try {
-      // 1. Salvar dados de endereço, redes sociais e cashback do Tenant
+      // 1. Atualizar branding e configurações do tenant
       await api.tenants.updateBranding({
         address,
         social_instagram: socialInstagram,
         social_facebook: socialFacebook,
         social_whatsapp: socialWhatsapp,
-        cashback_percentage: parseFloat(cashbackPercentage),
-        cashback_expiration_days: parseInt(cashbackExpirationDays),
+        cashback_percentage: parseFloat(cashbackPercentage) || 0,
+        cashback_expiration_days: parseInt(cashbackExpirationDays) || 30,
         waiting_menu_enabled: waitingMenuEnabled,
-        waiting_menu_items: waitingMenuItems
+        waiting_menu_items: waitingMenuItems,
+        min_cancellation_hours: parseInt(minCancellationHours, 10),
+        no_show_penalty_action: noShowPenaltyAction,
+        no_show_tolerance_count: parseInt(noShowToleranceCount, 10)
       });
 
-      // 2. Salvar PIX se estiver preenchido
+      // 2. Salvar PIX se preenchido
       if (pixKey && pixHolderName) {
         await api.request('/giftcards/payment-methods', {
           method: 'POST',
@@ -160,9 +338,25 @@ const ConfiguracoesOperacionais = () => {
         });
       }
 
-      // 3. Upsert Business Hours
+      // 3. Salvar Gateway de Pagamento e Sinal PIX (D3 P1)
+      await api.payments.saveGatewayConfig({
+        provider: gatewayProvider,
+        is_active: gatewayIsActive,
+        sandbox_mode: gatewaySandbox,
+        deposit_expiration_minutes: parseInt(gatewayExpiration, 10) || 15,
+        credentials: {
+          accessToken: gatewayAccessToken || undefined,
+          apiKey: gatewayApiKey || undefined
+        },
+        pix_key: pixKey,
+        pix_key_type: pixKeyType,
+        holder_name: pixHolderName
+      });
+
+      // 4. Horários de funcionamento
       const cleanBusinessHours = businessHours.map(({ id, ...rest }) => rest);
       await api.settings.updateBusinessHours(cleanBusinessHours);
+
       showSuccess('Configurações salvas com sucesso!');
       fetchData();
     } catch (e) {
@@ -174,23 +368,25 @@ const ConfiguracoesOperacionais = () => {
 
   const handleAddException = async () => {
     if (!newException.date) {
-      showError("Por favor selecione a data."); return;
+      showError("Por favor selecione a data.");
+      return;
     }
-    
+
     const toInsert = {
       tenant_id: tenant.id,
       exception_date: newException.date,
       is_closed: newException.is_closed,
       open_time: newException.is_closed ? null : newException.open_time,
       close_time: newException.is_closed ? null : newException.close_time,
-      reason: newException.reason
+      reason: newException.reason || 'Sem motivo informado'
     };
 
     try {
       await api.settings.addException(toInsert);
       setShowExceptionModal(false);
       setNewException({ date: '', is_closed: true, open_time: '09:00', close_time: '18:00', reason: '' });
-      fetchData(); // refresh
+      showSuccess('Exceção adicionada com sucesso!');
+      fetchData();
     } catch (err) {
       console.error(err);
       showError('Erro ao adicionar exceção.');
@@ -198,9 +394,10 @@ const ConfiguracoesOperacionais = () => {
   };
 
   const handleDeleteException = async (id) => {
-    if (await confirm('Deseja remover esta exceção?')) {
+    if (await confirm('Deseja realmente remover esta exceção de horário?')) {
       try {
         await api.settings.deleteException(id);
+        showSuccess('Exceção removida com sucesso!');
         fetchData();
       } catch (err) {
         console.error(err);
@@ -211,9 +408,10 @@ const ConfiguracoesOperacionais = () => {
 
   const handleAddCoupon = async () => {
     if (!newCoupon.code || !newCoupon.discount_value) {
-      showError("Preencha o código e o valor do desconto."); return;
+      showError("Preencha o código e o valor do desconto.");
+      return;
     }
-    
+
     const toInsert = {
       tenant_id: tenant.id,
       code: newCoupon.code.toUpperCase().replace(/\s+/g, ''),
@@ -228,7 +426,8 @@ const ConfiguracoesOperacionais = () => {
       await api.coupons.create(toInsert);
       setShowCouponModal(false);
       setNewCoupon({ code: '', discount_type: 'percentage', discount_value: 10, max_uses: '', expires_at: '', service_id: '' });
-      fetchData(); // refresh
+      showSuccess('Cupom criado com sucesso!');
+      fetchData();
     } catch (err) {
       console.error(err);
       showError('Erro ao adicionar cupom.');
@@ -236,9 +435,10 @@ const ConfiguracoesOperacionais = () => {
   };
 
   const handleDeleteCoupon = async (id) => {
-    if (await confirm('Deseja inativar/remover este cupom?')) {
+    if (await confirm('Deseja inativar/remover este cupom de desconto?')) {
       try {
         await api.coupons.delete(id);
+        showSuccess('Cupom removido com sucesso!');
         fetchData();
       } catch (err) {
         console.error(err);
@@ -247,292 +447,871 @@ const ConfiguracoesOperacionais = () => {
     }
   };
 
-  if (loading) return <div className="p-xl flex justify-center text-secondary">Carregando horários...</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-ink-soft">
+        <div className="w-9 h-9 border-3 border-brand/20 border-t-brand rounded-full animate-spin mb-3" />
+        <span className="text-sm font-medium">Carregando configurações operacionais...</span>
+      </div>
+    );
+  }
 
   return (
-    <>
-      <div className="flex-1 p-container-margin md:p-xl max-w-[1200px] w-full mx-auto pb-32 md:pb-xl animate-fade-in-up">
-        <div className="mb-xl flex justify-between items-end">
-          <div>
-            <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary mb-sm">Configurações Operacionais</h1>
-            <p className="font-body-md text-body-md text-secondary">Gerencie horários, dias de funcionamento e exceções/bloqueios.</p>
-          </div>
-          <button onClick={handleSaveAll} disabled={saving} className="hidden md:flex bg-primary text-on-primary font-label-md text-label-md px-lg py-sm rounded-lg items-center gap-sm hover:bg-on-primary-container transition-colors shadow-sm">
-            <span className="material-symbols-outlined text-[18px]">save</span>
-            {saving ? 'Salvando...' : 'Salvar Alterações'}
+    <div className="space-y-8 animate-fade-in pb-16 max-w-7xl mx-auto">
+      {/* Cabeçalho Editorial Rosé */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="font-display font-bold text-3xl sm:text-4xl text-ink tracking-tight">
+            Configurações operacionais
+          </h1>
+          <p className="text-sm text-ink-soft mt-1">
+            Jornada de funcionamento, dados de contato, PIX e benefícios do salão.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSaveAll}
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-brand hover:bg-brand-hover text-white text-sm font-semibold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+          >
+            {saving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Salvando...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>Salvar alterações</span>
+              </>
+            )}
           </button>
         </div>
+      </div>
+
+      {/* Grid Principal: 2 Colunas (8 + 4) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-xl">
-          {/* Bento Grid Section: Working Hours */}
-          <section className="lg:col-span-8 space-y-md">
-            <h2 className="font-headline-md text-headline-md text-on-surface mb-md flex items-center gap-sm">
-              <span className="material-symbols-outlined text-primary">schedule</span>
-              Jornada de Funcionamento (Padrão)
-            </h2>
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg flex flex-col gap-md">
-              
+        {/* Coluna Esquerda: Jornada, Contato, PIX, Cashback e Mimos (8 cols) */}
+        <div className="lg:col-span-8 space-y-6">
+          
+          {/* 1. Jornada de Funcionamento (Padrão) */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6 sm:p-7">
+            <div className="flex items-start gap-3.5 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-brand-tint flex items-center justify-center text-brand shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-display font-bold text-xl text-ink">Jornada de funcionamento padrão</h2>
+                <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
+                  Defina os dias e os horários em que o estabelecimento aceita agendamentos.
+                </p>
+              </div>
+            </div>
+
+            <div className="divide-y divide-line/60">
               {DAYS_OF_WEEK.map((day) => {
                 const dayData = businessHours.find(h => h.day_of_week === day.value) || {};
                 const isOpen = !dayData.is_closed;
+
                 return (
-                  <div key={day.value} className="flex flex-col sm:flex-row sm:items-center justify-between py-sm border-b border-surface-variant gap-sm">
-                    <div className="flex items-center justify-between sm:w-48">
-                      <span className={`font-label-md text-label-md ${isOpen ? 'text-on-surface' : 'text-secondary'}`}>{day.label}</span>
-                      <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                        <input 
+                  <div key={day.value} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center justify-between sm:w-52">
+                      <span className={`text-sm font-medium ${isOpen ? 'text-ink' : 'text-ink-soft'}`}>
+                        {day.label}
+                      </span>
+
+                      {/* Switch Toggle Rosé */}
+                      <label className="relative inline-flex items-center cursor-pointer ml-3">
+                        <input
+                          type="checkbox"
                           checked={isOpen}
                           onChange={(e) => handleHourChange(day.value, 'is_closed', !e.target.checked)}
-                          className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer" 
-                          id={`toggle-${day.value}`} 
-                          name={`toggle-${day.value}`} 
-                          type="checkbox"
+                          className="sr-only peer"
                         />
-                        <label className="toggle-label block overflow-hidden h-5 rounded-full bg-surface-variant cursor-pointer" htmlFor={`toggle-${day.value}`}></label>
-                      </div>
+                        <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand" />
+                      </label>
                     </div>
-                    <div className={`flex items-center gap-sm transition-opacity ${isOpen ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                      <input 
+
+                    {/* Inputs de Horários */}
+                    <div className={`flex items-center gap-2.5 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                      <input
+                        type="text"
                         value={dayData.open_time?.substring(0, 5) || '09:00'}
                         onChange={(e) => handleHourChange(day.value, 'open_time', e.target.value)}
                         disabled={!isOpen}
-                        className="bg-transparent border-b border-outline-variant focus:border-primary text-body-md font-body-md text-on-surface pb-1 outline-none w-24 text-center" 
-                        type="text" 
                         placeholder="09:00"
                         maxLength={5}
+                        className="w-24 px-3 py-1.5 bg-stone-50/70 border border-line rounded-xl text-center text-sm font-medium text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all tabular-nums"
                       />
-                      <span className="text-secondary font-body-md text-body-md">às</span>
-                      <input 
+                      <span className="text-xs font-medium text-ink-soft">às</span>
+                      <input
+                        type="text"
                         value={dayData.close_time?.substring(0, 5) || '18:00'}
                         onChange={(e) => handleHourChange(day.value, 'close_time', e.target.value)}
                         disabled={!isOpen}
-                        className="bg-transparent border-b border-outline-variant focus:border-primary text-body-md font-body-md text-on-surface pb-1 outline-none w-24 text-center" 
-                        type="text" 
                         placeholder="18:00"
                         maxLength={5}
+                        className="w-24 px-3 py-1.5 bg-stone-50/70 border border-line rounded-xl text-center text-sm font-medium text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all tabular-nums"
                       />
                     </div>
                   </div>
-                )
+                );
               })}
-              
+            </div>
+          </div>
+
+          {/* 2. Contato & Localização */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6 sm:p-7">
+            <div className="flex items-start gap-3.5 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-brand-tint flex items-center justify-center text-brand shrink-0">
+                <MapPin className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-display font-bold text-xl text-ink">Contato & localização</h2>
+                <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
+                  Informações exibidas na tela de login e no rodapé do app para as suas clientes.
+                </p>
+              </div>
             </div>
 
-            {/* Seção Contato & Localização */}
-            <h2 className="font-headline-md text-headline-md text-on-surface mt-xl mb-md flex items-center gap-sm">
-              <span className="material-symbols-outlined text-primary">distance</span>
-              Contato & Localização
-            </h2>
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg flex flex-col gap-lg">
-              <p className="font-body-sm text-body-sm text-secondary -mt-sm">Essas informações alimentam os menus da tela de login do seu salão. Se deixadas em branco, os respectivos menus não aparecerão.</p>
-              
-              <div className="flex flex-col gap-sm">
-                <label className="font-label-md text-label-md text-on-surface">Endereço Comercial</label>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                  Endereço Comercial
+                </label>
                 <textarea
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="Ex: Av. Paulista, 1000 - Bela Vista, São Paulo - SP, 01310-100"
-                  className="w-full min-h-[80px] p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all resize-y"
+                  rows={2}
+                  className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all resize-y"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
-                <div className="flex flex-col gap-xs">
-                  <label className="font-label-md text-label-md text-on-surface flex items-center gap-xs">
-                    <span className="material-symbols-outlined text-[18px] text-primary">link</span> Instagram
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    <InstagramIcon className="w-3.5 h-3.5 text-brand" />
+                    Instagram
                   </label>
                   <input
+                    type="url"
                     value={socialInstagram}
                     onChange={(e) => setSocialInstagram(e.target.value)}
                     placeholder="https://instagram.com/seu_perfil"
-                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
-                    type="url"
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
                   />
                 </div>
 
-                <div className="flex flex-col gap-xs">
-                  <label className="font-label-md text-label-md text-on-surface flex items-center gap-xs">
-                    <span className="material-symbols-outlined text-[18px] text-primary">link</span> Facebook
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    <FacebookIcon className="w-3.5 h-3.5 text-brand" />
+                    Facebook
                   </label>
                   <input
+                    type="url"
                     value={socialFacebook}
                     onChange={(e) => setSocialFacebook(e.target.value)}
                     placeholder="https://facebook.com/sua_pagina"
-                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
-                    type="url"
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
                   />
                 </div>
 
-                <div className="flex flex-col gap-xs">
-                  <label className="font-label-md text-label-md text-on-surface flex items-center gap-xs">
-                    <span className="material-symbols-outlined text-[18px] text-primary">link</span> WhatsApp
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    <Phone className="w-3.5 h-3.5 text-brand" />
+                    WhatsApp
                   </label>
                   <input
+                    type="url"
                     value={socialWhatsapp}
                     onChange={(e) => setSocialWhatsapp(e.target.value)}
                     placeholder="https://wa.me/5511999999999"
-                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
-                    type="url"
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
                   />
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Seção Bento: Métodos de Recebimento (PIX) */}
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg flex flex-col gap-md mt-lg">
-              <h3 className="font-headline-md text-[20px] text-on-surface mb-xs flex items-center gap-sm">
-                <span className="material-symbols-outlined text-primary">account_balance_wallet</span>
-                Métodos de Recebimento (PIX)
-              </h3>
-              <p className="font-body-md text-body-md text-secondary">
-                Configure a chave PIX do estabelecimento. Esta chave será exibida aos clientes para o pagamento de Vales-Presente e outros serviços digitais.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-md mt-sm">
-                <div className="flex flex-col gap-xs">
-                  <label className="font-label-md text-label-md text-on-surface">Tipo de Chave PIX *</label>
-                  <select
-                    value={pixKeyType}
-                    onChange={(e) => setPixKeyType(e.target.value)}
-                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
-                  >
-                    <option value="cpf">CPF / CNPJ</option>
-                    <option value="email">E-mail</option>
-                    <option value="phone">Telefone</option>
-                    <option value="random">Chave Aleatória</option>
-                  </select>
+          {/* 2.1 WhatsApp Oficial do Salão (Automações & Lembretes em 1 Toque - Fase 44 D2) */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6 sm:p-7">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                  <MessageSquare className="w-5 h-5" />
                 </div>
-
-                <div className="flex flex-col gap-xs">
-                  <label className="font-label-md text-label-md text-on-surface">Chave PIX *</label>
-                  <input
-                    value={pixKey}
-                    onChange={(e) => setPixKey(e.target.value)}
-                    placeholder="Sua chave..."
-                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-xs">
-                  <label className="font-label-md text-label-md text-on-surface">Nome do Titular *</label>
-                  <input
-                    value={pixHolderName}
-                    onChange={(e) => setPixHolderName(e.target.value)}
-                    placeholder="Ex: Maria da Silva"
-                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-xs">
-                  <label className="font-label-md text-label-md text-on-surface">CPF/CNPJ do Titular</label>
-                  <input
-                    value={pixHolderDocument}
-                    onChange={(e) => setPixHolderDocument(e.target.value)}
-                    placeholder="Opcional"
-                    className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
-                  />
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="font-display font-bold text-xl text-ink">WhatsApp oficial & automações</h2>
+                    {waStatus === 'CONNECTED' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                        Conectado
+                      </span>
+                    ) : waStatus === 'PAIRING_CODE' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-ping"></span>
+                        Aguardando Pareamento
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 border border-stone-200">
+                        Desconectado
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
+                    Envie lembretes automáticos 24h e 2h antes com botões de confirmação e remarcação em 1 toque sem taxas por mensagem.
+                  </p>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={handleRefreshWhatsApp}
+                title="Atualizar status da conexão"
+                className="p-2 rounded-xl border border-line hover:bg-stone-50 text-ink-soft hover:text-ink transition-all"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Seção Bento: Fidelização e Cashback */}
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg flex flex-col gap-md mt-lg">
-              <h3 className="font-headline-md text-[20px] text-on-surface mb-xs flex items-center gap-sm">
-                <span className="material-symbols-outlined text-primary">stars</span>
-                Regras de Cashback (Clube Fidelidade)
-              </h3>
-              <p className="font-body-md text-body-md text-secondary">
-                Habilite o retorno de saldo para fidelizar clientes em serviços.
-              </p>
-              
-              {!tenant?.features?.clube ? (
-                <div className="bg-surface p-md rounded-xl border border-outline-variant/30 text-center">
-                  <span className="material-symbols-outlined text-3xl text-secondary mb-1">lock</span>
-                  <p className="font-label-md text-secondary mb-1">Recurso Indisponível</p>
-                  <p className="text-xs text-secondary mb-3">Ative o Clube de Assinaturas no seu plano SaaS para habilitar o Cashback.</p>
-                  <button 
-                    type="button" 
-                    onClick={() => navigate(`/${tenant_slug}/staff/admin/assinatura`)}
-                    className="text-primary font-bold text-xs hover:underline"
+            {!tenant?.features?.whatsapp_gateway ? (
+              <div className="rounded-2xl border border-line/80 bg-stone-50/60 p-6 sm:p-7 text-center flex flex-col items-center">
+                <div className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 mb-3 shadow-xs">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-brand-tint text-brand mb-2">
+                  Exclusivo do Maior Plano
+                </span>
+                <h3 className="text-base sm:text-lg font-display font-bold text-ink mb-1.5">
+                  Lembretes automáticos com confirmação em 1 toque
+                </h3>
+                <p className="text-xs sm:text-sm text-ink-soft max-w-md mb-5 leading-relaxed">
+                  Reduza o índice de faltas (no-show) em até 80% conectando o WhatsApp oficial do seu salão para confirmações e remarcações em tempo real sem pagar taxas por mensagem.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/${tenant_slug}/staff/admin/assinatura`)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-xl transition-all shadow-xs"
+                >
+                  <span>Fazer upgrade de plano</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <>
+            {waStatus === 'CONNECTED' ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Smartphone className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wider font-semibold text-emerald-900">Linha Ativa do Salão</p>
+                      <p className="text-base font-bold font-mono text-emerald-950">+{waPhone || socialWhatsapp || 'Conectada'}</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleDisconnectWhatsApp}
+                    className="self-start sm:self-auto px-4 py-2 bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-semibold rounded-xl transition-all shadow-2xs"
                   >
-                    Ver Planos SaaS &rarr;
+                    Desconectar Aparelho
                   </button>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-md mt-base min-w-0">
-                  <div className="flex flex-col gap-xs">
-                    <label className="font-label-md text-label-md text-on-surface">Porcentagem de Cashback (%)</label>
-                    <input
-                      value={cashbackPercentage}
-                      onChange={(e) => setCashbackPercentage(e.target.value)}
-                      placeholder="Ex: 5.00"
-                      min="0"
-                      max="100"
-                      step="0.1"
-                      className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
-                      type="number"
-                    />
-                    <span className="text-[10px] text-secondary">Porcentagem que retorna como saldo na carteira da cliente.</span>
-                  </div>
 
-                  <div className="flex flex-col gap-xs">
-                    <label className="font-label-md text-label-md text-on-surface">Prazo de Expiração (Dias)</label>
-                    <input
-                      value={cashbackExpirationDays}
-                      onChange={(e) => setCashbackExpirationDays(e.target.value)}
-                      placeholder="Ex: 30"
-                      min="1"
-                      className="w-full p-md bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
-                      type="number"
-                    />
-                    <span className="text-[10px] text-secondary">Dias para a cliente utilizar o cashback antes de expirar.</span>
+                <div className="mt-4 pt-3.5 border-t border-emerald-200/70 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-emerald-900">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Lembretes 24h e 2h antes ativos</span>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Experiência do Cliente */}
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg flex flex-col gap-md mt-lg border-l-4 border-l-accent">
-              <div className="flex justify-between items-center mb-xs">
-                <h3 className="font-headline-md text-[20px] text-on-surface flex items-center gap-sm">
-                  <span className="material-symbols-outlined text-primary">concierge</span>
-                  Self Check-in e Menu de Espera
-                </h3>
-                <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                  <input 
-                    checked={waitingMenuEnabled}
-                    onChange={(e) => setWaitingMenuEnabled(e.target.checked)}
-                    className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer" 
-                    id="toggle-waiting-menu" 
-                    type="checkbox"
-                  />
-                  <label className="toggle-label block overflow-hidden h-5 rounded-full bg-surface-variant cursor-pointer" htmlFor="toggle-waiting-menu"></label>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Confirmação e remarcação em 1 toque ativas</span>
+                  </div>
                 </div>
               </div>
-              <p className="font-body-md text-body-md text-secondary">
-                Permita que suas clientes façam check-in pelo app e escolham um mimo (ex: café, água) antes de serem atendidas.
-              </p>
-              
-              <div className={`transition-all duration-300 ${waitingMenuEnabled ? 'opacity-100 max-h-[500px] mt-md' : 'opacity-50 max-h-0 overflow-hidden mt-0 pointer-events-none'}`}>
-                <label className="font-label-md text-label-md text-on-surface mb-2 block">Opções do Menu</label>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {waitingMenuItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-1 bg-primary-container text-on-primary-container px-3 py-1.5 rounded-full text-sm font-medium">
-                      {item}
-                      <button 
-                        onClick={() => setWaitingMenuItems(prev => prev.filter((_, i) => i !== idx))}
-                        className="text-on-primary-container hover:text-error flex items-center justify-center ml-1"
+            ) : waStatus === 'PAIRING_CODE' ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 sm:p-6 text-center">
+                <p className="text-xs uppercase tracking-wider font-semibold text-amber-900 mb-2">
+                  Código de Pareamento de 8 Dígitos
+                </p>
+                <div className="inline-flex items-center gap-3 bg-white px-6 py-3 rounded-2xl border border-amber-300 shadow-xs mb-4">
+                  <span className="font-mono text-3xl sm:text-4xl font-bold tracking-widest text-ink">
+                    {waPairingCode}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(waPairingCode);
+                      showSuccess('Código copiado para a área de transferência!');
+                    }}
+                    title="Copiar código"
+                    className="p-2 rounded-xl border border-line hover:bg-stone-100 text-ink-soft hover:text-ink transition-all"
+                  >
+                    <Copy className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="max-w-md mx-auto text-left bg-white/80 p-4 rounded-xl border border-amber-200 text-xs text-amber-950 space-y-1.5 mb-4">
+                  <p className="font-semibold text-ink">Como conectar no seu celular agora:</p>
+                  <p>1. Abra o WhatsApp no aparelho celular do salão.</p>
+                  <p>2. Toque em <strong>Configurações</strong> (ou nos 3 pontinhos) &gt; <strong>Aparelhos conectados</strong>.</p>
+                  <p>3. Toque em <strong>Conectar um aparelho</strong> &gt; <strong>Conectar com número de telefone</strong>.</p>
+                  <p>4. Digite o código de 8 dígitos exibido acima.</p>
+                </div>
+
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleRefreshWhatsApp}
+                    className="px-5 py-2.5 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-xl transition-all shadow-xs"
+                  >
+                    Já digitei no celular (Verificar conexão)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWaStatus('DISCONNECTED')}
+                    className="px-4 py-2.5 bg-white border border-line text-ink-soft hover:text-ink text-xs font-medium rounded-xl transition-all"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-stone-50/80 border border-line/80 flex items-start gap-3">
+                  <Info className="w-4 h-4 text-brand mt-0.5 shrink-0" />
+                  <p className="text-xs text-ink-soft leading-relaxed">
+                    Conecte o WhatsApp do seu salão diretamente pela nossa tecnologia nativa. 
+                    Sem necessidade de câmera: você recebe um <strong>Código de 8 dígitos</strong> diretamente no WhatsApp para parear em segundos com 100% de segurança e sem taxas em dólar por mensagem.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Número do WhatsApp do Salão (com DDD) *
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <input
+                      type="tel"
+                      value={waInputPhone}
+                      onChange={(e) => setWaInputPhone(e.target.value)}
+                      placeholder="Ex: 11988887777"
+                      className="flex-1 px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm font-mono text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
+                    />
+
+                    <button
+                      type="button"
+                      disabled={waConnecting}
+                      onClick={() => handleConnectWhatsApp('pairing_code')}
+                      className="px-5 py-2.5 bg-brand hover:bg-brand-dark text-white text-xs font-semibold rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {waConnecting ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Gerando código...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Smartphone className="w-4 h-4" />
+                          <span>Gerar Código de Pareamento</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={waConnecting}
+                      onClick={() => handleConnectWhatsApp('qr')}
+                      title="Conectar escaneando QR code"
+                      className="px-3.5 py-2.5 bg-white border border-line hover:bg-stone-50 text-ink text-xs font-medium rounded-xl transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <QrCode className="w-4 h-4 text-ink-soft" />
+                      <span>QR Code</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-ink-soft mt-1.5">
+                    Digite apenas números com o DDD (Ex: 11 para São Paulo). Código internacional +55 é inserido automaticamente.
+                  </p>
+                </div>
+              </div>
+            )}
+              </>
+            )}
+          </div>
+
+          {/* 3. Gateway de Pagamento & Sinal Antecipado por PIX (Fase 44 - D3 P1) */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6 sm:p-7 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-5">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-brand-tint flex items-center justify-center text-brand shrink-0">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-display font-bold text-xl text-ink">Gateway de pagamento & sinal por PIX</h2>
+                  <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
+                    Recebimento de sinal para garantia de horário, combate a faltas e validação de vales-presente.
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle Principal de Ativação do Sinal */}
+              <div className="flex items-center gap-3 bg-stone-50 px-4 py-2 rounded-2xl border border-line shrink-0">
+                <span className="text-xs font-semibold text-ink">
+                  {gatewayIsActive ? 'Sinal Ativado' : 'Sinal Desativado'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setGatewayIsActive(!gatewayIsActive)}
+                  className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer p-0.5 shadow-2xs ${
+                    gatewayIsActive ? 'bg-brand' : 'bg-stone-300'
+                  }`}
+                >
+                  <div 
+                    className={`w-5 h-5 rounded-full bg-white shadow-xs transition-transform transform ${
+                      gatewayIsActive ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Configurações do Gateway Quando Ativo */}
+            {gatewayIsActive && (
+              <div className="space-y-5 bg-stone-50/70 p-5 rounded-2xl border border-line animate-fade-in">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Provedor */}
+                  <div>
+                    <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                      Provedor de Pagamento
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={gatewayProvider}
+                        onChange={(e) => setGatewayProvider(e.target.value)}
+                        className="w-full appearance-none px-3.5 py-2.5 bg-white border border-line rounded-xl text-sm font-medium text-ink focus:border-brand outline-none transition-all pr-9 cursor-pointer"
                       >
-                        <span className="material-symbols-outlined text-[16px]">close</span>
+                        <option value="simulator">Simulador Sandbox (Ambiente de Testes)</option>
+                        <option value="manual_pix">PIX Manual (Chave do Salão)</option>
+                        <option value="mercadopago">Mercado Pago (PIX Dinâmico Automático)</option>
+                        <option value="asaas">Asaas (PIX Dinâmico Automático)</option>
+                        <option value="abacatepay">AbacatePay (PIX Automático)</option>
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-ink-soft absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {/* Prazo de Expiração */}
+                  <div>
+                    <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                      Prazo para Pagamento do Sinal
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={gatewayExpiration}
+                        onChange={(e) => setGatewayExpiration(Number(e.target.value))}
+                        className="w-full appearance-none px-3.5 py-2.5 bg-white border border-line rounded-xl text-sm font-medium text-ink focus:border-brand outline-none transition-all pr-9 cursor-pointer tabular-nums"
+                      >
+                        <option value={10}>10 minutos</option>
+                        <option value={15}>15 minutos (Recomendado)</option>
+                        <option value={30}>30 minutos</option>
+                        <option value={60}>1 hora</option>
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-ink-soft absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {/* Sandbox Mode */}
+                  <div>
+                    <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                      Modo Sandbox / Testes
+                    </label>
+                    <div className="flex items-center justify-between h-[42px] px-3.5 bg-white border border-line rounded-xl">
+                      <span className="text-xs text-ink-soft">
+                        {gatewaySandbox ? 'Ambiente de Testes' : 'Ambiente Real (Produção)'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setGatewaySandbox(!gatewaySandbox)}
+                        className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer p-0.5 ${
+                          gatewaySandbox ? 'bg-amber-600' : 'bg-stone-300'
+                        }`}
+                      >
+                        <div 
+                          className={`w-4 h-4 rounded-full bg-white shadow-xs transition-transform transform ${
+                            gatewaySandbox ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
                       </button>
                     </div>
+                  </div>
+                </div>
+
+                {/* Credenciais Privadas Seguras com Criptografia AES-256-GCM */}
+                {gatewayProvider === 'mercadopago' && (
+                  <div className="bg-white p-4 rounded-xl border border-line space-y-2 animate-fade-in">
+                    <label className="flex items-center justify-between text-xs uppercase font-semibold text-ink-soft tracking-wider">
+                      <span className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        Access Token do Mercado Pago (Criptografado com AES-256-GCM)
+                      </span>
+                      {gatewayHasToken && (
+                        <span className="text-emerald-700 font-semibold normal-case text-xs">
+                          ✓ Token configurado
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="password"
+                      value={gatewayAccessToken}
+                      onChange={(e) => setGatewayAccessToken(e.target.value)}
+                      placeholder={gatewayHasToken ? '•••••••••••••••••••••••••••••••• (deixe em branco para manter)' : 'APP_USR-0000000000000000-000000-...'}
+                      className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm font-mono text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
+                    />
+                    <p className="text-[11px] text-ink-soft">
+                      100% dos fundos caem diretamente na conta Mercado Pago do salão. A OperaBeauty não retém valores.
+                    </p>
+                  </div>
+                )}
+
+                {gatewayProvider === 'asaas' && (
+                  <div className="bg-white p-4 rounded-xl border border-line space-y-2 animate-fade-in">
+                    <label className="flex items-center justify-between text-xs uppercase font-semibold text-ink-soft tracking-wider">
+                      <span className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        API Key do Asaas ($aact_...)
+                      </span>
+                      {gatewayHasToken && (
+                        <span className="text-emerald-700 font-semibold normal-case text-xs">
+                          ✓ Chave configurada
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="password"
+                      value={gatewayApiKey}
+                      onChange={(e) => setGatewayApiKey(e.target.value)}
+                      placeholder={gatewayHasToken ? '•••••••••••••••••••••••••••••••• (deixe em branco para manter)' : '$aact_YTU5YTE0M2M6N2Z...'}
+                      className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm font-mono text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
+                    />
+                  </div>
+                )}
+
+                {gatewayProvider === 'simulator' && (
+                  <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200/80 text-xs text-amber-950 flex items-start gap-2.5">
+                    <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    <p leading-relaxed>
+                      <strong>Modo Simulador Ativo:</strong> Ao agendar qualquer serviço com sinal exigido, um QR Code PIX de teste será emitido na tela final e o cliente (ou você em homologação) poderá clicar em <em>"Simular Pagamento Aprovado"</em> para confirmar o horário instantaneamente sem movimentar dinheiro real.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Dados da Chave PIX do Estabelecimento */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-ink flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-brand" />
+                Chave PIX Direta do Estabelecimento
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Tipo de Chave PIX *
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={pixKeyType}
+                      onChange={(e) => setPixKeyType(e.target.value)}
+                      className="w-full appearance-none px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all pr-9 cursor-pointer"
+                    >
+                      <option value="cpf">CPF / CNPJ</option>
+                      <option value="email">E-mail</option>
+                      <option value="phone">Telefone</option>
+                      <option value="random">Chave Aleatória</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-ink-soft absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Chave PIX *
+                  </label>
+                  <input
+                    type="text"
+                    value={pixKey}
+                    onChange={(e) => setPixKey(e.target.value)}
+                    placeholder="Informe a chave cadastrada no seu banco..."
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm font-mono text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Nome do Titular da Conta *
+                  </label>
+                  <input
+                    type="text"
+                    value={pixHolderName}
+                    onChange={(e) => setPixHolderName(e.target.value)}
+                    placeholder="Ex: Studio Thais Eireli"
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    CPF/CNPJ do Titular (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={pixHolderDocument}
+                    onChange={(e) => setPixHolderDocument(e.target.value)}
+                    placeholder="00.000.000/0001-00"
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3.1 Política de Cancelamento e Controle de Faltas (No-Show - Fase 44 D8 P1) */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6 sm:p-7">
+            <div className="flex items-start gap-3.5 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-brand shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-display font-bold text-xl text-ink">Política de cancelamento & faltas (no-show)</h2>
+                <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
+                  Defina a antecedência mínima para cancelamentos online e proteja sua agenda contra ausências imprevistas.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 1. Antecedência Mínima */}
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Antecedência Mínima para Cancelar
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={minCancellationHours}
+                      onChange={(e) => setMinCancellationHours(Number(e.target.value))}
+                      className="w-full appearance-none px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm font-medium text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all pr-9 cursor-pointer tabular-nums"
+                    >
+                      <option value={0}>Sem prazo (a qualquer momento)</option>
+                      <option value={1}>1 hora antes</option>
+                      <option value={2}>2 horas antes (Padrão)</option>
+                      <option value={4}>4 horas antes</option>
+                      <option value={6}>6 horas antes</option>
+                      <option value={12}>12 horas antes</option>
+                      <option value={24}>24 horas antes</option>
+                      <option value={48}>48 horas antes</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-ink-soft absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                  <p className="text-[11px] text-ink-soft mt-1.5">
+                    Com menos de {minCancellationHours}h, a cliente é direcionada a falar com a recepção.
+                  </p>
+                </div>
+
+                {/* 2. Tolerância de Faltas */}
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Tolerância de Faltas Sem Aviso
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={noShowToleranceCount}
+                      onChange={(e) => setNoShowToleranceCount(Number(e.target.value))}
+                      className="w-full appearance-none px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm font-medium text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all pr-9 cursor-pointer tabular-nums"
+                    >
+                      <option value={1}>1 falta tolerada</option>
+                      <option value={2}>2 faltas toleradas (Padrão)</option>
+                      <option value={3}>3 faltas toleradas</option>
+                      <option value={5}>5 faltas toleradas</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-ink-soft absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                  <p className="text-[11px] text-ink-soft mt-1.5">
+                    Limite de faltas acumuladas antes de disparar a ação do salão.
+                  </p>
+                </div>
+
+                {/* 3. Ação ao Atingir Tolerância */}
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Ação ao Exceder as Faltas
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={noShowPenaltyAction}
+                      onChange={(e) => setNoShowPenaltyAction(e.target.value)}
+                      className="w-full appearance-none px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm font-medium text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all pr-9 cursor-pointer"
+                    >
+                      <option value="warn">Apenas Alertar na Ficha do CRM</option>
+                      <option value="require_deposit">Exigir Sinal PIX Obrigatório</option>
+                      <option value="block">Bloquear Agendamento Online</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-ink-soft absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                  <p className="text-[11px] text-ink-soft mt-1.5">
+                    {noShowPenaltyAction === 'warn' && 'Apenas destaca o histórico de faltas no prontuário da cliente.'}
+                    {noShowPenaltyAction === 'require_deposit' && 'Novas reservas desta cliente exigirão pagamento de sinal PIX.'}
+                    {noShowPenaltyAction === 'block' && 'A cliente não poderá agendar online até liberação pelo gestor.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Box Informativo Rosé Editorial */}
+              <div className="rounded-xl border border-rose-200/70 bg-rose-50/40 p-4 text-xs text-rose-950 flex items-start gap-3">
+                <Info className="w-4 h-4 text-brand shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-ink">Gestão Humanizada de Faltas:</p>
+                  <p className="text-ink-soft leading-relaxed">
+                    Sua equipe pode marcar falta diretamente pelo card do agendamento na agenda quando a cliente não comparecer. Na Ficha CRM da cliente, o gestor pode perdoar ausências ou reverter bloqueios com um único toque.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 4. Fidelização e Cashback */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6 sm:p-7">
+            <div className="flex items-start gap-3.5 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-brand-tint flex items-center justify-center text-brand shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-display font-bold text-xl text-ink">Regras de cashback e fidelidade</h2>
+                <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
+                  Retorne parte do valor gasto para a carteira da cliente e estimule novas visitas.
+                </p>
+              </div>
+            </div>
+
+            {!tenant?.features?.clube ? (
+              <div className="rounded-xl border border-line/80 bg-stone-50/60 p-5 text-center flex flex-col items-center">
+                <div className="w-9 h-9 rounded-full bg-stone-200/70 flex items-center justify-center text-ink-soft mb-2">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-semibold text-ink mb-1">Recurso do Clube Fidelidade</h3>
+                <p className="text-xs text-ink-soft max-w-sm mb-3">
+                  Ative o Clube de Assinaturas no seu plano SaaS para habilitar o Cashback automático por atendimento.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/${tenant_slug}/staff/admin/assinatura`)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"
+                >
+                  Ver planos disponíveis <ExternalLink className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Porcentagem de Cashback (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={cashbackPercentage}
+                    onChange={(e) => setCashbackPercentage(e.target.value)}
+                    placeholder="Ex: 5.0"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm font-medium text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all tabular-nums"
+                  />
+                  <p className="text-[11px] text-ink-soft mt-1">Percentual creditado na carteira da cliente ao concluir serviço.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Prazo de Expiração (Dias)
+                  </label>
+                  <input
+                    type="number"
+                    value={cashbackExpirationDays}
+                    onChange={(e) => setCashbackExpirationDays(e.target.value)}
+                    placeholder="Ex: 30"
+                    min="1"
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm font-medium text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all tabular-nums"
+                  />
+                  <p className="text-[11px] text-ink-soft mt-1">Tempo limite para a cliente resgatar antes de expirar.</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 5. Self Check-in e Mimos na Recepção */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6 sm:p-7">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-brand-tint flex items-center justify-center text-brand shrink-0">
+                  <Coffee className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-display font-bold text-xl text-ink">Self check-in & menu de espera</h2>
+                  <p className="text-xs sm:text-sm text-ink-soft mt-0.5">
+                    Permita que as clientes confirmem presença e escolham um mimo ao chegarem no salão.
+                  </p>
+                </div>
+              </div>
+
+              {/* Switch Toggle */}
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={waitingMenuEnabled}
+                  onChange={(e) => setWaitingMenuEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand" />
+              </label>
+            </div>
+
+            {waitingMenuEnabled && (
+              <div className="pt-4 border-t border-line/60 space-y-4 animate-fade-in">
+                <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider">
+                  Mimos Disponíveis para as Clientes
+                </label>
+
+                <div className="flex flex-wrap gap-2">
+                  {waitingMenuItems.map((item, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-tint text-brand text-xs font-semibold"
+                    >
+                      <span>{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => setWaitingMenuItems(prev => prev.filter((_, i) => i !== idx))}
+                        className="hover:text-red-700 transition-colors cursor-pointer"
+                        title={`Remover ${item}`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
                   ))}
                   {waitingMenuItems.length === 0 && (
-                    <span className="text-secondary text-sm italic">Nenhum item adicionado.</span>
+                    <span className="text-xs text-ink-soft italic">Nenhum mimo adicionado ainda.</span>
                   )}
                 </div>
+
                 <div className="flex gap-2">
-                  <input 
+                  <input
                     type="text"
                     value={newItemInput}
                     onChange={(e) => setNewItemInput(e.target.value)}
@@ -545,278 +1324,404 @@ const ConfiguracoesOperacionais = () => {
                         }
                       }
                     }}
-                    placeholder="Ex: Chá gelado (pressione Enter)"
-                    className="flex-1 min-w-0 p-3 bg-transparent border border-outline-variant focus:border-primary rounded-xl text-body-md outline-none transition-all"
+                    placeholder="Ex: Chá gelado de hibisco (pressione Enter)"
+                    className="flex-1 px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
                   />
-                  <button 
+                  <button
+                    type="button"
                     onClick={() => {
                       if (newItemInput.trim() && !waitingMenuItems.includes(newItemInput.trim())) {
                         setWaitingMenuItems([...waitingMenuItems, newItemInput.trim()]);
                         setNewItemInput('');
                       }
                     }}
-                    className="bg-secondary-container text-on-secondary-container px-4 py-2 rounded-xl font-bold hover:bg-secondary-container/80 transition-colors shrink-0"
+                    className="px-4 py-2.5 rounded-xl border border-line hover:bg-stone-50 text-ink text-xs font-semibold transition-colors shrink-0 cursor-pointer"
                   >
                     Adicionar
                   </button>
                 </div>
               </div>
-            </div>
-          </section>
-          
-          {/* Sidebar Info/Settings */}
-          <section className="lg:col-span-4 space-y-xl">
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg">
-              <h3 className="font-headline-md text-[20px] text-on-surface mb-md flex items-center gap-sm">
-                <span className="material-symbols-outlined text-primary text-[20px]">calendar_add_on</span>
-                Exceções de Horário
-              </h3>
-              <p className="font-body-md text-body-md text-secondary mb-md">Adicione datas de recesso, feriados ou dias com horário especial (ex: aberturas em domingos excepcionais).</p>
-              
-              <div className="space-y-sm mb-md max-h-[300px] overflow-y-auto">
-                {exceptions.map(exc => (
-                  <div key={exc.id} className="flex justify-between items-center bg-surface p-sm rounded-lg border border-surface-variant">
-                    <div>
-                      <p className="font-label-md text-label-md text-on-surface">{exc.reason || 'Sem motivo'}</p>
-                      <p className="font-body-sm text-[12px] text-secondary">
-                        {format(parseISO(exc.exception_date), 'dd/MM/yyyy')} 
-                        {exc.is_closed ? ' - Fechado' : ` - das ${exc.open_time?.substring(0, 5)} às ${exc.close_time?.substring(0, 5)}`}
-                      </p>
-                    </div>
-                    <button onClick={() => handleDeleteException(exc.id)} className="text-outline hover:text-error transition-colors">
-                      <span className="material-symbols-outlined">delete</span>
-                    </button>
-                  </div>
-                ))}
-                {exceptions.length === 0 && (
-                  <p className="text-body-sm text-secondary italic">Nenhuma exceção cadastrada.</p>
-                )}
-              </div>
-              
-              <button onClick={() => setShowExceptionModal(true)} className="w-full border border-primary text-primary font-label-md text-label-md py-sm rounded-lg hover:bg-primary-container hover:text-on-primary-container transition-colors flex items-center justify-center gap-xs">
-                <span className="material-symbols-outlined text-[18px]">add</span> Nova Exceção
-              </button>
-            </div>
-            
-            {/* Coupons Section */}
-            <div className="bg-surface-container-lowest rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg">
-              <h3 className="font-headline-md text-[20px] text-on-surface mb-md flex items-center gap-sm">
-                <span className="material-symbols-outlined text-primary text-[20px]">local_activity</span>
-                Cupons de Desconto
-              </h3>
-              
-              <div className="space-y-sm mb-md max-h-[300px] overflow-y-auto">
-                {coupons.map(coupon => (
-                  <div key={coupon.id} className="flex justify-between items-center bg-surface p-sm rounded-lg border border-surface-variant">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-label-md text-label-md text-on-surface font-mono">{coupon.code}</p>
-                        {coupon.service_id ? (
-                          <span className="bg-tertiary-container text-on-tertiary-container text-[10px] px-2 py-0.5 rounded-full font-semibold truncate max-w-[120px]">
-                            {coupon.service_name || 'Serviço Específico'}
-                          </span>
-                        ) : (
-                          <span className="bg-primary-container text-on-primary-container text-[10px] px-2 py-0.5 rounded-full font-semibold">Global</span>
-                        )}
-                      </div>
-                      <p className="font-body-sm text-[12px] text-secondary mt-1">
-                        {coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `R$ ${coupon.discount_value.toFixed(2)}`}
-                        {coupon.max_uses ? ` • ${coupon.current_uses || 0}/${coupon.max_uses} usos` : ` • Usado ${coupon.current_uses || 0}x`}
-                        {coupon.expires_at && ` • Válido até ${format(parseISO(coupon.expires_at), 'dd/MM/yyyy')}`}
-                      </p>
-                    </div>
-                    <button onClick={() => handleDeleteCoupon(coupon.id)} className="text-outline hover:text-error transition-colors">
-                      <span className="material-symbols-outlined">delete</span>
-                    </button>
-                  </div>
-                ))}
-                {coupons.length === 0 && (
-                  <p className="text-body-sm text-secondary italic">Nenhum cupom ativo.</p>
-                )}
-              </div>
-              
-              <button onClick={() => setShowCouponModal(true)} className="w-full border border-primary text-primary font-label-md text-label-md py-sm rounded-lg hover:bg-primary-container hover:text-on-primary-container transition-colors flex items-center justify-center gap-xs">
-                <span className="material-symbols-outlined text-[18px]">add</span> Novo Cupom
-              </button>
-            </div>
-            
-            <div className="bg-primary-container rounded-xl shadow-[0px_4px_20px_rgba(0,0,0,0.04)] p-md md:p-lg">
-              <h3 className="font-headline-md text-[20px] text-on-primary-container mb-sm flex items-center gap-sm">
-                <span className="material-symbols-outlined text-on-primary-container text-[20px]">info</span>
-                Aviso
-              </h3>
-              <p className="font-body-md text-body-md text-on-primary-container opacity-90">
-                Alterações na jornada afetam a disponibilidade de todos os profissionais. Agendamentos existentes fora dos novos horários ou nas exceções exigirão reagendamento manual.
-              </p>
-            </div>
-          </section>
+            )}
+          </div>
         </div>
 
-        {/* Mobile Save FAB */}
-        <button onClick={handleSaveAll} disabled={saving} className="md:hidden fixed bottom-6 right-4 bg-primary text-on-primary rounded-full p-md shadow-[0px_10px_30px_rgba(0,0,0,0.08)] flex items-center justify-center hover:scale-105 transition-transform z-40">
-          <span className="material-symbols-outlined text-[24px]">save</span>
-        </button>
+        {/* Coluna Direita: Exceções, Cupons e Alerta Institucional (4 cols) */}
+        <div className="lg:col-span-4 space-y-6">
+          
+          {/* 1. Exceções de Horário e Feriados */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-brand-tint flex items-center justify-center text-brand">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <h3 className="font-display font-bold text-lg text-ink">Exceções de horário</h3>
+              </div>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-ink-soft tabular-nums">
+                {exceptions.length}
+              </span>
+            </div>
+
+            <p className="text-xs text-ink-soft mb-4">
+              Datas de recesso, feriados ou dias com horário especial de atendimento.
+            </p>
+
+            <div className="space-y-2.5 mb-4 max-h-[280px] overflow-y-auto pr-1">
+              {exceptions.map(exc => (
+                <div key={exc.id} className="p-3 rounded-xl border border-line/70 bg-stone-50/50 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-ink truncate">{exc.reason || 'Sem motivo'}</p>
+                    <p className="text-[11px] text-ink-soft mt-0.5">
+                      {format(parseISO(exc.exception_date), 'dd/MM/yyyy')}
+                      {exc.is_closed ? (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 font-medium">Fechado</span>
+                      ) : (
+                        <span className="ml-1.5 text-ink-soft font-mono">{exc.open_time?.substring(0, 5)} às {exc.close_time?.substring(0, 5)}</span>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteException(exc.id)}
+                    className="p-1.5 rounded-lg text-ink-soft hover:text-red-700 hover:bg-red-50 transition-colors shrink-0 cursor-pointer"
+                    title="Remover exceção"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              {exceptions.length === 0 && (
+                <p className="text-xs text-ink-soft italic py-3 text-center">Nenhuma exceção cadastrada.</p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowExceptionModal(true)}
+              className="w-full py-2.5 px-4 rounded-xl border border-line text-ink hover:bg-stone-50 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-brand" />
+              <span>Nova exceção</span>
+            </button>
+          </div>
+
+          {/* 2. Cupons de Desconto */}
+          <div className="rounded-[22px] border border-line bg-white shadow-xs p-6">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-brand-tint flex items-center justify-center text-brand">
+                  <Tag className="w-4 h-4" />
+                </div>
+                <h3 className="font-display font-bold text-lg text-ink">Cupons de desconto</h3>
+              </div>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-ink-soft tabular-nums">
+                {coupons.length}
+              </span>
+            </div>
+
+            <p className="text-xs text-ink-soft mb-4">
+              Códigos promocionais para aplicar no PDV ou no agendamento online.
+            </p>
+
+            <div className="space-y-2.5 mb-4 max-h-[280px] overflow-y-auto pr-1">
+              {coupons.map(coupon => (
+                <div key={coupon.id} className="p-3 rounded-xl border border-line/70 bg-stone-50/50 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-mono text-xs font-bold text-ink">{coupon.code}</span>
+                      {coupon.service_id ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-200 text-stone-700 font-medium truncate max-w-[110px]">
+                          {coupon.service_name || 'Específico'}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-tint text-brand font-semibold">
+                          Global
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-ink-soft">
+                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% OFF` : `${formatCurrency(coupon.discount_value)} OFF`}
+                      {coupon.max_uses ? ` • ${coupon.current_uses || 0}/${coupon.max_uses} usos` : ''}
+                      {coupon.expires_at ? ` • Até ${format(parseISO(coupon.expires_at), 'dd/MM/yy')}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteCoupon(coupon.id)}
+                    className="p-1.5 rounded-lg text-ink-soft hover:text-red-700 hover:bg-red-50 transition-colors shrink-0 cursor-pointer"
+                    title="Remover cupom"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              {coupons.length === 0 && (
+                <p className="text-xs text-ink-soft italic py-3 text-center">Nenhum cupom ativo.</p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCouponModal(true)}
+              className="w-full py-2.5 px-4 rounded-xl border border-line text-ink hover:bg-stone-50 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 text-brand" />
+              <span>Novo cupom</span>
+            </button>
+          </div>
+
+          {/* 3. Card Informativo Institucional */}
+          <div className="rounded-[22px] border border-brand/20 bg-brand-tint/30 p-5">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-brand shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-brand mb-1">Impacto na Disponibilidade</h4>
+                <p className="text-xs text-ink leading-relaxed">
+                  Alterações na jornada afetam a grade de todos os profissionais. Atendimentos já confirmados fora dos novos horários exigirão alinhamento manual com os clientes.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
+      {/* Modal Rosé: Nova Exceção de Horário */}
       {showExceptionModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-[500px] flex flex-col p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold mb-4 text-slate-900">Adicionar Exceção de Data</h3>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-[24px] border border-line w-full max-w-md p-6 sm:p-7 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-display font-bold text-xl text-ink">Adicionar exceção de data</h3>
+              <button
+                type="button"
+                onClick={() => setShowExceptionModal(false)}
+                className="p-1.5 rounded-lg text-ink-soft hover:text-ink transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Motivo / Título</label>
-                <input 
-                  type="text" 
+                <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                  Motivo / Título
+                </label>
+                <input
+                  type="text"
                   value={newException.reason}
-                  onChange={(e) => setNewException({...newException, reason: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all"
-                  placeholder="Ex: Feriado Nacional, Evento..."
+                  onChange={(e) => setNewException({ ...newException, reason: e.target.value })}
+                  placeholder="Ex: Feriado de Carnaval, Manutenção..."
+                  className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Data</label>
-                <input 
-                  type="date" 
+                <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                  Data da Exceção
+                </label>
+                <input
+                  type="date"
                   value={newException.date}
-                  onChange={(e) => setNewException({...newException, date: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all"
+                  onChange={(e) => setNewException({ ...newException, date: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
                 />
               </div>
-              <div className="flex items-center gap-2 mt-4 mb-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <input 
-                  type="checkbox" 
+
+              <div className="flex items-center gap-3 p-3 bg-stone-50/70 rounded-xl border border-line">
+                <input
+                  type="checkbox"
                   id="exc-closed"
                   checked={newException.is_closed}
-                  onChange={(e) => setNewException({...newException, is_closed: e.target.checked})}
-                  className="w-4 h-4 text-accent border-slate-300 rounded focus:ring-accent"
+                  onChange={(e) => setNewException({ ...newException, is_closed: e.target.checked })}
+                  className="w-4 h-4 accent-brand cursor-pointer"
                 />
-                <label htmlFor="exc-closed" className="text-sm font-bold text-slate-700 cursor-pointer">Dia Inteiro Fechado?</label>
+                <label htmlFor="exc-closed" className="text-xs font-semibold text-ink cursor-pointer">
+                  Salão fechado durante o dia inteiro?
+                </label>
               </div>
+
               {!newException.is_closed && (
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Abertura</label>
-                    <input 
-                      type="text" 
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                      Abertura
+                    </label>
+                    <input
+                      type="text"
                       value={newException.open_time}
-                      onChange={(e) => setNewException({...newException, open_time: e.target.value})}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all"
+                      onChange={(e) => setNewException({ ...newException, open_time: e.target.value })}
                       placeholder="09:00"
                       maxLength={5}
+                      className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-center text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all tabular-nums"
                     />
                   </div>
-                  <div className="flex-1">
-                    <label className="block text-sm font-bold text-slate-700 mb-1">Fechamento</label>
-                    <input 
-                      type="text" 
+                  <div>
+                    <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                      Fechamento
+                    </label>
+                    <input
+                      type="text"
                       value={newException.close_time}
-                      onChange={(e) => setNewException({...newException, close_time: e.target.value})}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all"
+                      onChange={(e) => setNewException({ ...newException, close_time: e.target.value })}
                       placeholder="18:00"
                       maxLength={5}
+                      className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-center text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all tabular-nums"
                     />
                   </div>
                 </div>
               )}
             </div>
-            <div className="mt-8 flex justify-end gap-3">
-              <button onClick={() => setShowExceptionModal(false)} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
-              <button onClick={handleAddException} className="px-6 py-2.5 text-sm font-bold bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">Adicionar</button>
+
+            <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-line">
+              <button
+                type="button"
+                onClick={() => setShowExceptionModal(false)}
+                className="px-5 py-2.5 text-xs font-semibold text-ink-soft hover:bg-stone-50 rounded-full transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAddException}
+                className="px-6 py-2.5 text-xs font-semibold bg-brand hover:bg-brand-hover text-white rounded-full transition-colors shadow-xs cursor-pointer"
+              >
+                Adicionar exceção
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Coupon Modal */}
+      {/* Modal Rosé: Novo Cupom de Desconto */}
       {showCouponModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-[400px] flex flex-col p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold mb-4 text-slate-900">Novo Cupom</h3>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-[24px] border border-line w-full max-w-md p-6 sm:p-7 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-display font-bold text-xl text-ink">Criar cupom de desconto</h3>
+              <button
+                type="button"
+                onClick={() => setShowCouponModal(false)}
+                className="p-1.5 rounded-lg text-ink-soft hover:text-ink transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Código do Cupom</label>
-                <input 
-                  type="text" 
+                <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                  Código do Cupom *
+                </label>
+                <input
+                  type="text"
                   value={newCoupon.code}
-                  onChange={(e) => setNewCoupon({...newCoupon, code: e.target.value.toUpperCase()})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none font-mono uppercase"
-                  placeholder="EX: VERAO20"
+                  onChange={(e) => setNewCoupon({ ...newCoupon, code: e.target.value.toUpperCase() })}
+                  placeholder="EX: PRIMEIRAVEZ20"
+                  className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm font-mono uppercase text-ink placeholder:text-stone-400 focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Válido Para</label>
-                <select
-                  value={newCoupon.service_id}
-                  onChange={(e) => setNewCoupon({...newCoupon, service_id: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none"
-                >
-                  <option value="">Todos os Serviços (Global)</option>
-                  {services.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Tipo de Desconto</label>
+                <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                  Válido Para
+                </label>
+                <div className="relative">
                   <select
-                    value={newCoupon.discount_type}
-                    onChange={(e) => setNewCoupon({...newCoupon, discount_type: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none"
+                    value={newCoupon.service_id}
+                    onChange={(e) => setNewCoupon({ ...newCoupon, service_id: e.target.value })}
+                    className="w-full appearance-none px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all pr-9 cursor-pointer"
                   >
-                    <option value="percentage">Porcentagem (%)</option>
-                    <option value="fixed">Valor Fixo (R$)</option>
+                    <option value="">Todos os serviços (Global)</option>
+                    {services.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
                   </select>
+                  <ChevronDown className="w-4 h-4 text-ink-soft absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Valor</label>
-                  <input 
-                    type="number" 
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Tipo de Desconto
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={newCoupon.discount_type}
+                      onChange={(e) => setNewCoupon({ ...newCoupon, discount_type: e.target.value })}
+                      className="w-full appearance-none px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all pr-9 cursor-pointer"
+                    >
+                      <option value="percentage">Porcentagem (%)</option>
+                      <option value="fixed">Valor Fixo (R$)</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-ink-soft absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Valor do Desconto *
+                  </label>
+                  <input
+                    type="number"
                     value={newCoupon.discount_value}
-                    onChange={(e) => setNewCoupon({...newCoupon, discount_value: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none"
+                    onChange={(e) => setNewCoupon({ ...newCoupon, discount_value: e.target.value })}
                     min="0"
                     step="0.01"
+                    placeholder="10"
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all tabular-nums"
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Máximo de Usos</label>
-                  <input 
-                    type="number" 
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Máximo de Usos
+                  </label>
+                  <input
+                    type="number"
                     value={newCoupon.max_uses}
-                    onChange={(e) => setNewCoupon({...newCoupon, max_uses: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none"
+                    onChange={(e) => setNewCoupon({ ...newCoupon, max_uses: e.target.value })}
                     placeholder="Ilimitado"
                     min="1"
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all tabular-nums"
                   />
                 </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Válido Até</label>
-                  <input 
-                    type="date" 
+
+                <div>
+                  <label className="block text-xs uppercase font-semibold text-ink-soft tracking-wider mb-1.5">
+                    Válido Até
+                  </label>
+                  <input
+                    type="date"
                     value={newCoupon.expires_at}
-                    onChange={(e) => setNewCoupon({...newCoupon, expires_at: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-accent focus:ring-1 focus:ring-accent outline-none"
+                    onChange={(e) => setNewCoupon({ ...newCoupon, expires_at: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-stone-50/70 border border-line rounded-xl text-sm text-ink focus:border-brand focus:bg-white focus:ring-1 focus:ring-brand outline-none transition-all"
                   />
                 </div>
               </div>
             </div>
-            <div className="mt-8 flex justify-end gap-3">
-              <button onClick={() => setShowCouponModal(false)} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
-              <button onClick={handleAddCoupon} className="px-6 py-2.5 text-sm font-bold bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">Criar Cupom</button>
+
+            <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-line">
+              <button
+                type="button"
+                onClick={() => setShowCouponModal(false)}
+                className="px-5 py-2.5 text-xs font-semibold text-ink-soft hover:bg-stone-50 rounded-full transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAddCoupon}
+                className="px-6 py-2.5 text-xs font-semibold bg-brand hover:bg-brand-hover text-white rounded-full transition-colors shadow-xs cursor-pointer"
+              >
+                Criar cupom
+              </button>
             </div>
           </div>
         </div>
       )}
-
-      <style>{`
-        .toggle-checkbox:checked { right: 0; border-color: var(--color-primary); }
-        .toggle-checkbox:checked + .toggle-label { background-color: var(--color-primary-container); }
-        .toggle-checkbox:checked + .toggle-label:after { transform: translateX(100%); border-color: white; }
-      `}</style>
-    </>
+    </div>
   );
 };
 

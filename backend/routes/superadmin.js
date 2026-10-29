@@ -16,6 +16,8 @@ import {
   getTenantById,
   createTenant,
   updateTenant,
+  suspendTenant,
+  reactivateTenant,
   deleteTenant,
   resetStaffPassword,
   createInitialStaff,
@@ -35,7 +37,13 @@ router.use(authMiddleware, requireRole(['superadmin']));
 
 router.get('/audit-logs', async (req, res) => {
   try {
-    const logs = await auditService.getSuperAdminLogs();
+    const { action, tenant_id, search, limit } = req.query;
+    const logs = await auditService.getSuperAdminLogs({
+      action: action || null,
+      tenant_id: tenant_id || null,
+      search: search || null,
+      limit: limit ? parseInt(limit, 10) : 100
+    });
     res.json(logs);
   } catch (err) {
     req.log.error(err);
@@ -88,13 +96,34 @@ const updateTenantSchema = z.object({
   body: z.object({
     name: z.string().optional(),
     slug: z.string().optional(),
-    status: z.enum(['active', 'inactive']).optional(),
+    status: z.enum(['active', 'inactive', 'suspended']).optional(),
     plan_price: z.number().positive().nullable().optional(),
     plan_id: z.string().uuid().nullable().optional(),
     primary_color: z.string().optional(),
-    secondary_color: z.string().optional()
+    secondary_color: z.string().optional(),
+    confirm_tenant_name: z.string().optional(),
+    suspension_reason: z.string().optional()
   }),
   query: z.any()
+});
+
+const suspendTenantSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('ID do inquilino inválido.')
+  }),
+  body: z.object({
+    confirm_tenant_name: z.string().min(1, 'A confirmação do nome do salão é obrigatória.'),
+    reason: z.string().min(5, 'O motivo da suspensão deve conter no mínimo 5 caracteres.')
+  }),
+  query: z.any().optional()
+});
+
+const reactivateTenantSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('ID do inquilino inválido.')
+  }),
+  query: z.any().optional(),
+  body: z.any().optional()
 });
 
 const deleteTenantSchema = z.object({
@@ -165,9 +194,14 @@ const platformSettingsSchema = z.object({
 
 const savePlatformSettingsSchema = z.object({
   body: z.object({
-    payment_gateway: z.enum(['mercadopago', 'stripe', 'abacatepay'], { errorMap: () => ({ message: 'Gateway de pagamento inválido.' }) }),
-    gateway_api_key: z.string().min(1, 'A chave de API é obrigatória.'),
-    gateway_public_key: z.string().optional().nullable()
+    payment_gateway: z.enum(['mercadopago', 'stripe', 'abacatepay', 'asaas', 'sandbox'], { errorMap: () => ({ message: 'Gateway de pagamento inválido.' }) }),
+    gateway_api_key: z.string().optional().nullable(),
+    gateway_public_key: z.string().optional().nullable(),
+    pix_key: z.string().optional().nullable(),
+    pix_key_type: z.enum(['cnpj', 'email', 'phone', 'random']).optional().nullable(),
+    environment: z.enum(['sandbox', 'production']).optional().nullable(),
+    grace_period_days: z.coerce.number().min(1).max(30).optional().nullable(),
+    webhook_secret: z.string().optional().nullable()
   }),
   query: z.any(), params: z.any()
 });
@@ -230,15 +264,42 @@ router.post('/tenants', validate(createTenantSchema), async (req, res) => {
 
 router.put('/tenants/:id', validate(updateTenantSchema), async (req, res) => {
   const { id } = req.params;
-  const { name, slug, status, plan_price, plan_id, primary_color, secondary_color } = req.body;
+  const { name, slug, status, plan_price, plan_id, primary_color, secondary_color, confirm_tenant_name, suspension_reason } = req.body;
 
   try {
-    const updatedTenant = await updateTenant(id, name, slug, status, plan_price, plan_id, primary_color, secondary_color);
+    const updatedTenant = await updateTenant(id, name, slug, status, plan_price, plan_id, primary_color, secondary_color, confirm_tenant_name, suspension_reason, req);
     return res.json(updatedTenant);
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     req.log.error(error, 'Erro ao atualizar tenant pelo superadmin');
     return res.status(500).json({ error: 'Erro interno ao atualizar salão.' });
+  }
+});
+
+router.post('/tenants/:id/suspend', validate(suspendTenantSchema), async (req, res) => {
+  const { id } = req.params;
+  const { confirm_tenant_name, reason } = req.body;
+
+  try {
+    const suspendedTenant = await suspendTenant(id, confirm_tenant_name, reason, req);
+    return res.json({ message: 'Salão suspenso com sucesso.', tenant: suspendedTenant });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao suspender salão pelo Super Admin');
+    return res.status(500).json({ error: 'Erro interno ao suspender salão.' });
+  }
+});
+
+router.post('/tenants/:id/reactivate', validate(reactivateTenantSchema), async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const reactivatedTenant = await reactivateTenant(id, req);
+    return res.json({ message: 'Salão reativado com sucesso.', tenant: reactivatedTenant });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao reativar salão pelo Super Admin');
+    return res.status(500).json({ error: 'Erro interno ao reativar salão.' });
   }
 });
 
@@ -291,9 +352,8 @@ router.get('/settings', validate(platformSettingsSchema), async (req, res) => {
 });
 
 router.post('/settings', validate(savePlatformSettingsSchema), async (req, res) => {
-  const { payment_gateway, gateway_api_key, gateway_public_key } = req.body;
   try {
-    const settings = await savePlatformSettings(payment_gateway, gateway_api_key, gateway_public_key);
+    const settings = await savePlatformSettings(req.body);
     return res.json(settings);
   } catch (error) {
     req.log.error(error, 'Erro ao salvar configurações globais da plataforma');
@@ -518,6 +578,149 @@ router.post('/feature-flags/tenants', validate(toggleTenantFlagSchema), async (r
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     req.log.error(error, 'Erro ao alterar feature flag do tenant');
     return res.status(500).json({ error: 'Erro interno ao alterar feature flag do tenant.' });
+  }
+});
+
+// =========================================================================
+// GESTÃO DE PARCEIROS E REVENDA SAAS (SUPER ADMIN)
+// =========================================================================
+
+router.get('/resellers/settings', async (req, res) => {
+  try {
+    const { getResellerProgramSettings } = await import('../services/superadminService.js');
+    const settings = await getResellerProgramSettings();
+    return res.json(settings);
+  } catch (error) {
+    req.log?.error?.(error, 'Erro ao obter configurações do programa de parceiros');
+    return res.status(500).json({ error: 'Erro ao obter configurações de parceiros.' });
+  }
+});
+
+router.post('/resellers/settings', async (req, res) => {
+  try {
+    const { updateResellerProgramSettings } = await import('../services/superadminService.js');
+    const { enabled, default_commission } = req.body;
+    const settings = await updateResellerProgramSettings({ enabled, default_commission });
+    return res.json({ message: 'Configurações de parceiros atualizadas com sucesso!', settings });
+  } catch (error) {
+    req.log?.error?.(error, 'Erro ao atualizar configurações de parceiros');
+    return res.status(500).json({ error: 'Erro ao atualizar configurações de parceiros.' });
+  }
+});
+
+router.get('/resellers', async (req, res) => {
+  try {
+    const { listSuperAdminResellers } = await import('../services/superadminService.js');
+    const resellers = await listSuperAdminResellers();
+    return res.json(resellers);
+  } catch (error) {
+    req.log?.error?.(error, 'Erro ao listar parceiros da plataforma');
+    return res.status(500).json({ error: 'Erro ao listar parceiros.' });
+  }
+});
+
+router.post('/resellers', async (req, res) => {
+  try {
+    const { registerReseller } = await import('../services/resellerService.js');
+    const reseller = await registerReseller({ ...req.body, is_superadmin: true });
+    return res.status(201).json({ message: 'Parceiro cadastrado com sucesso!', reseller });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error?.(error, 'Erro ao cadastrar parceiro via Super Admin');
+    return res.status(500).json({ error: 'Erro ao cadastrar parceiro.' });
+  }
+});
+
+router.patch('/resellers/:id/status', async (req, res) => {
+  try {
+    const { updateResellerStatus } = await import('../services/superadminService.js');
+    const { id } = req.params;
+    const { status } = req.body;
+    const result = await updateResellerStatus(id, status);
+    return res.json({ message: 'Status do parceiro atualizado com sucesso!', reseller: result });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error?.(error, 'Erro ao atualizar status do parceiro');
+    return res.status(500).json({ error: 'Erro ao atualizar status do parceiro.' });
+  }
+});
+
+router.patch('/resellers/:id/commission', async (req, res) => {
+  try {
+    const { updateResellerCommission } = await import('../services/superadminService.js');
+    const { id } = req.params;
+    const { commission_rate } = req.body;
+    const result = await updateResellerCommission(id, commission_rate);
+    return res.json({ message: 'Comissão do parceiro atualizada com sucesso!', reseller: result });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error?.(error, 'Erro ao atualizar comissão do parceiro');
+    return res.status(500).json({ error: 'Erro ao atualizar comissão.' });
+  }
+});
+
+router.get('/resellers/payouts', async (req, res) => {
+  try {
+    const { listSuperAdminPayouts } = await import('../services/superadminService.js');
+    const { status } = req.query;
+    const payouts = await listSuperAdminPayouts(status);
+    return res.json(payouts);
+  } catch (error) {
+    req.log?.error?.(error, 'Erro ao listar saques de parceiros');
+    return res.status(500).json({ error: 'Erro ao listar saques.' });
+  }
+});
+
+router.post('/resellers/payouts/:id/process', async (req, res) => {
+  try {
+    const { processSuperAdminPayout } = await import('../services/superadminService.js');
+    const { id } = req.params;
+    const { action, receipt_url, notes } = req.body;
+    const result = await processSuperAdminPayout(id, {
+      action,
+      receipt_url,
+      notes,
+      adminId: req.user?.id || null
+    });
+    return res.json({ message: `Saque ${action === 'paid' ? 'marcado como pago' : 'recusado'} com sucesso!`, result });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error?.(error, 'Erro ao processar saque do parceiro');
+    return res.status(500).json({ error: 'Erro ao processar saque.' });
+  }
+});
+
+// ==========================================
+// GOVERNANÇA DPO / REQUISIÇÕES LGPD (F5)
+// ==========================================
+
+router.get('/privacy/requests', async (req, res) => {
+  try {
+    const { listPrivacyRequests } = await import('../services/privacyService.js');
+    const { status } = req.query;
+    const requests = await listPrivacyRequests(status);
+    return res.json(requests);
+  } catch (error) {
+    req.log?.error?.(error, 'Erro ao listar requisições de privacidade DPO');
+    return res.status(500).json({ error: 'Erro ao listar requisições de privacidade.' });
+  }
+});
+
+router.patch('/privacy/requests/:id', async (req, res) => {
+  try {
+    const { updatePrivacyRequestStatus } = await import('../services/privacyService.js');
+    const { id } = req.params;
+    const { status, resolution_notes } = req.body;
+    const result = await updatePrivacyRequestStatus(id, {
+      status,
+      resolution_notes,
+      adminId: req.user?.id || null
+    });
+    return res.json({ message: 'Solicitação de privacidade atualizada com sucesso!', request: result });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error?.(error, 'Erro ao atualizar solicitação de privacidade');
+    return res.status(500).json({ error: 'Erro ao atualizar solicitação de privacidade.' });
   }
 });
 

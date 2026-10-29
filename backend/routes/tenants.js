@@ -3,12 +3,15 @@ import { authMiddleware, requireRole } from '../middlewares/auth.js';
 import { z } from 'zod';
 import { validate } from '../middlewares/validate.js';
 import { getTenantBySlug, updateBranding } from '../services/tenantService.js';
+import { getContrastRatio, WHITE_LABEL_THEMES } from '../utils/themeTokens.js';
 
 const router = express.Router();
 
 const updateBrandingSchema = z.object({
   body: z.object({
     name: z.string().min(1, 'O nome do estabelecimento é obrigatório.').optional(),
+    theme_id: z.enum(['rose', 'nude', 'lavender', 'sage', 'noir', 'bordeaux', 'custom']).optional(),
+    brand_hex: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Cor hexadecimal inválida. Formato esperado: #RRGGBB').optional(),
     primary_color: z.string().optional(),
     secondary_color: z.string().optional(),
     tertiary_color: z.string().optional(),
@@ -22,7 +25,10 @@ const updateBrandingSchema = z.object({
     cashback_percentage: z.number().min(0).max(100).optional(),
     cashback_expiration_days: z.number().int().min(1).optional(),
     waiting_menu_enabled: z.boolean().optional(),
-    waiting_menu_items: z.array(z.string()).optional()
+    waiting_menu_items: z.array(z.string()).optional(),
+    min_cancellation_hours: z.number().int().min(0).max(168).optional(),
+    no_show_penalty_action: z.enum(['warn', 'require_deposit', 'block']).optional(),
+    no_show_tolerance_count: z.number().int().min(1).max(20).optional()
   }),
   query: z.any(), params: z.any()
 });
@@ -84,6 +90,8 @@ router.get('/by-slug/:slug', async (req, res) => {
 router.put('/branding', authMiddleware, requireRole(['manager']), validate(updateBrandingSchema), async (req, res) => {
   const { 
     name, 
+    theme_id,
+    brand_hex,
     primary_color, 
     secondary_color, 
     tertiary_color, 
@@ -97,20 +105,50 @@ router.put('/branding', authMiddleware, requireRole(['manager']), validate(updat
     cashback_percentage,
     cashback_expiration_days,
     waiting_menu_enabled,
-    waiting_menu_items
+    waiting_menu_items,
+    min_cancellation_hours,
+    no_show_penalty_action,
+    no_show_tolerance_count
   } = req.body;
   const tenant_id = req.user.tenant_id;
 
   try {
+    // Validação de contraste no modo de cor livre (custom)
+    if (theme_id === 'custom' && brand_hex) {
+      const contrast = getContrastRatio(brand_hex, '#FFFFFF');
+      if (contrast < 4.5) {
+        return res.status(400).json({ 
+          error: `A cor de marca escolhida (${brand_hex}) possui contraste de ${Math.round(contrast * 10) / 10}:1, abaixo do padrão mínimo WCAG AA (4,5:1). Escolha um tom mais escuro para garantir acessibilidade.` 
+        });
+      }
+    }
+
+    // Se escolheu um dos temas prontos, sincroniza as cores legadas com a paleta oficial
+    let effectivePrimary = primary_color;
+    let effectiveSecondary = secondary_color;
+    let effectiveTertiary = tertiary_color;
+    let effectiveBrandHex = brand_hex;
+
+    if (theme_id && WHITE_LABEL_THEMES[theme_id]) {
+      const selectedTheme = WHITE_LABEL_THEMES[theme_id];
+      effectivePrimary = selectedTheme.brand;
+      effectiveSecondary = selectedTheme.tint;
+      effectiveTertiary = selectedTheme.bg;
+      effectiveBrandHex = selectedTheme.brand;
+    } else if (theme_id === 'custom' && brand_hex) {
+      effectivePrimary = brand_hex;
+      effectiveBrandHex = brand_hex;
+    }
+
     const updatedTenant = await updateBranding(
       tenant_id, 
       name, 
-      primary_color, 
-      secondary_color, 
-      tertiary_color, 
+      effectivePrimary, 
+      effectiveSecondary, 
+      effectiveTertiary, 
       logo_url, 
       banners, 
-      welcome_message,
+      welcome_message, 
       address,
       social_instagram,
       social_facebook,
@@ -118,7 +156,12 @@ router.put('/branding', authMiddleware, requireRole(['manager']), validate(updat
       cashback_percentage,
       cashback_expiration_days,
       waiting_menu_enabled,
-      waiting_menu_items
+      waiting_menu_items,
+      theme_id,
+      effectiveBrandHex,
+      min_cancellation_hours,
+      no_show_penalty_action,
+      no_show_tolerance_count
     );
 
     return res.json(updatedTenant);

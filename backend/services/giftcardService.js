@@ -11,9 +11,9 @@ function generateRequestId() {
   return code;
 }
 
-// Gera código de resgate seguro: VG-XXXX-XXXX-XXXX
-function generateRedemptionCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+// C14 (P1): Gera código de resgate seguro criptográfico (12 caracteres alfanuméricos sem ambiguidades visuais 0/O, 1/I)
+export function generateRedemptionCode() {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   let code = 'VG-';
   for (let i = 0; i < 12; i++) {
     if (i > 0 && i % 4 === 0) code += '-';
@@ -244,13 +244,34 @@ export const validateGiftCardCode = async (tenantId, redemptionCode) => {
   return gift;
 };
 
-// Resgatar Gift Card (Com concorrência controlada e resgate parcial)
-export const redeemGiftCard = async (tenantId, redemptionCode, amountToRedeem) => {
+// Resgatar Gift Card (Com concorrência controlada, débito atômico, livro-razão e idempotência)
+export const redeemGiftCard = async (tenantId, redemptionCode, amountToRedeem, appointmentId = null, idempotencyKey = null) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     
-    // Select FOR UPDATE trava a linha até o final da transação
+    // 1. Idempotência: se já existe resgate registrado com essa chave de idempotência para o tenant
+    if (idempotencyKey) {
+      const existingRedemption = await client.query(
+        `SELECT r.id, r.amount, r.idempotency_key, r.created_at, g.id as giftcard_id, g.available_balance, g.status
+         FROM public.cap_giftcard_redemptions r
+         JOIN public.cap_giftcards g ON r.giftcard_id = g.id
+         WHERE r.tenant_id = $1 AND r.idempotency_key = $2`,
+        [tenantId, idempotencyKey]
+      );
+      if (existingRedemption.rows.length > 0) {
+        await client.query('COMMIT');
+        return {
+          id: existingRedemption.rows[0].giftcard_id,
+          available_balance: existingRedemption.rows[0].available_balance,
+          status: existingRedemption.rows[0].status,
+          redemption_id: existingRedemption.rows[0].id,
+          is_idempotent: true
+        };
+      }
+    }
+    
+    // 2. Trava a linha do Vale-Presente para evitar race conditions
     const query = `
       SELECT id, status, payment_status, available_balance, expires_at
       FROM public.cap_giftcards
@@ -276,22 +297,39 @@ export const redeemGiftCard = async (tenantId, redemptionCode, amountToRedeem) =
     if (amount <= 0) throw new Error('O valor de resgate deve ser maior que zero.');
     if (amount > balance) throw new Error(`Saldo insuficiente. Saldo disponível: R$ ${balance.toFixed(2)}`);
     
-    const newBalance = balance - amount;
-    const newStatus = newBalance === 0 ? 'REDEEMED' : 'PARTIALLY_REDEEMED';
-    
+    // 3. Atualização Atômica garantindo saldo não-negativo
     const updateQuery = `
       UPDATE public.cap_giftcards
-      SET available_balance = $2, status = $3
-      WHERE id = $1
+      SET available_balance = available_balance - $2,
+          status = CASE WHEN (available_balance - $2) <= 0 THEN 'REDEEMED' ELSE 'PARTIALLY_REDEEMED' END
+      WHERE id = $1 AND tenant_id = $3 AND available_balance >= $2
       RETURNING id, available_balance, status
     `;
-    const updateResult = await client.query(updateQuery, [gift.id, newBalance, newStatus]);
+    const updateResult = await client.query(updateQuery, [gift.id, amount, tenantId]);
+    
+    if (updateResult.rowCount === 0) {
+      throw new Error(`Saldo insuficiente para realizar o resgate. Saldo disponível: R$ ${balance.toFixed(2)}`);
+    }
+
+    // 4. Registro no Livro-Razão Imutável (cap_giftcard_redemptions)
+    const ledgerQuery = `
+      INSERT INTO public.cap_giftcard_redemptions (
+        tenant_id, giftcard_id, appointment_id, amount, idempotency_key, created_at
+      ) VALUES ($1, $2, $3, $4, $5, NOW())
+      RETURNING id, amount, idempotency_key, created_at
+    `;
+    const ledgerResult = await client.query(ledgerQuery, [
+      tenantId, gift.id, appointmentId || null, amount, idempotencyKey || null
+    ]);
     
     await client.query('COMMIT');
-    return updateResult.rows[0];
+    return {
+      ...updateResult.rows[0],
+      redemption_id: ledgerResult.rows[0]?.id
+    };
   } catch (error) {
     await client.query('ROLLBACK');
-    error.statusCode = 400;
+    error.statusCode = error.statusCode || 400;
     throw error;
   } finally {
     client.release();

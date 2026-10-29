@@ -85,7 +85,12 @@ export const createCoupon = async (tenantId, code, discount_type, discount_value
 };
 
 export const redeemCoupon = async (id, tenantId) => {
-  const existCheck = await pool.query('SELECT id, tenant_id, code, discount_type, discount_value, max_uses, current_uses, expires_at, service_id, created_at FROM public.cap_coupons WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+  // 1. Verificação de existência e status (isolamento de tenant)
+  const existCheck = await pool.query(
+    'SELECT id, tenant_id, code, discount_type, discount_value, max_uses, current_uses, expires_at, status FROM public.cap_coupons WHERE id = $1 AND tenant_id = $2',
+    [id, tenantId]
+  );
+
   if (existCheck.rows.length === 0) {
     const error = new Error('Cupom não encontrado para este salão.');
     error.statusCode = 404;
@@ -93,28 +98,44 @@ export const redeemCoupon = async (id, tenantId) => {
   }
 
   const currentCoupon = existCheck.rows[0];
+  const uses = currentCoupon.uses !== undefined ? currentCoupon.uses : (currentCoupon.current_uses || 0);
 
-  if (currentCoupon.max_uses !== null && currentCoupon.current_uses >= currentCoupon.max_uses) {
-    const error = new Error('Este cupom já atingiu o limite máximo de utilizações.');
+  if (currentCoupon.status === 'expired' || (currentCoupon.expires_at && new Date(currentCoupon.expires_at) < new Date())) {
+    const error = new Error('Este cupom já está expirado ou inativo.');
     error.statusCode = 400;
     throw error;
   }
 
-  if (currentCoupon.expires_at && new Date(currentCoupon.expires_at) < new Date()) {
-    const error = new Error('Este cupom já expirou.');
+  if (currentCoupon.max_uses !== null && currentCoupon.max_uses !== undefined && uses >= currentCoupon.max_uses) {
+    const error = new Error('Este cupom já atingiu o limite máximo de usos.');
     error.statusCode = 400;
     throw error;
   }
 
-  const result = await pool.query(
+  // 2. Operação Atômica em um único ponto (C10): UPDATE condicional com RETURNING
+  const updateResult = await pool.query(
     `UPDATE public.cap_coupons
      SET current_uses = current_uses + 1
      WHERE id = $1 AND tenant_id = $2
+       AND (max_uses IS NULL OR current_uses < max_uses)
+       AND (expires_at IS NULL OR expires_at > NOW())
      RETURNING id, tenant_id, code, discount_type, discount_value, max_uses, current_uses, expires_at, service_id, created_at`,
     [id, tenantId]
   );
 
-  return { currentCoupon, updatedCoupon: result.rows[0] };
+  if (updateResult.rows.length === 0) {
+    const error = new Error('Este cupom já atingiu o limite máximo de usos.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const updatedCoupon = updateResult.rows[0];
+  const normalizedUpdated = {
+    ...updatedCoupon,
+    uses: updatedCoupon.uses !== undefined ? updatedCoupon.uses : updatedCoupon.current_uses
+  };
+
+  return { currentCoupon, updatedCoupon: normalizedUpdated };
 };
 
 export const updateCoupon = async (id, tenantId, code, discount_type, discount_value, max_uses, expires_at, service_id) => {
@@ -165,4 +186,34 @@ export const deleteCoupon = async (id, tenantId) => {
   }
 
   return result.rows[0];
+};
+
+export const validateCoupon = async (tenantId, code, subtotal = 0) => {
+  const coupons = await listCoupons(tenantId, code);
+  if (coupons.length === 0) {
+    const error = new Error('Cupom não encontrado.');
+    error.statusCode = 404;
+    throw error;
+  }
+  const coupon = coupons[0];
+  if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+    const error = new Error('Este cupom já está expirado.');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (coupon.max_uses !== null && coupon.current_uses >= coupon.max_uses) {
+    const error = new Error('Este cupom já atingiu o limite de utilizações.');
+    error.statusCode = 400;
+    throw error;
+  }
+  let discount_amount = 0;
+  if (coupon.discount_type === 'percentage') {
+    discount_amount = (subtotal * coupon.discount_value) / 100;
+  } else {
+    discount_amount = Math.min(subtotal, coupon.discount_value);
+  }
+  return {
+    ...coupon,
+    discount_amount
+  };
 };

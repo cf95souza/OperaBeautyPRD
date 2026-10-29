@@ -1,8 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
 import { api } from '../../lib/api';
 import { useNotification } from '../../context/NotificationProvider';
+import { 
+  Sparkles, 
+  Users, 
+  Plus, 
+  X, 
+  Star, 
+  Edit2, 
+  Clock, 
+  CheckCircle2, 
+  Calendar,
+  CreditCard,
+  Crown,
+  ChevronRight,
+  PauseCircle,
+  PlayCircle
+} from 'lucide-react';
+import { EstadoVazio } from '../../components/ui/EstadoVazio';
+import { formatCurrency, formatNumber } from '../../utils/formatters';
 
 const GestaoAssinaturas = () => {
   const { tenant_slug } = useParams();
@@ -36,15 +54,15 @@ const GestaoAssinaturas = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Carrega Planos do Salão
+      // 1. Carrega Planos do Salão
       const plansData = await api.memberships.listPlans(tenant.id);
-      setPlans(plansData);
+      setPlans(Array.isArray(plansData) ? plansData : []);
 
-      // Carrega Assinantes do Salão
+      // 2. Carrega Assinantes do Salão
       const subsData = await api.memberships.listSubscriptions();
-      setSubscribers(subsData);
+      setSubscribers(Array.isArray(subsData) ? subsData : []);
 
-      // Carrega Serviços para o Select
+      // 3. Carrega Serviços para o Select
       const srvData = await api.services.list(tenant.id);
       const activeServices = srvData ? srvData.filter(s => s.is_active) : [];
       setServices(activeServices);
@@ -60,14 +78,34 @@ const GestaoAssinaturas = () => {
     }
   };
 
+  // 3 KPIs Canônicos (§9.6 J10 · Mockup G9)
+  const activePlansCount = useMemo(() => {
+    return plans.filter(p => p.is_active).length;
+  }, [plans]);
+
+  const activeSubscribersCount = useMemo(() => {
+    return subscribers.filter(s => s.status === 'active').length;
+  }, [subscribers]);
+
+  const monthlyRecurringRevenue = useMemo(() => {
+    return subscribers
+      .filter(s => s.status === 'active')
+      .reduce((sum, s) => sum + Number(s.plan_price || s.price || 0), 0);
+  }, [subscribers]);
+
+  // Plano em Destaque para o Preview
+  const previewPlan = useMemo(() => {
+    return plans.find(p => p.is_active) || plans[0] || null;
+  }, [plans]);
+
   const handleEdit = (plan) => {
     setNewPlan({
       name: plan.name,
       description: plan.description || '',
       price: plan.price,
-      billing_cycle: plan.billing_cycle,
-      service_ids: plan.service_ids || [],
-      usage_limit: plan.usage_limit
+      billing_cycle: plan.billing_cycle || 'monthly',
+      service_ids: plan.service_ids || (plan.service_id ? [plan.service_id] : []),
+      usage_limit: plan.usage_limit || 4
     });
     setEditingId(plan.id);
     setShowModal(true);
@@ -75,11 +113,12 @@ const GestaoAssinaturas = () => {
 
   const handleToggleActive = async (plan) => {
     const newStatus = !plan.is_active;
-    if (!(await confirm(`Deseja realmente ${newStatus ? 'ativar' : 'desativar'} este plano de fidelidade?`))) return;
+    const actionLabel = newStatus ? 'reativar as vendas deste plano' : 'pausar as vendas deste plano';
+    if (!(await confirm(`Deseja realmente ${actionLabel}? Assinaturas ativas existentes continuarão vigentes.`))) return;
 
     try {
       await api.memberships.updatePlan(plan.id, { is_active: newStatus });
-      showSuccess(`Plano ${newStatus ? 'ativado' : 'desativado'} com sucesso.`);
+      showSuccess(`Vendas do plano ${newStatus ? 'reativadas' : 'pausadas'} com sucesso.`);
       fetchData();
     } catch (err) {
       console.error(err);
@@ -102,16 +141,19 @@ const GestaoAssinaturas = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!newPlan.name.trim()) { showError('Nome é obrigatório.'); return; }
-    if (!newPlan.price || isNaN(newPlan.price)) { showError('Preço inválido.'); return; }
-    if (!newPlan.service_ids || newPlan.service_ids.length === 0) { showError('Selecione um serviço para vincular ao plano.'); return; }
+    if (!newPlan.name.trim()) { showError('Nome do plano é obrigatório.'); return; }
+    if (!newPlan.price || isNaN(newPlan.price)) { showError('Preço mensal inválido.'); return; }
+    if (!newPlan.service_ids || newPlan.service_ids.length === 0) { showError('Selecione pelo menos um procedimento para o plano.'); return; }
 
     setSaving(true);
     try {
       const payload = {
         ...newPlan,
+        name: newPlan.name.trim(),
+        description: newPlan.description.trim(),
         price: parseFloat(newPlan.price),
-        usage_limit: parseInt(newPlan.usage_limit)
+        usage_limit: parseInt(newPlan.usage_limit) || 4,
+        is_active: true
       };
 
       if (editingId) {
@@ -145,163 +187,306 @@ const GestaoAssinaturas = () => {
   };
 
   return (
-    <div className="p-gutter md:p-xl flex-1 flex flex-col gap-lg max-w-[1200px] mx-auto w-full animate-fade-in-up">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-md">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in text-ink">
+      
+      {/* 1. Cabeçalho Editorial (§9.6 J10 · Mockup G9) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line pb-4">
         <div>
-          <h2 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>card_membership</span> Clube de Assinaturas (Fidelidade)
-          </h2>
-          <p className="font-body-md text-secondary mt-1 max-w-[600px]">Crie planos recorrentes, garanta faturamento mensal e fidelize suas clientes.</p>
+          <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink">Clube de assinaturas</h1>
+          <p className="text-sm text-ink-soft mt-1">Planos recorrentes para fidelizar clientes e garantir receita no mês.</p>
         </div>
-        
-        {activeTab === 'plans' && (
-          <button 
-            onClick={openNewModal}
-            className="bg-primary text-on-primary px-5 py-2.5 rounded-full font-label-md hover:bg-primary/90 hover:shadow-md transition-all flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[20px]">add</span> Criar Novo Plano
-          </button>
-        )}
+
+        <button 
+          onClick={openNewModal}
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-brand hover:bg-brand-hover text-white text-sm font-semibold shadow-xs hover:shadow-md transition-all active:scale-98 cursor-pointer shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Criar plano</span>
+        </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-outline-variant/30">
+      {/* 2. Grade de 3 KPIs Compactos (§9.6 J10 · Mockup G9) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        
+        {/* KPI: PLANOS ATIVOS */}
+        <div className="rounded-[22px] border border-line bg-white p-5 shadow-2xs space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft block">
+            PLANOS ATIVOS
+          </span>
+          <span className="font-display text-3xl sm:text-4xl font-bold text-ink tabular-nums block">
+            {activePlansCount}
+          </span>
+          <span className="text-xs text-ink-soft block">No clube</span>
+        </div>
+
+        {/* KPI: ASSINANTES */}
+        <div className="rounded-[22px] border border-line bg-white p-5 shadow-2xs space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft block">
+            ASSINANTES
+          </span>
+          <span className="font-display text-3xl sm:text-4xl font-bold text-ink tabular-nums block">
+            {activeSubscribersCount}
+          </span>
+          <span className="text-xs text-ink-soft block">Clientes ativas</span>
+        </div>
+
+        {/* KPI: RECEITA RECORRENTE (MRR) */}
+        <div className="rounded-[22px] border border-line bg-white p-5 shadow-2xs space-y-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft block">
+            RECEITA RECORRENTE
+          </span>
+          <span className="font-display text-3xl sm:text-4xl font-bold text-ink tabular-nums lining-nums block">
+            {formatCurrency(monthlyRecurringRevenue)}
+          </span>
+          <span className="text-xs text-ink-soft block">Por mês</span>
+        </div>
+
+      </div>
+
+      {/* 3. Abas Superiores Rosé Editorial */}
+      <div className="flex items-center gap-6 border-b border-line pb-1">
         <button
           onClick={() => setActiveTab('plans')}
-          className={`px-6 py-3 font-label-md text-label-md transition-colors relative ${
-            activeTab === 'plans' ? 'text-primary border-b-2 border-primary font-semibold' : 'text-secondary hover:text-on-surface'
+          className={`pb-2.5 font-semibold text-sm transition-all cursor-pointer relative ${
+            activeTab === 'plans'
+              ? 'text-brand border-b-2 border-brand'
+              : 'text-ink-soft hover:text-ink'
           }`}
         >
-          Planos do Clube
+          Planos do clube
         </button>
+
         <button
           onClick={() => setActiveTab('subscribers')}
-          className={`px-6 py-3 font-label-md text-label-md transition-colors relative ${
-            activeTab === 'subscribers' ? 'text-primary border-b-2 border-primary font-semibold' : 'text-secondary hover:text-on-surface'
+          className={`pb-2.5 font-semibold text-sm transition-all cursor-pointer relative ${
+            activeTab === 'subscribers'
+              ? 'text-brand border-b-2 border-brand'
+              : 'text-ink-soft hover:text-ink'
           }`}
         >
-          Clientes Assinantes ({subscribers.length})
+          Clientes assinantes ({subscribers.length})
         </button>
       </div>
 
-      {/* Content */}
+      {/* 4. Conteúdo: Planos do Clube vs Assinantes */}
       {loading ? (
-        <div className="flex justify-center p-xl"><span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span></div>
+        <div className="py-20 text-center text-ink-soft flex flex-col items-center justify-center gap-3">
+          <div className="w-8 h-8 border-2 border-brand/30 border-t-brand rounded-full animate-spin" />
+          <span className="text-sm">Carregando planos do clube...</span>
+        </div>
       ) : activeTab === 'plans' ? (
+        
         plans.length === 0 ? (
-          <div className="text-center p-xl text-secondary bg-surface-container-lowest rounded-2xl border border-outline-variant/30 flex flex-col items-center">
-            <span className="material-symbols-outlined text-5xl mb-3 opacity-40">card_membership</span>
-            <p className="font-headline-sm text-headline-sm-mobile mb-2">Nenhum plano criado ainda</p>
-            <p className="font-body-sm text-secondary mb-6">Ofereça planos mensais para ter recorrência garantida no seu faturamento.</p>
-            <button onClick={openNewModal} className="bg-primary/10 text-primary px-5 py-2.5 rounded-full font-label-md hover:bg-primary/20 transition-colors">Criar Primeiro Plano</button>
+          <div className="bg-white rounded-[24px] border border-line p-8 shadow-xs">
+            <EstadoVazio
+              icone={<Sparkles className="w-8 h-8 text-brand" />}
+              titulo="Nenhum plano criado ainda"
+              descricao="Ofereça planos mensais para ter recorrência garantida e fidelizar clientes."
+              textoAcao="+ Criar plano"
+              aoClicarAcao={openNewModal}
+            />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
-            {plans.map(plan => (
-              <div key={plan.id} className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-lg shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start mb-md">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${plan.is_active ? 'bg-primary-container text-on-primary-container' : 'bg-surface-variant text-on-surface-variant'}`}>
-                      {plan.is_active ? 'Ativo' : 'Inativo'}
-                    </span>
-                    <span className="font-label-sm text-secondary uppercase tracking-widest">{plan.billing_cycle === 'monthly' ? 'Mensal' : 'Anual'}</span>
+          <div className="flex flex-col lg:flex-row gap-8 items-start">
+            
+            {/* Coluna Esquerda: Lista de Planos do Clube */}
+            <div className="flex-1 w-full space-y-6">
+              {plans.map(plan => {
+                const planSubscribers = subscribers.filter(s => s.plan_id === plan.id && s.status === 'active').length;
+
+                return (
+                  <div 
+                    key={plan.id} 
+                    className="rounded-[24px] border border-line bg-white p-6 sm:p-8 shadow-xs space-y-5"
+                  >
+                    {/* Topo do Card do Plano */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2.5">
+                          <h2 className="font-display text-2xl font-bold text-ink">
+                            {plan.name}
+                          </h2>
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            plan.is_active 
+                              ? 'bg-[#E8F5E9] text-[#2E7D32]' 
+                              : 'bg-stone-200 text-ink-soft'
+                          }`}>
+                            {plan.is_active ? 'Ativo' : 'Vendas pausadas'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-ink-soft mt-1.5 leading-relaxed">
+                          {plan.description || 'Adicione uma descrição para a cliente entender o benefício.'}
+                        </p>
+                      </div>
+
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-stone-100 text-ink-soft shrink-0">
+                        {plan.billing_cycle === 'monthly' ? 'Mensal' : 'Anual'}
+                      </span>
+                    </div>
+
+                    {/* Caixa de Detalhes dos Serviços Inclusos */}
+                    <div className="bg-stone-50 rounded-2xl p-4 border border-line/40 space-y-2.5 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-ink-soft font-medium">Serviços inclusos</span>
+                        <span className="font-semibold text-ink">
+                          {plan.service_name || (services.find(s => s.id === (plan.service_ids?.[0] || plan.service_id))?.name) || 'Procedimentos do salão'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-ink-soft font-medium">Uso por ciclo</span>
+                        <span className="font-semibold text-ink">
+                          {plan.usage_limit === 0 ? 'Ilimitado' : `${plan.usage_limit} sessões`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Preço e Assinantes */}
+                    <div className="flex items-baseline justify-between pt-1">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-display text-3xl font-bold text-ink tabular-nums lining-nums">
+                          {formatCurrency(plan.price)}
+                        </span>
+                        <span className="text-xs text-ink-soft font-medium">/mês</span>
+                      </div>
+
+                      <span className="text-xs text-ink-soft font-medium tabular-nums">
+                        {planSubscribers} {planSubscribers === 1 ? 'assinante' : 'assinantes'}
+                      </span>
+                    </div>
+
+                    {/* Botões de Ação */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-line/60">
+                      <button
+                        onClick={() => handleEdit(plan)}
+                        className="px-5 py-2 rounded-full bg-brand text-white text-xs font-semibold hover:bg-brand-hover shadow-xs transition-all active:scale-98 cursor-pointer"
+                      >
+                        Editar
+                      </button>
+
+                      <button
+                        onClick={() => handleToggleActive(plan)}
+                        className="px-4 py-2 rounded-full border border-line text-xs font-semibold text-ink-soft hover:text-ink hover:bg-stone-50 transition-all cursor-pointer"
+                      >
+                        {plan.is_active ? 'Pausar vendas' : 'Reativar vendas'}
+                      </button>
+                    </div>
+
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Coluna Direita: Preview "COMO A CLIENTE VÊ NO APP" (§9.6 J10 · Mockup G9) */}
+            <div className="w-full lg:w-[380px] shrink-0 sticky top-6">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft block mb-2">
+                COMO A CLIENTE VÊ NO APP
+              </span>
+
+              {previewPlan ? (
+                <div className="rounded-[22px] border-2 border-amber-200/80 bg-white p-6 shadow-xs space-y-5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-brand-tint/60 flex items-center justify-center text-brand shrink-0">
+                      <Star className="w-4 h-4 fill-brand/20 text-brand" />
+                    </div>
+
+                    <div>
+                      <span className="block text-[10px] uppercase font-bold tracking-wider text-ink-soft/80">
+                        CLUBE STUDIO
+                      </span>
+                      <h3 className="font-bold text-sm text-ink mt-0.5">
+                        {previewPlan.name}
+                      </h3>
+                      <p className="text-xs text-ink-soft mt-0.5">
+                        {previewPlan.usage_limit} sessões de {previewPlan.service_name || 'serviço'} por mês
+                      </p>
+                    </div>
                   </div>
 
-                  <h3 className="font-headline-sm text-on-surface mb-2">{plan.name}</h3>
-                  <p className="font-body-sm text-secondary line-clamp-2 mb-4" title={plan.description}>{plan.description || 'Sem descrição cadastrada.'}</p>
-                  
-                  <div className="bg-surface-container-low p-3 rounded-xl border border-outline-variant/50 space-y-2 mb-lg">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-secondary font-label-sm shrink-0">Serviços:</span>
-                      <span className="font-semibold text-on-surface truncate ml-2 text-right" title={plan.service_name}>{plan.service_name}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-secondary font-label-sm">Uso por ciclo:</span>
-                      <span className="font-semibold text-on-surface">{plan.usage_limit === 0 ? 'Ilimitado' : `${plan.usage_limit} sessões`}</span>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    className="w-full py-3.5 rounded-full bg-brand hover:bg-brand-hover text-white text-sm font-semibold shadow-xs transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>Assinar por {formatCurrency(previewPlan.price)}/mês</span>
+                  </button>
                 </div>
+              ) : (
+                <div className="rounded-[22px] border border-dashed border-stone-200 bg-stone-50/40 p-6 text-center text-xs text-ink-soft">
+                  Crie um plano para visualizar a prévia do aplicativo.
+                </div>
+              )}
+            </div>
 
-                <div className="flex justify-between items-center border-t border-outline-variant/20 pt-md mt-md">
-                  <div>
-                    <span className="font-label-sm text-secondary block">Valor</span>
-                    <span className="font-headline-sm text-primary font-bold">R$ {Number(plan.price).toFixed(2).replace('.', ',')}</span>
-                  </div>
-                  
-                  <div className="flex gap-1">
-                    <button 
-                      onClick={() => handleToggleActive(plan)}
-                      title={plan.is_active ? 'Desativar Plano' : 'Ativar Plano'}
-                      className="p-2 rounded-full hover:bg-surface-variant text-secondary transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">{plan.is_active ? 'visibility_off' : 'visibility'}</span>
-                    </button>
-                    <button 
-                      onClick={() => handleEdit(plan)}
-                      title="Editar Plano"
-                      className="p-2 rounded-full hover:bg-surface-variant text-primary transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">edit</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         )
+
       ) : (
+
+        /* 5. Aba: Clientes Assinantes */
         subscribers.length === 0 ? (
-          <div className="text-center p-xl text-secondary bg-surface-container-lowest rounded-2xl border border-outline-variant/30 flex flex-col items-center">
-            <span className="material-symbols-outlined text-5xl mb-3 opacity-40">groups</span>
-            <p className="font-headline-sm text-headline-sm-mobile mb-2">Nenhuma cliente assinante ainda</p>
-            <p className="font-body-sm text-secondary">Clientes poderão aderir aos seus planos ativos diretamente pelo aplicativo delas.</p>
+          <div className="bg-white rounded-[24px] border border-line p-8 shadow-xs">
+            <EstadoVazio
+              icone={<Users className="w-8 h-8 text-brand" />}
+              titulo="Nenhuma cliente assinante ainda"
+              descricao="Clientes poderão aderir aos seus planos ativos diretamente pelo aplicativo delas."
+            />
           </div>
         ) : (
-          <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl overflow-hidden shadow-sm">
+          <div className="rounded-[22px] border border-line bg-white shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-outline-variant/30 bg-surface-container-low">
-                    <th className="py-md px-lg font-label-md text-secondary">Cliente</th>
-                    <th className="py-md px-lg font-label-md text-secondary">Plano Contratado</th>
-                    <th className="py-md px-lg font-label-md text-secondary">Créditos Restantes</th>
-                    <th className="py-md px-lg font-label-md text-secondary">Ciclo Faturamento</th>
-                    <th className="py-md px-lg font-label-md text-secondary">Próxima Renovação</th>
-                    <th className="py-md px-lg font-label-md text-secondary">Status</th>
-                    <th className="py-md px-lg font-label-md text-secondary">Ações</th>
+                  <tr className="border-b border-line bg-stone-50/50 text-[11px] font-bold uppercase tracking-wider text-ink-soft">
+                    <th className="px-6 py-4">CLIENTE</th>
+                    <th className="px-6 py-4">PLANO</th>
+                    <th className="px-6 py-4">CRÉDITOS RESTANTES</th>
+                    <th className="px-6 py-4">CICLO</th>
+                    <th className="px-6 py-4">PRÓXIMA RENOVAÇÃO</th>
+                    <th className="px-6 py-4">SITUAÇÃO</th>
+                    <th className="px-6 py-4 text-right">AÇÕES</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {subscribers.map(sub => (
-                    <tr key={sub.id} className="border-b border-outline-variant/20 hover:bg-surface-variant/20 transition-colors">
-                      <td className="py-md px-lg">
-                        <div className="font-label-md text-on-surface">{sub.client_name}</div>
-                        <div className="text-xs text-secondary">{sub.client_phone}</div>
+                <tbody className="divide-y divide-line/70 text-sm">
+                  {subscribers.map((sub) => (
+                    <tr key={sub.id} className="hover:bg-stone-50/60 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="font-semibold text-ink block">{sub.client_name}</span>
+                        <span className="text-xs text-ink-soft">{sub.client_phone}</span>
                       </td>
-                      <td className="py-md px-lg font-label-md text-on-surface">
-                        {sub.membership_name}
-                        <div className="text-xs text-secondary">R$ {Number(sub.price).toFixed(2).replace('.', ',')}</div>
+
+                      <td className="px-6 py-4 font-medium text-ink">
+                        {sub.plan_name}
                       </td>
-                      <td className="py-md px-lg">
-                        <span className="font-semibold text-primary">{sub.remaining_sessions}</span> / <span className="text-secondary text-xs">{sub.usage_limit === 0 ? '∞' : sub.usage_limit}</span>
-                      </td>
-                      <td className="py-md px-lg text-sm text-on-surface uppercase">{sub.billing_cycle === 'monthly' ? 'Mensal' : 'Anual'}</td>
-                      <td className="py-md px-lg text-sm text-on-surface">
-                        {new Date(sub.current_period_end).toLocaleDateString('pt-BR')}
-                      </td>
-                      <td className="py-md px-lg">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${sub.status === 'active' ? 'bg-[#ECFDF5] text-[#047857]' : 'bg-[#FEF2F2] text-[#B91C1C]'}`}>
-                          {sub.status === 'active' ? 'Ativo' : 'Atrasado'}
+
+                      <td className="px-6 py-4 tabular-nums">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-tint/60 text-brand">
+                          {sub.remaining_credits} sessões
                         </span>
                       </td>
-                      <td className="py-md px-lg">
-                        <button 
+
+                      <td className="px-6 py-4 text-xs text-ink-soft">
+                        {sub.billing_cycle === 'monthly' ? 'Mensal' : 'Anual'}
+                      </td>
+
+                      <td className="px-6 py-4 text-xs text-ink-soft tabular-nums">
+                        {sub.renews_at ? new Date(sub.renews_at).toLocaleDateString('pt-BR') : '—'}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          sub.status === 'active' 
+                            ? 'bg-[#E8F5E9] text-[#2E7D32]' 
+                            : 'bg-stone-200 text-ink-soft'
+                        }`}>
+                          {sub.status === 'active' ? 'Ativa' : 'Pausada'}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4 text-right">
+                        <button
                           onClick={() => handleRenewSubscription(sub)}
-                          className="bg-primary/10 text-primary hover:bg-primary hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap flex items-center gap-1"
+                          className="px-3.5 py-1 rounded-full border border-line text-xs font-semibold text-brand hover:bg-brand-tint/20 transition-all cursor-pointer"
                         >
-                          <span className="material-symbols-outlined text-[14px]">payments</span>
-                          Renovar Pagamento
+                          Renovar ciclo
                         </button>
                       </td>
                     </tr>
@@ -311,123 +496,126 @@ const GestaoAssinaturas = () => {
             </div>
           </div>
         )
+
       )}
 
-      {/* Modal Criar/Editar */}
+      {/* 6. Modal: Criar / Editar Plano do Clube */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-surface w-full max-w-[500px] rounded-2xl shadow-xl p-lg relative animate-in zoom-in-95 duration-200">
-            <button 
-              onClick={() => setShowModal(false)} 
-              className="absolute top-4 right-4 text-secondary hover:text-error transition-colors"
-            >
-              <span className="material-symbols-outlined">close</span>
-            </button>
-            
-            <h3 className="font-headline-md text-on-surface mb-2">{editingId ? 'Editar Plano de Assinatura' : 'Criar Plano de Assinatura'}</h3>
-            <p className="font-body-sm text-secondary mb-6">Ofereça vantagens exclusivas com cobranças recorrentes periódicas.</p>
-            
-            <form onSubmit={handleSave} className="space-y-md">
-              <div>
-                <label className="block font-label-sm text-secondary mb-1">Nome do Plano</label>
-                <input 
-                  required
-                  type="text" 
-                  placeholder="Ex: Clube do Cabelo Semanal"
-                  className="w-full border border-outline rounded-xl px-3 py-2 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm"
-                  value={newPlan.name}
-                  onChange={e => setNewPlan(prev => ({ ...prev, name: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <label className="block font-label-sm text-secondary mb-1">Descrição</label>
-                <textarea 
-                  rows="2"
-                  placeholder="Ex: Escova e hidratação livre 4 vezes no mês..."
-                  className="w-full border border-outline rounded-xl px-3 py-2 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm resize-none"
-                  value={newPlan.description}
-                  onChange={e => setNewPlan(prev => ({ ...prev, description: e.target.value }))}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-md">
-                <div>
-                  <label className="block font-label-sm text-secondary mb-1">Preço Mensal (R$)</label>
-                  <input 
-                    required
-                    type="number" 
-                    step="0.01"
-                    placeholder="150,00"
-                    className="w-full border border-outline rounded-xl px-3 py-2 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm"
-                    value={newPlan.price}
-                    onChange={e => setNewPlan(prev => ({ ...prev, price: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-label-sm text-secondary mb-1">Ciclo Cobrança</label>
-                  <select
-                    className="w-full border border-outline rounded-xl px-3 py-2 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm"
-                    value={newPlan.billing_cycle}
-                    onChange={e => setNewPlan(prev => ({ ...prev, billing_cycle: e.target.value }))}
-                  >
-                    <option value="monthly">Mensal</option>
-                    <option value="yearly">Anual</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-md">
-                <div>
-                  <label className="block font-label-sm text-secondary mb-1">Limite Global de Sessões / Ciclo</label>
-                  <input 
-                    required
-                    type="number" 
-                    min="0"
-                    className="w-full border border-outline rounded-xl px-3 py-2 bg-white focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm"
-                    value={newPlan.usage_limit}
-                    onChange={e => setNewPlan(prev => ({ ...prev, usage_limit: e.target.value }))}
-                  />
-                  <p className="text-[11px] text-secondary mt-1">O limite total que o cliente pode usar, somando todos os serviços abaixo. Digite 0 para Ilimitado.</p>
-                </div>
-
-                <div>
-                  <label className="block font-label-sm text-secondary mb-1">Serviços Atrelados</label>
-                  <div className="w-full border border-outline rounded-xl bg-white max-h-40 overflow-y-auto p-2 space-y-1">
-                    {services.map(s => (
-                      <label key={s.id} className="flex items-center gap-2 p-2 hover:bg-surface-variant/20 rounded cursor-pointer transition-colors">
-                        <input 
-                          type="checkbox"
-                          className="accent-primary w-4 h-4 shrink-0"
-                          checked={newPlan.service_ids?.includes(s.id)}
-                          onChange={(e) => {
-                            setNewPlan(prev => {
-                              const ids = new Set(prev.service_ids || []);
-                              if (e.target.checked) ids.add(s.id);
-                              else ids.delete(s.id);
-                              return { ...prev, service_ids: Array.from(ids) };
-                            });
-                          }}
-                        />
-                        <span className="text-sm text-on-surface line-clamp-1">{s.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fade-in overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-[24px] border border-line shadow-2xl p-6 md:p-8 relative animate-scale-up my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-line mb-4">
+              <h2 className="font-display text-2xl font-bold text-ink">
+                {editingId ? 'Editar Plano do Clube' : 'Novo Plano de Assinatura'}
+              </h2>
               <button 
-                type="submit" 
-                disabled={saving}
-                className="w-full bg-primary text-on-primary py-3 rounded-xl font-bold hover:opacity-95 transition-all disabled:opacity-50 mt-4 shadow-sm"
+                onClick={() => setShowModal(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-ink-soft hover:text-ink cursor-pointer hover:bg-stone-100"
               >
-                {saving ? 'Salvando...' : 'Salvar Plano de Assinatura'}
+                <X className="w-5 h-5" />
               </button>
+            </div>
+
+            <form onSubmit={handleSave} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
+                  Nome do Plano *
+                </label>
+                <input 
+                  required 
+                  type="text"
+                  placeholder="Ex: Pacote Toda Bonita, Clube da Escova"
+                  value={newPlan.name} 
+                  onChange={e => setNewPlan({ ...newPlan, name: e.target.value })}
+                  className="w-full border border-line rounded-xl px-4 py-2.5 bg-white text-sm text-ink focus:border-brand outline-none shadow-2xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
+                  Descrição dos Benefícios
+                </label>
+                <textarea 
+                  rows={2}
+                  placeholder="Ex: 4 sessões de escova modelada por mês com hidratação inclusa."
+                  value={newPlan.description} 
+                  onChange={e => setNewPlan({ ...newPlan, description: e.target.value })}
+                  className="w-full border border-line rounded-xl px-4 py-2 bg-white text-sm text-ink focus:border-brand outline-none shadow-2xs resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
+                    Preço Mensal (R$) *
+                  </label>
+                  <input 
+                    required 
+                    type="number" 
+                    step="0.01" 
+                    min="0" 
+                    placeholder="200,00"
+                    value={newPlan.price} 
+                    onChange={e => setNewPlan({ ...newPlan, price: e.target.value })}
+                    className="w-full border border-line rounded-xl px-4 py-2.5 bg-white text-sm text-ink focus:border-brand outline-none tabular-nums shadow-2xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
+                    Sessões por Mês *
+                  </label>
+                  <input 
+                    required 
+                    type="number" 
+                    min="1" 
+                    placeholder="4"
+                    value={newPlan.usage_limit} 
+                    onChange={e => setNewPlan({ ...newPlan, usage_limit: e.target.value })}
+                    className="w-full border border-line rounded-xl px-4 py-2.5 bg-white text-sm text-ink focus:border-brand outline-none tabular-nums shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
+                  Procedimento Vinculado *
+                </label>
+                <select
+                  required
+                  value={newPlan.service_ids[0] || ''}
+                  onChange={e => setNewPlan({ ...newPlan, service_ids: [e.target.value] })}
+                  className="w-full border border-line rounded-xl px-4 py-2.5 bg-white text-sm text-ink focus:border-brand outline-none cursor-pointer"
+                >
+                  <option value="">Selecione o serviço...</option>
+                  {services.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({formatCurrency(s.price)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-line">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 rounded-full border border-stone-300 text-ink-soft text-xs font-semibold hover:bg-stone-50 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-5 py-2.5 rounded-full bg-brand text-white text-xs font-semibold hover:bg-brand-hover shadow-xs disabled:opacity-50 cursor-pointer transition-all active:scale-98"
+                >
+                  {saving ? 'Salvando...' : (editingId ? 'Salvar Alterações' : 'Criar Plano')}
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 };

@@ -1,21 +1,24 @@
 import pool from '../config/db.js';
 
-// 1. Criar Venda de Produtos no PDV com Baixa Automática no Estoque
+// 1. Criar Venda de Produtos no PDV com Baixa Automática no Estoque (Atômica)
 export const createProductSale = async (tenantId, clientId, paymentMethod, items) => {
   const clientConnection = await pool.connect();
   
   try {
     await clientConnection.query('BEGIN');
     
-    // 1. Validar e verificar estoque de todos os itens antes de registrar a venda
+    // 1. Ordena itens por inventory_id para prevenir deadlocks em requisições simultâneas
+    const sortedItems = [...items].sort((a, b) => String(a.inventory_id).localeCompare(String(b.inventory_id)));
+
+    // 2. Validar e verificar estoque de todos os itens com lock pessimista (FOR UPDATE)
     let totalPrice = 0;
     const validatedItems = [];
     
-    for (const item of items) {
+    for (const item of sortedItems) {
       const { inventory_id, quantity } = item;
       
       const invResult = await clientConnection.query(
-        'SELECT name, quantity, price, type FROM public.cap_inventory WHERE id = $1 AND tenant_id = $2',
+        'SELECT id, name, quantity, price, type FROM public.cap_inventory WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
         [inventory_id, tenantId]
       );
       
@@ -33,7 +36,7 @@ export const createProductSale = async (tenantId, clientId, paymentMethod, items
         throw error;
       }
       
-      if (dbItem.quantity < quantity) {
+      if (parseFloat(dbItem.quantity) < quantity) {
         const error = new Error(`Estoque insuficiente para o produto "${dbItem.name}". Estoque disponível: ${dbItem.quantity}`);
         error.statusCode = 400;
         throw error;
@@ -45,13 +48,14 @@ export const createProductSale = async (tenantId, clientId, paymentMethod, items
       
       validatedItems.push({
         inventory_id,
+        name: dbItem.name,
         quantity,
         unit_price: unitPrice,
         total_price: itemTotalPrice
       });
     }
     
-    // 2. Registrar a Venda
+    // 3. Registrar a Venda
     const saleResult = await clientConnection.query(
       `INSERT INTO public.cap_product_sales (tenant_id, client_id, total_price, payment_method, created_at)
        VALUES ($1, $2, $3, $4, NOW())
@@ -61,7 +65,7 @@ export const createProductSale = async (tenantId, clientId, paymentMethod, items
     
     const sale = saleResult.rows[0];
     
-    // 3. Registrar Itens e Baixar Estoque
+    // 4. Registrar Itens e Baixar Estoque Atomicamente
     for (const item of validatedItems) {
       await clientConnection.query(
         `INSERT INTO public.cap_product_sale_items (sale_id, inventory_id, quantity, unit_price, total_price)
@@ -69,18 +73,29 @@ export const createProductSale = async (tenantId, clientId, paymentMethod, items
         [sale.id, item.inventory_id, item.quantity, item.unit_price, item.total_price]
       );
       
-      await clientConnection.query(
+      const updateResult = await clientConnection.query(
         `UPDATE public.cap_inventory
          SET quantity = quantity - $1
-         WHERE id = $2 AND tenant_id = $3`,
+         WHERE id = $2 AND tenant_id = $3 AND quantity >= $1
+         RETURNING id, quantity`,
         [item.quantity, item.inventory_id, tenantId]
       );
+
+      if (updateResult.rowCount === 0) {
+        const error = new Error(`Estoque insuficiente para o produto "${item.name}".`);
+        error.statusCode = 400;
+        throw error;
+      }
     }
     
     await clientConnection.query('COMMIT');
     return { ...sale, items: validatedItems };
   } catch (error) {
     await clientConnection.query('ROLLBACK');
+    if (error.code === '23514') {
+      error.message = 'Operação não permitida: a quantidade em estoque não pode ser negativa.';
+      error.statusCode = 400;
+    }
     throw error;
   } finally {
     clientConnection.release();

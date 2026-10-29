@@ -74,8 +74,8 @@ export const listWalletTransactions = async (tenantId, clientId) => {
   return result.rows;
 };
 
-// 4. Processar Ganho de Cashback (Após conclusão de agendamento)
-export const processCashbackEarnings = async (clientConnection, tenantId, clientId, appointmentId, amount) => {
+// 4. Processar Ganho de Cashback (Após conclusão de agendamento) com Idempotência
+export const processCashbackEarnings = async (clientConnection, tenantId, clientId, appointmentId, amount, customIdempotencyKey = null) => {
   // 1. Busca configurações de cashback do tenant
   const tenantConfig = await clientConnection.query(
     'SELECT cashback_percentage, cashback_expiration_days FROM public.cap_tenants WHERE id = $1',
@@ -92,13 +92,21 @@ export const processCashbackEarnings = async (clientConnection, tenantId, client
   const cashbackEarned = amount * (percentage / 100);
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + expirationDays);
+  const idempotencyKey = customIdempotencyKey || `cashback:earn:${appointmentId}`;
 
-  // 2. Cria transação de crédito
-  await clientConnection.query(
-    `INSERT INTO public.cap_wallet_transactions (tenant_id, client_id, amount, type, description, expires_at, created_at)
-     VALUES ($1, $2, $3, 'credit', $4, $5, NOW())`,
-    [tenantId, clientId, cashbackEarned, `Cashback recebido pelo agendamento #${appointmentId.substring(0, 8)}`, expiresAt]
+  // 2. Cria transação de crédito garantindo idempotência
+  const txResult = await clientConnection.query(
+    `INSERT INTO public.cap_wallet_transactions (tenant_id, client_id, amount, type, description, expires_at, idempotency_key, created_at)
+     VALUES ($1, $2, $3, 'credit', $4, $5, $6, NOW())
+     ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+     RETURNING id`,
+    [tenantId, clientId, cashbackEarned, `Cashback recebido pelo agendamento #${appointmentId.substring(0, 8)}`, expiresAt, idempotencyKey]
   );
+
+  // Se a transação já foi processada anteriormente, não incrementa saldo duplicado
+  if (txResult.rowCount === 0) {
+    return;
+  }
 
   // 3. Incrementa na carteira
   await clientConnection.query(
@@ -110,49 +118,63 @@ export const processCashbackEarnings = async (clientConnection, tenantId, client
   );
 };
 
-// 5. Processar Resgate/Uso de Cashback (Desconto no Checkout)
-export const processCashbackRedemption = async (clientConnection, tenantId, clientId, appointmentId, amount) => {
+// 5. Processar Resgate/Uso de Cashback (Desconto no Checkout) com Idempotência e Bloqueio Atômico
+export const processCashbackRedemption = async (clientConnection, tenantId, clientId, appointmentId, amount, customIdempotencyKey = null) => {
   if (amount <= 0) return;
 
-  // 1. Verifica saldo atual
-  const walletResult = await clientConnection.query(
-    'SELECT balance FROM public.cap_client_wallets WHERE tenant_id = $1 AND client_id = $2 FOR UPDATE',
-    [tenantId, clientId]
+  const idempotencyKey = customIdempotencyKey || `cashback:redeem:${appointmentId}`;
+
+  // 1. Checa se o resgate com esta chave já foi processado
+  const existingTx = await clientConnection.query(
+    'SELECT id FROM public.cap_wallet_transactions WHERE tenant_id = $1 AND idempotency_key = $2',
+    [tenantId, idempotencyKey]
+  );
+  if (existingTx.rows.length > 0) {
+    return; // Operação já realizada de forma idempotente
+  }
+
+  // 2. Debita da carteira atomicamente garantindo saldo suficiente (balance >= $1)
+  const walletUpdate = await clientConnection.query(
+    `UPDATE public.cap_client_wallets 
+     SET balance = balance - $1, updated_at = NOW()
+     WHERE tenant_id = $2 AND client_id = $3 AND balance >= $1
+     RETURNING balance`,
+    [amount, tenantId, clientId]
   );
 
-  const balance = parseFloat(walletResult.rows[0]?.balance || '0');
-  if (balance < amount) {
+  if (walletUpdate.rowCount === 0) {
     const error = new Error('Saldo de cashback insuficiente para resgate.');
     error.statusCode = 400;
     throw error;
   }
 
-  // 2. Cria transação de débito
+  // 3. Cria transação de débito no livro-razão com chave de idempotência
   await clientConnection.query(
-    `INSERT INTO public.cap_wallet_transactions (tenant_id, client_id, amount, type, description, created_at)
-     VALUES ($1, $2, $3, 'debit', $4, NOW())`,
-    [tenantId, clientId, -amount, `Resgate de cashback no agendamento #${appointmentId.substring(0, 8)}`]
-  );
-
-  // 3. Atualiza saldo da carteira
-  await clientConnection.query(
-    `UPDATE public.cap_client_wallets 
-     SET balance = balance - $1, updated_at = NOW()
-     WHERE tenant_id = $2 AND client_id = $3`,
-    [amount, tenantId, clientId]
+    `INSERT INTO public.cap_wallet_transactions (tenant_id, client_id, amount, type, description, idempotency_key, created_at)
+     VALUES ($1, $2, $3, 'debit', $4, $5, NOW())`,
+    [tenantId, clientId, -amount, `Resgate de cashback no agendamento #${appointmentId.substring(0, 8)}`, idempotencyKey]
   );
 };
 
-// 6. Processar Estorno de Cashback (Devolução no Cancelamento)
-export const processCashbackRefund = async (clientConnection, tenantId, clientId, appointmentId, amount) => {
+// 6. Processar Estorno de Cashback (Devolução no Cancelamento) com Idempotência
+export const processCashbackRefund = async (clientConnection, tenantId, clientId, appointmentId, amount, customIdempotencyKey = null) => {
   if (amount <= 0) return;
 
-  // 1. Cria transação de crédito (estorno)
-  await clientConnection.query(
-    `INSERT INTO public.cap_wallet_transactions (tenant_id, client_id, amount, type, description, created_at)
-     VALUES ($1, $2, $3, 'credit', $4, NOW())`,
-    [tenantId, clientId, amount, `Estorno de cashback do agendamento #${appointmentId.substring(0, 8)} cancelado`]
+  const idempotencyKey = customIdempotencyKey || `cashback:refund:${appointmentId}`;
+
+  // 1. Cria transação de crédito (estorno) com idempotência
+  const txResult = await clientConnection.query(
+    `INSERT INTO public.cap_wallet_transactions (tenant_id, client_id, amount, type, description, idempotency_key, created_at)
+     VALUES ($1, $2, $3, 'credit', $4, $5, NOW())
+     ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+     RETURNING id`,
+    [tenantId, clientId, amount, `Estorno de cashback do agendamento #${appointmentId.substring(0, 8)} cancelado`, idempotencyKey]
   );
+
+  // Se já foi estornado anteriormente, não estorna novamente
+  if (txResult.rowCount === 0) {
+    return;
+  }
 
   // 2. Atualiza saldo da carteira somando o valor de volta
   await clientConnection.query(

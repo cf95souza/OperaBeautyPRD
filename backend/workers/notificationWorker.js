@@ -37,6 +37,123 @@ export const notificationWorker = new Worker('notifications', async (job) => {
       throw err;
     }
   }
+
+  if (action === 'sendAppointmentReminder') {
+    const { appointmentId, reminderType, tenantId, clientId } = job.data;
+    
+    // 1. Validar se o agendamento ainda está ativo (respeitar cancelamento ou conclusão prévia)
+    const apptRes = await pool.query(
+      `SELECT a.id, a.start_time, a.status, s.name as service_name, t.name as tenant_name, t.slug as tenant_slug, 
+              c.name as client_name, c.phone as client_phone,
+              st.name as staff_name
+       FROM public.cap_appointments a
+       JOIN public.cap_services s ON a.service_id = s.id
+       JOIN public.cap_tenants t ON a.tenant_id = t.id
+       JOIN public.cap_clients c ON a.client_id = c.id
+       LEFT JOIN public.cap_staff st ON a.staff_id = st.id
+       WHERE a.id = $1 AND a.status NOT IN ('cancelled', 'completed')`,
+      [appointmentId]
+    );
+
+    if (apptRes.rows.length === 0) {
+      logger.info(`Lembrete ${reminderType} para agendamento ${appointmentId} ignorado (agendamento cancelado, concluído ou inexistente).`);
+      return;
+    }
+
+    const appt = apptRes.rows[0];
+    const clientFirstName = (appt.client_name || 'Cliente').split(' ')[0];
+    const startTimeDate = new Date(appt.start_time);
+    const formattedTime = startTimeDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+    const formattedDate = startTimeDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+
+    let title = '';
+    let body = '';
+    if (reminderType === '24h') {
+      title = 'Lembrete do seu agendamento ⏰';
+      body = `Olá, ${clientFirstName}! Seu atendimento de ${appt.service_name} no ${appt.tenant_name} é amanhã (${formattedDate}) às ${formattedTime}.`;
+    } else {
+      title = 'Seu atendimento é daqui a pouco! 🌸';
+      body = `Olá, ${clientFirstName}! Faltam 2 horas para o seu atendimento de ${appt.service_name} às ${formattedTime} no ${appt.tenant_name}. Estamos te esperando!`;
+    }
+
+    const actionUrl = `/${appt.tenant_slug}/historico`;
+    const { notifyClient } = await import('../services/notificationService.js');
+    await notifyClient(tenantId, clientId, title, body, actionUrl);
+    logger.info(`Lembrete Web Push ${reminderType} disparado com sucesso para cliente ${clientId} (Agendamento ${appointmentId})`);
+
+    // 2. Disparo de WhatsApp se o salão possuir instância conectada e cliente tiver telefone
+    try {
+      if (appt.client_phone) {
+        const waInstanceRes = await pool.query(
+          `SELECT i.status 
+           FROM public.cap_whatsapp_instances i
+           JOIN public.cap_tenants t ON i.tenant_id = t.id
+           LEFT JOIN public.cap_plans p ON t.plan_id = p.id
+           LEFT JOIN public.cap_feature_flags f ON f.name = 'whatsapp_gateway'
+           LEFT JOIN public.cap_tenant_feature_flags tf ON tf.feature_flag_id = f.id AND tf.tenant_id = t.id
+           WHERE i.tenant_id = $1 
+             AND i.status = 'CONNECTED'
+             AND (
+               f.is_active_global = true 
+               OR tf.is_enabled = true 
+               OR (p.features IS NOT NULL AND p.features @> '["whatsapp_gateway"]'::jsonb)
+             )`,
+          [tenantId]
+        );
+
+        if (waInstanceRes.rows.length > 0) {
+          const { whatsappService } = await import('../services/whatsappService.js');
+          await whatsappService.sendReminder({
+            tenantId,
+            appointmentId,
+            recipientPhone: appt.client_phone,
+            clientName: clientFirstName,
+            salonName: appt.tenant_name,
+            serviceName: appt.service_name,
+            professionalName: appt.staff_name || 'Profissional',
+            scheduledTimeFormatted: `${formattedDate} às ${formattedTime}`,
+            messageType: reminderType === '24h' ? 'REMINDER_24H' : 'REMINDER_2H',
+          });
+          logger.info(`Lembrete WhatsApp ${reminderType} enviado com botões interativos para ${appt.client_phone} (Agendamento ${appointmentId})`);
+        }
+      }
+    } catch (waErr) {
+      logger.warn(`Falha não fatal ao enviar lembrete via WhatsApp para agendamento ${appointmentId}: ${waErr.message}`);
+    }
+  }
+
+  // Tratamento de expiração de sinal por PIX no agendamento (Liberação de Horário na Agenda)
+  if (action === 'checkDepositExpiration') {
+    const { appointmentId, tenantId } = job.data;
+    try {
+      const res = await pool.query(
+        `SELECT id, status, deposit_status, client_id, start_time 
+         FROM public.cap_appointments 
+         WHERE id = $1 AND deposit_status = 'pending'`,
+        [appointmentId]
+      );
+
+      if (res.rows.length > 0) {
+        const appt = res.rows[0];
+        await pool.query(
+          `UPDATE public.cap_appointments 
+           SET status = 'cancelled', deposit_status = 'expired' 
+           WHERE id = $1 AND deposit_status = 'pending'`,
+          [appointmentId]
+        );
+
+        await pool.query(
+          `INSERT INTO public.cap_timeline_notes (tenant_id, client_id, appointment_id, content)
+           VALUES ($1, $2, $3, 'Agendamento cancelado automaticamente: prazo de pagamento do sinal por PIX expirou.')`,
+          [tenantId, appt.client_id, appointmentId]
+        );
+
+        logger.info(`Sinal por PIX expirado para o agendamento ${appointmentId}. Horário liberado na agenda do profissional.`);
+      }
+    } catch (expErr) {
+      logger.error(`Erro ao processar expiração de sinal para agendamento ${appointmentId}: ${expErr.message}`);
+    }
+  }
 }, { 
   connection: redisClient,
   concurrency: 5 // Processar até 5 pushes simultaneamente

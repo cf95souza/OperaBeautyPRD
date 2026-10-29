@@ -8,26 +8,53 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import crypto from 'crypto';
+import fs from 'fs';
+import { PRIVATE_UPLOADS_DIR } from './privateUploads.js';
 
-const storage = multer.diskStorage({
+const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+
+const crmStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../public/uploads'))
+    const tenantId = req.user?.tenant_id || 'general';
+    const destDir = path.join(PRIVATE_UPLOADS_DIR, tenantId);
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+    cb(null, destDir);
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + crypto.randomInt(1000000000);
-    cb(null, uniqueSuffix + path.extname(file.originalname))
+    const randomHex = crypto.randomBytes(24).toString('hex');
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `crm-${Date.now()}-${randomHex}${ext}`);
   }
 });
-const upload = multer({ storage: storage });
+
+const uploadCrmImage = multer({
+  storage: crmStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      const error = new Error('Formato não suportado para prontuário. Envie imagens JPG, PNG ou WebP.');
+      error.statusCode = 400;
+      cb(error, false);
+    }
+  }
+});
 import { z } from 'zod';
 import { validate } from '../middlewares/validate.js';
 import {
   listClients,
+  createClient,
+  importClients,
   updateMe,
   updateClientPassword,
   getClientById,
   updateClient,
   updateAnamnese,
+  resetClientNoShows,
+  toggleClientBlock,
   getClientTimeline,
   createTimelineNote,
   deleteTimelineNote,
@@ -57,9 +84,23 @@ const updateClientSchema = z.object({
     name: z.string().min(1, 'Nome é obrigatório.').optional(),
     phone: z.string().min(1, 'Telefone é obrigatório.').optional(),
     birth_date: z.string().nullable().optional(),
-    vip_tier: z.enum(['Prata', 'Ouro', 'VIP', 'Black']).optional()
+    vip_tier: z.enum(['Prata', 'Ouro', 'VIP', 'Black']).optional(),
+    is_blocked: z.boolean().optional(),
+    blocked_reason: z.string().nullable().optional(),
+    no_show_count: z.number().int().min(0).optional()
   }),
   query: z.any(), params: z.any()
+});
+
+const toggleBlockSchema = z.object({
+  body: z.object({
+    is_blocked: z.boolean(),
+    reason: z.string().max(500).optional()
+  }),
+  params: z.object({
+    id: z.string().uuid('ID de cliente inválido.')
+  }),
+  query: z.any()
 });
 
 const updateAnamneseSchema = z.object({
@@ -77,6 +118,62 @@ const timelineNoteSchema = z.object({
   query: z.any(), params: z.any()
 });
 
+const createClientSchema = z.object({
+  body: z.object({
+    name: z.string().min(1, 'Nome é obrigatório.'),
+    phone: z.string().min(8, 'Telefone inválido.'),
+    birth_date: z.string().nullable().optional(),
+    vip_tier: z.enum(['Prata', 'Ouro', 'VIP', 'Black']).optional(),
+    password: z.string().min(4).optional()
+  }),
+  query: z.any(), params: z.any()
+});
+
+const importClientsSchema = z.object({
+  body: z.object({
+    clients: z.array(z.object({
+      name: z.string().min(1, 'Nome é obrigatório.'),
+      phone: z.string().min(8, 'Telefone inválido.'),
+      birth_date: z.string().nullable().optional(),
+      vip_tier: z.enum(['Prata', 'Ouro', 'VIP', 'Black']).optional(),
+      password: z.string().optional()
+    })).min(1, 'A lista deve conter ao menos 1 cliente.').max(1000, 'Limite máximo de 1000 clientes por lote.'),
+    options: z.object({
+      all_or_nothing: z.boolean().optional().default(true),
+      on_duplicate: z.enum(['skip', 'update']).optional().default('skip')
+    }).optional()
+  }),
+  query: z.any(), params: z.any()
+});
+
+// Criar Cliente pelo Gestor / Equipe
+router.post('/', authMiddleware, requireRole(['manager', 'professional']), validate(createClientSchema), async (req, res) => {
+  const { name, phone, birth_date, vip_tier, password } = req.body;
+  const tenantId = req.user.tenant_id;
+  try {
+    const newClient = await createClient(tenantId, name, phone, password || '123456', birth_date, vip_tier);
+    return res.status(201).json(newClient);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao criar cliente');
+    return res.status(500).json({ error: 'Erro interno ao cadastrar cliente.' });
+  }
+});
+
+// Importar Planilha de Clientes
+router.post('/import', authMiddleware, requireRole(['manager']), validate(importClientsSchema), async (req, res) => {
+  const { clients, options } = req.body;
+  const tenantId = req.user.tenant_id;
+  const userId = req.user.id;
+  try {
+    const result = await importClients(tenantId, clients, options || {}, userId);
+    return res.json(result);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao importar clientes');
+    return res.status(500).json({ error: 'Erro interno ao importar clientes.' });
+  }
+});
 
 // Listar Clientes
 router.get('/', authMiddleware, requireRole(['manager', 'professional', 'superadmin']), async (req, res) => {
@@ -147,18 +244,66 @@ router.get('/:id', authMiddleware, requireRole(['manager', 'professional', 'clie
 // Atualizar dados do Cliente
 router.put('/:id', authMiddleware, validate(updateClientSchema), async (req, res) => {
   const { id } = req.params;
-  const { name, phone, birth_date, vip_tier } = req.body;
+  const { name, phone, birth_date, vip_tier, is_blocked, blocked_reason, no_show_count } = req.body;
   const tenantId = req.user.tenant_id;
   const userId = req.user.id;
   const userRole = req.user.role;
 
   try {
-    const client = await updateClient(id, tenantId, userId, userRole, name, phone, birth_date, vip_tier);
+    const client = await updateClient(
+      id, 
+      tenantId, 
+      userId, 
+      userRole, 
+      name, 
+      phone, 
+      birth_date, 
+      vip_tier, 
+      is_blocked, 
+      blocked_reason, 
+      no_show_count
+    );
     return res.json(client);
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     req.log.error(error, 'Erro ao atualizar cliente');
     return res.status(500).json({ error: 'Erro interno ao salvar cliente.' });
+  }
+});
+
+// Zerar contador de faltas (D8 P1 - Apenas Gestores)
+router.post('/:id/reset-no-shows', authMiddleware, requireRole(['manager']), async (req, res) => {
+  const { id } = req.params;
+  const tenantId = req.user.tenant_id;
+  const authorId = req.user.id;
+
+  try {
+    const client = await resetClientNoShows(id, tenantId, authorId);
+    return res.json({ message: 'Contador de faltas zerado com sucesso.', client });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao zerar faltas do cliente');
+    return res.status(500).json({ error: 'Erro interno ao zerar faltas.' });
+  }
+});
+
+// Alternar bloqueio para agendamentos online (D8 P1 - Apenas Gestores)
+router.post('/:id/toggle-block', authMiddleware, requireRole(['manager']), validate(toggleBlockSchema), async (req, res) => {
+  const { id } = req.params;
+  const { is_blocked, reason } = req.body;
+  const tenantId = req.user.tenant_id;
+  const authorId = req.user.id;
+
+  try {
+    const client = await toggleClientBlock(id, tenantId, is_blocked, reason, authorId);
+    return res.json({ 
+      message: is_blocked ? 'Cliente bloqueado para agendamentos online.' : 'Bloqueio do cliente removido.',
+      client 
+    });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao alterar bloqueio do cliente');
+    return res.status(500).json({ error: 'Erro interno ao alterar bloqueio.' });
   }
 });
 
@@ -208,12 +353,12 @@ router.get('/:id/timeline', authMiddleware, requireRole(['manager', 'professiona
 });
 
 // Adicionar nota ao prontuário
-router.post('/:id/timeline', authMiddleware, requireRole(['manager', 'professional']), upload.single('image'), async (req, res) => {
+router.post('/:id/timeline', authMiddleware, requireRole(['manager', 'professional']), uploadCrmImage.single('image'), async (req, res) => {
   const { id } = req.params;
   const { content, appointment_id } = req.body;
   const tenantId = req.user.tenant_id;
   const staffId = req.user.id;
-  const image_path = req.file ? `/uploads/${req.file.filename}` : null;
+  const image_path = req.file ? `/api/uploads/crm/${tenantId}/${req.file.filename}` : null;
 
   if (!content && !image_path) {
     return res.status(400).json({ error: 'Conteúdo da nota ou imagem são obrigatórios.' });
