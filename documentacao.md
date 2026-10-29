@@ -2404,3 +2404,18 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
   - **2. Testes Automatizados**:
     * Suíte Jest dedicada em `backend/tests/rebrandLookbook.test.js` passando 100% (**3/3 testes aprovados**).
     * Compilação de produção Vite (`npm run build`) validada com sucesso em 2.31s.
+
+- **29/10/2026 - Resolução dos Planos Oficiais e Módulo de Parceiros no Super Admin [Concluída]:**
+  - **1. Extinção do Plano Solo e Consolidação dos 4 Planos Oficiais**:
+    * Extinto o plano `Solo` do catálogo oficial.
+    * Definidos os 4 planos ativos a partir do Básico:
+      1. **Básico** (`basico`, R$ 69,90/mês, até 1 profissional)
+      2. **Essencial** (`essencial`, R$ 79,90/mês, até 3 profissionais)
+      3. **Premium** (`premium`, R$ 129,90/mês, profissionais ilimitados, badge 'Mais Escolhido')
+      4. **Signature** (`signature`, R$ 199,90/mês, profissionais ilimitados, WhatsApp bot, badge 'Alta Performance')
+    * Atualização de `init.sql`, landing page e documentação.
+  - **2. Correção de Rotas e Tabelas de Parceiros / Afiliados**:
+    * Adicionado alias de rota `['/resellers', '/resellers/list']` em `backend/routes/superadmin.js`, eliminando erro 404 em `GET /api/superadmin/resellers/list`.
+    * Adicionados campos de sustentabilidade (`reseller_program_enabled`, `reseller_default_commission_rate`) em `cap_platform_settings`.
+    * Adicionadas tabelas `cap_saas_resellers`, `cap_saas_referrals`, `cap_saas_commissions`, `cap_saas_payouts` e `cap_refresh_tokens` no baseline `init.sql` com índices e permissões `opera_app`.
+

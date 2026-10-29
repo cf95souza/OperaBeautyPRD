@@ -608,7 +608,7 @@ router.post('/resellers/settings', async (req, res) => {
   }
 });
 
-router.get('/resellers', async (req, res) => {
+router.get(['/resellers', '/resellers/list'], async (req, res) => {
   try {
     const { listSuperAdminResellers } = await import('../services/superadminService.js');
     const resellers = await listSuperAdminResellers();
