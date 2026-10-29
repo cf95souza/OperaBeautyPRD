@@ -76,7 +76,7 @@ const AcessoProfissional = () => {
     }
   };
 
-  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : 'O';
+  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : (tenant_slug ? tenant_slug.charAt(0).toUpperCase() : 'O');
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-bg relative p-4 sm:p-6 md:p-8 font-sans text-ink selection:bg-brand-tint selection:text-brand overflow-hidden">
@@ -138,7 +138,7 @@ const AcessoProfissional = () => {
             </div>
 
             <h2 className="font-display text-2xl lg:text-3xl font-medium tracking-tight text-white mb-2 leading-snug">
-              {tenant?.name || 'Studio Thais'}
+              {tenant?.name || (tenant_slug ? tenant_slug.toUpperCase() : 'Portal da Equipe')}
             </h2>
             
             <p className="text-sm text-white/85 font-normal leading-relaxed max-w-sm mb-5">

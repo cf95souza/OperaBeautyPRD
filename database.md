@@ -143,10 +143,72 @@ CREATE TABLE public.cap_tenants (
     
     -- Onboarding Guiado e Display de Mesa QR Code (D11 P1)
     onboarding_dismissed BOOLEAN DEFAULT FALSE, -- Flag se o gestor dispensou/minimizou o guia inicial
-    qr_code_generated_at TIMESTAMPTZ, -- Data/hora em que gerou ou imprimiu o display de balcão
+    -- Planos Fundadores e Preço Congelado
+    is_founder BOOLEAN NOT NULL DEFAULT FALSE,
+    frozen_price NUMERIC(10,2),
+    price_frozen_until TIMESTAMPTZ,
+    founder_badge_label VARCHAR(50),
+
+    -- Domínio Customizado e Módulos SaaS (E3)
+    custom_domain VARCHAR(255),
+    custom_domain_verified BOOLEAN DEFAULT FALSE,
+    extra_whatsapp_messages INT DEFAULT 0,
+    nfse_enabled BOOLEAN DEFAULT FALSE,
+
+    -- Avaliações e Mini-Site (D16 / D20)
+    google_review_url TEXT,
+    google_review_auto_invite BOOLEAN DEFAULT TRUE,
+    google_review_min_stars INT DEFAULT 4,
+    google_maps_url TEXT,
+    headline TEXT,
+    about_text TEXT,
+    minisite_gallery JSONB DEFAULT '[]'::jsonb,
+    meta_title TEXT,
+    meta_description TEXT,
+    meta_image_url TEXT,
+    minisite_enabled BOOLEAN DEFAULT TRUE,
+
+    -- Faturamento e Inadimplência SaaS
+    grace_period_days INT DEFAULT 5,
+    overdue_since TIMESTAMPTZ,
+    billing_locked_at TIMESTAMPTZ,
+    suspension_reason TEXT,
     
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Garantir colunas se a tabela já existir (idempotência para banco em produção)
+ALTER TABLE public.cap_tenants 
+    ADD COLUMN IF NOT EXISTS theme_id VARCHAR(50) DEFAULT 'rose',
+    ADD COLUMN IF NOT EXISTS brand_hex VARCHAR(7) DEFAULT '#8E3B4E',
+    ADD COLUMN IF NOT EXISTS min_cancellation_hours INT DEFAULT 2,
+    ADD COLUMN IF NOT EXISTS no_show_penalty_action VARCHAR(30) DEFAULT 'warn',
+    ADD COLUMN IF NOT EXISTS no_show_tolerance_count INT DEFAULT 2,
+    ADD COLUMN IF NOT EXISTS is_founder BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS frozen_price NUMERIC(10,2),
+    ADD COLUMN IF NOT EXISTS price_frozen_until TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS founder_badge_label VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS onboarding_dismissed BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS qr_code_generated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS custom_domain VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS custom_domain_verified BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS extra_whatsapp_messages INT DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS nfse_enabled BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS google_review_url TEXT,
+    ADD COLUMN IF NOT EXISTS google_review_auto_invite BOOLEAN DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS google_review_min_stars INT DEFAULT 4,
+    ADD COLUMN IF NOT EXISTS google_maps_url TEXT,
+    ADD COLUMN IF NOT EXISTS headline TEXT,
+    ADD COLUMN IF NOT EXISTS about_text TEXT,
+    ADD COLUMN IF NOT EXISTS minisite_gallery JSONB DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS meta_title TEXT,
+    ADD COLUMN IF NOT EXISTS meta_description TEXT,
+    ADD COLUMN IF NOT EXISTS meta_image_url TEXT,
+    ADD COLUMN IF NOT EXISTS minisite_enabled BOOLEAN DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS grace_period_days INT DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS overdue_since TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS billing_locked_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS suspension_reason TEXT;
 
 -- 2.4 Tabela de Super Admins da Plataforma (SaaS Mestre)
 CREATE TABLE public.cap_platform_admins (

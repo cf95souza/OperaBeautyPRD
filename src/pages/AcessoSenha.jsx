@@ -76,7 +76,7 @@ const AcessoSenha = () => {
           </button>
 
           <span className="font-display text-[17px] font-semibold text-brand tracking-tight">
-            {tenant?.name || 'Studio Thais'}
+            {tenant?.name || (tenant_slug ? tenant_slug.toUpperCase() : 'OperaBeauty')}
           </span>
 
           <div className="w-10" />

@@ -2422,10 +2422,22 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Substituição completa do layout legado e dos inputs de cor nativos feios por uma experiência de alto padrão alinhada ao Design System Rosé Editorial / Stitch.
     * Integração com a coleção dos **6 Temas White-Label Oficiais** (`Rosé`, `Nude`, `Lavanda`, `Sálvia`, `Preto e Dourado / Noir`, `Bordô`) com mostruário visual de paletas em círculos e mini-cards interativos.
     * Suporte a **Tom Exclusivo (HEX)** com seletor moderno e validação de contraste WCAG 2.1 em tempo real contra fundos claros.
-    * Mini preview dinâmico ao vivo da vitrine do salão durante o preenchimento.
-    * Seletor em cards visuais dos **4 Planos SaaS Oficiais** (`Básico`, `Essencial`, `Premium`, `Signature`) sem plano Solo.
-    * Utilitário de geração de senha forte aleatória para o gestor com alternância de visibilidade (`Eye`/`EyeOff`).
-    * Backend atualizado para persistir `theme_id`, `brand_hex`, `primary_color`, `secondary_color` e `tertiary_color` diretamente na criação do salão no banco de dados.
+- **29/10/2026 - Blindagem Multi-Tenant, Resolução de Erro 500 ao Carregar Salão e Eliminação de Fallback "Studio Thais" [Concluída]:**
+  - **1. Causa Raiz Diagnosticada**:
+    * Ao rodar `init.sql`, a tabela `cap_tenants` havia sido criada com uma definição simplificada, omitindo colunas adicionadas em migrações subsequentes (`theme_id`, `brand_hex`, `is_founder`, `min_cancellation_hours`, `no_show_penalty_action`, etc.).
+    * Quando qualquer usuário ou gestor acessava `GET /api/tenants/by-slug/:slug` (ex: `atelietodabonita`), a consulta falhava no PostgreSQL com `ERROR: column t.theme_id does not exist`, retornando **HTTP 500**.
+    * Como resultado, `TenantContext` recebia erro e mantinha `tenant = null`. As telas do cliente e da equipe possuíam fallbacks legados estáticos codificados com `'Studio Thais'` e monograma 'T', causando a impressão de que o salão errado havia sido aberto.
+  - **2. Extensão do Baseline e DDL Idempotente (`init.sql` e `database.md`)**:
+    * A tabela `cap_tenants` recebeu formalmente no seu `CREATE TABLE` todas as colunas de White-Label (`theme_id`, `brand_hex`), políticas de cancelamento e no-show (`min_cancellation_hours`, `no_show_penalty_action`, `no_show_tolerance_count`), fundadores (`is_founder`, `frozen_price`, `price_frozen_until`, `founder_badge_label`), onboarding (`onboarding_dismissed`, `qr_code_generated_at`), complementos (`custom_domain`, `custom_domain_verified`, `extra_whatsapp_messages`, `nfse_enabled`), mini-site e avaliações.
+    * Adicionados blocos `ALTER TABLE public.cap_tenants ADD COLUMN IF NOT EXISTS ...`, `ALTER TABLE public.cap_clients ADD COLUMN IF NOT EXISTS ...` e `ALTER TABLE public.cap_appointments ADD COLUMN IF NOT EXISTS ...` que garantem que bases já inicializadas em produção se atualizem instantaneamente sem perda de dados.
+  - **3. Blindagem de Roteamento com `TenantGate` (`src/App.jsx`)**:
+    * Criação do componente `TenantGate` no `TenantWrapper`:
+      - Bloqueia a renderização prematura ou com dados ausentes enquanto carrega (`loading`).
+      - Emite tela amigável 404 de "Salão não encontrado: /{tenant_slug}" caso o salão não exista ou esteja indisponível, impedindo terminantemente que telas sejam renderizadas com dados fantasmas.
+      - Aplica o tema visual oficial configurado do salão via CSS Variables antes da renderização.
+  - **4. Eliminação dos Fallbacks Fixos no Frontend**:
+    * `HomeCliente.jsx`, `AcessoProfissional.jsx`, `AcessoTelefone.jsx`, `AcessoSenha.jsx`, `CadastroCliente.jsx` e `HistoricoAgendamentos.jsx` agora utilizam monogramas e nomes dinâmicos (ex: letra "A" para "Atelie Toda Bonita") derivados diretamente da identidade do salão ou do slug.
+
 
 
 

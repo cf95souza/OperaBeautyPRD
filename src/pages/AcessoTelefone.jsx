@@ -107,7 +107,7 @@ const AcessoTelefone = () => {
   };
 
   // Inicial do salão para monograma elegante quando sem logo
-  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : 'T';
+  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : (tenant_slug ? tenant_slug.charAt(0).toUpperCase() : 'O');
 
   // Configurações de redes e localização
   const hasAddress = Boolean(tenant?.address && tenant.address.trim());
@@ -140,7 +140,7 @@ const AcessoTelefone = () => {
 
         {/* 2. Nome do Salão */}
         <h2 className="font-display text-[22px] font-semibold text-brand tracking-tight mb-6">
-          {tenant?.name || 'Studio Thais'}
+          {tenant?.name || (tenant_slug ? tenant_slug.toUpperCase() : 'OperaBeauty')}
         </h2>
 
         {/* 3. Imagem de Capa (Nítida / Fallback com formas orgânicas) */}

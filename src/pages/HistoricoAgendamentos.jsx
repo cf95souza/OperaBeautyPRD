@@ -219,7 +219,7 @@ const HistoricoAgendamentos = () => {
     navigate(`/${tenant_slug}/agendar/horarios`);
   };
 
-  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : 'T';
+  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : (tenant_slug ? tenant_slug.charAt(0).toUpperCase() : 'O');
 
   return (
     <TelaCliente temNavegacaoInferior className="selection:bg-brand-tint selection:text-brand">
@@ -244,7 +244,7 @@ const HistoricoAgendamentos = () => {
               )}
             </div>
             <span className="font-serif text-[18px] font-semibold text-brand tracking-tight truncate max-w-[200px]">
-              {tenant?.name || 'Studio Thais'}
+              {tenant?.name || (tenant_slug ? tenant_slug.toUpperCase() : 'OperaBeauty')}
             </span>
           </div>
 

@@ -301,7 +301,7 @@ const HomeCliente = () => {
     : '';
 
   // Monograma e primeiro nome
-  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : 'T';
+  const initialLetter = tenant?.name ? tenant.name.trim().charAt(0).toUpperCase() : (tenant_slug ? tenant_slug.charAt(0).toUpperCase() : 'O');
   const primeiroNome = session?.name ? session.name.trim().split(' ')[0] : '';
 
   return (
@@ -326,8 +326,8 @@ const HomeCliente = () => {
               </span>
             )}
           </div>
-          <span className="font-display text-[18px] font-semibold text-brand tracking-tight">
-            {tenant?.name || 'Studio Thais'}
+          <span className="font-display text-[18px] font-semibold text-brand tracking-tight truncate max-w-[220px]">
+            {tenant?.name || 'OperaBeauty'}
           </span>
         </div>
 

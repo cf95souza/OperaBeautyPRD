@@ -141,7 +141,9 @@ CREATE TABLE public.cap_tenants (
     plan_price NUMERIC DEFAULT 59.99,
     plan_id UUID REFERENCES public.cap_plans(id) ON DELETE SET NULL, -- Plano de assinatura ativo
     
-    -- Customização Visual (Branding)
+    -- Customização Visual (Branding & White Label)
+    theme_id VARCHAR(50) DEFAULT 'rose',
+    brand_hex VARCHAR(7) DEFAULT '#8E3B4E',
     logo_url TEXT,
     primary_color TEXT DEFAULT '#7c5357',
     secondary_color TEXT DEFAULT '#eeb9bd',
@@ -165,9 +167,82 @@ CREATE TABLE public.cap_tenants (
     -- Cashback
     cashback_percentage DECIMAL(5, 2) DEFAULT 0.00,
     cashback_expiration_days INTEGER DEFAULT 30,
+
+    -- Política de Cancelamento e Faltas (D8 P1)
+    min_cancellation_hours INT DEFAULT 2,
+    no_show_penalty_action VARCHAR(30) DEFAULT 'warn',
+    no_show_tolerance_count INT DEFAULT 2,
+
+    -- Planos Fundadores e Preço Congelado
+    is_founder BOOLEAN NOT NULL DEFAULT FALSE,
+    frozen_price NUMERIC(10,2),
+    price_frozen_until TIMESTAMPTZ,
+    founder_badge_label VARCHAR(50),
+
+    -- Onboarding Guiado e Display de Mesa QR Code (D11 P1)
+    onboarding_dismissed BOOLEAN DEFAULT FALSE,
+    qr_code_generated_at TIMESTAMPTZ,
+
+    -- Domínio Customizado e Módulos SaaS (E3)
+    custom_domain VARCHAR(255),
+    custom_domain_verified BOOLEAN DEFAULT FALSE,
+    extra_whatsapp_messages INT DEFAULT 0,
+    nfse_enabled BOOLEAN DEFAULT FALSE,
+
+    -- Avaliações e Mini-Site (D16 / D20)
+    google_review_url TEXT,
+    google_review_auto_invite BOOLEAN DEFAULT TRUE,
+    google_review_min_stars INT DEFAULT 4,
+    google_maps_url TEXT,
+    headline TEXT,
+    about_text TEXT,
+    minisite_gallery JSONB DEFAULT '[]'::jsonb,
+    meta_title TEXT,
+    meta_description TEXT,
+    meta_image_url TEXT,
+    minisite_enabled BOOLEAN DEFAULT TRUE,
+
+    -- Faturamento e Inadimplência SaaS
+    grace_period_days INT DEFAULT 5,
+    overdue_since TIMESTAMPTZ,
+    billing_locked_at TIMESTAMPTZ,
+    suspension_reason TEXT,
     
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Garantir colunas se a tabela já existir (idempotência para banco em produção)
+ALTER TABLE public.cap_tenants 
+    ADD COLUMN IF NOT EXISTS theme_id VARCHAR(50) DEFAULT 'rose',
+    ADD COLUMN IF NOT EXISTS brand_hex VARCHAR(7) DEFAULT '#8E3B4E',
+    ADD COLUMN IF NOT EXISTS min_cancellation_hours INT DEFAULT 2,
+    ADD COLUMN IF NOT EXISTS no_show_penalty_action VARCHAR(30) DEFAULT 'warn',
+    ADD COLUMN IF NOT EXISTS no_show_tolerance_count INT DEFAULT 2,
+    ADD COLUMN IF NOT EXISTS is_founder BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS frozen_price NUMERIC(10,2),
+    ADD COLUMN IF NOT EXISTS price_frozen_until TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS founder_badge_label VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS onboarding_dismissed BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS qr_code_generated_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS custom_domain VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS custom_domain_verified BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS extra_whatsapp_messages INT DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS nfse_enabled BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS google_review_url TEXT,
+    ADD COLUMN IF NOT EXISTS google_review_auto_invite BOOLEAN DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS google_review_min_stars INT DEFAULT 4,
+    ADD COLUMN IF NOT EXISTS google_maps_url TEXT,
+    ADD COLUMN IF NOT EXISTS headline TEXT,
+    ADD COLUMN IF NOT EXISTS about_text TEXT,
+    ADD COLUMN IF NOT EXISTS minisite_gallery JSONB DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS meta_title TEXT,
+    ADD COLUMN IF NOT EXISTS meta_description TEXT,
+    ADD COLUMN IF NOT EXISTS meta_image_url TEXT,
+    ADD COLUMN IF NOT EXISTS minisite_enabled BOOLEAN DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS grace_period_days INT DEFAULT 5,
+    ADD COLUMN IF NOT EXISTS overdue_since TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS billing_locked_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS suspension_reason TEXT;
 
 -- 2.4 Tabela de Super Admins da Plataforma (SaaS Mestre)
 CREATE TABLE public.cap_platform_admins (
@@ -222,11 +297,21 @@ CREATE TABLE public.cap_clients (
     vip_tier TEXT DEFAULT 'Prata' CHECK (vip_tier IN ('Prata', 'Ouro', 'VIP', 'Black')),
     referral_code VARCHAR(20) UNIQUE, -- Código próprio do cliente para Indique e Ganhe
     referred_by UUID REFERENCES public.cap_clients(id) ON DELETE SET NULL, -- Quem o indicou
+    no_show_count INT DEFAULT 0, -- Contador de faltas acumuladas (D8 P1)
+    is_blocked BOOLEAN DEFAULT FALSE, -- Trava de bloqueio para agendamentos online
+    blocked_reason TEXT, -- Motivo do bloqueio do cliente
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(tenant_id, phone)
 );
 CREATE INDEX IF NOT EXISTS idx_cap_clients_referral_code ON public.cap_clients(referral_code);
 CREATE INDEX IF NOT EXISTS idx_cap_clients_referred_by ON public.cap_clients(referred_by);
+
+-- Garantir colunas em cap_clients se já existir
+ALTER TABLE public.cap_clients 
+    ADD COLUMN IF NOT EXISTS no_show_count INT DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS blocked_reason TEXT;
+
 
 -- 2.7 Serviços
 CREATE TABLE public.cap_services (
@@ -307,6 +392,9 @@ CREATE TABLE public.cap_appointments (
     checkin_status TEXT DEFAULT 'pending', -- pending, checked_in
     checkin_request TEXT, -- Ex: Café sem açúcar
     cashback_redeemed DECIMAL(10, 2) DEFAULT 0.00,
+    no_show_marked_at TIMESTAMPTZ,
+    no_show_marked_by UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
+    cancellation_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT no_overlapping_appointments EXCLUDE USING gist (
         tenant_id WITH =,
@@ -314,6 +402,13 @@ CREATE TABLE public.cap_appointments (
         tstzrange(start_time, end_time) WITH &&
     ) WHERE (status <> 'cancelled')
 );
+
+-- Garantir colunas em cap_appointments se já existir
+ALTER TABLE public.cap_appointments 
+    ADD COLUMN IF NOT EXISTS no_show_marked_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS no_show_marked_by UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+
 
 -- 2.13 Prontuários e Histórico (Timeline)
 CREATE TABLE public.cap_timeline_notes (

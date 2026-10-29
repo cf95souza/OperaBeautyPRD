@@ -45,13 +45,57 @@ import DemoBanner from './components/DemoBanner';
 
 // --- Contexto Multi-Tenant ---
 import { TenantProvider, useTenant } from './context/TenantContext';
+
+// --- Gate de Verificação do Salão ---
+const TenantGate = () => {
+  const { tenant, loading } = useTenant();
+  const { tenant_slug } = useParams();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAF8F5] text-[#2B2327]">
+        <div className="w-10 h-10 border-4 border-[#8E3B4E] border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-sm text-[#7D6B6E] font-medium tracking-wide">Carregando ambiente do salão...</p>
+      </div>
+    );
+  }
+
+  if (!tenant) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAF8F5] text-[#2B2327] px-6 text-center">
+        <div className="w-16 h-16 rounded-full bg-[#FDE8E8] text-[#B81D1D] flex items-center justify-center mb-4 shadow-xs">
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h1 className="text-xl sm:text-2xl font-bold text-[#2B2327] mb-2 font-display">Salão não encontrado</h1>
+        <p className="text-sm text-[#7D6B6E] max-w-md mb-6 leading-relaxed">
+          Não foi possível localizar o estabelecimento <strong className="text-[#8E3B4E]">/{tenant_slug}</strong> ou ele está temporariamente indisponível.
+        </p>
+        <a 
+          href="/" 
+          className="px-5 py-2.5 bg-[#8E3B4E] text-white rounded-xl text-sm font-medium shadow-xs hover:opacity-95 transition"
+        >
+          Conhecer o OperaBeauty
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <DemoBanner />
+      <Outlet />
+    </>
+  );
+};
+
 // --- Wrapper para Proteger as Rotas do Salão ---
 const TenantWrapper = () => {
   return (
     <TenantProvider>
       <BookingProvider>
-        <DemoBanner />
-        <Outlet />
+        <TenantGate />
       </BookingProvider>
     </TenantProvider>
   );
