@@ -61,14 +61,40 @@ ALTER DATABASE operabeauty SET timezone TO 'America/Sao_Paulo';
 CREATE TABLE public.cap_plans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
+    slug VARCHAR(50) UNIQUE,
+    description TEXT,
     price NUMERIC(10, 2) NOT NULL,
+    yearly_price NUMERIC(10, 2),
+    sort_order INT DEFAULT 0,
     interval TEXT DEFAULT 'month',
     max_professionals INT, -- NULL ou 0 significa ilimitado
     max_banners INT DEFAULT 1, -- Limite de banners promocionais
+    max_whatsapp_messages INT DEFAULT 0,
+    is_featured BOOLEAN DEFAULT FALSE,
+    badge_label VARCHAR(50),
     features JSONB DEFAULT '[]'::jsonb,
+    marketing_features JSONB DEFAULT '[]'::jsonb,
+    extra_professional_price NUMERIC(10, 2) DEFAULT 15.00,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 2.1.1 Tabela de Tokens de Atualização (Sessão Móvel e Web / C3)
+CREATE TABLE public.cap_refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked BOOLEAN DEFAULT FALSE,
+    replaced_by_token TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    family_id UUID NOT NULL,
+    device_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cap_refresh_tokens_device ON public.cap_refresh_tokens(device_id);
+
 
 -- 2.2 Tabela de Configurações Globais da Plataforma
 CREATE TABLE public.cap_platform_settings (
@@ -700,6 +726,104 @@ VALUES (
     'Thais Admin'
 )
 ON CONFLICT (email) DO NOTHING;
+
+-- ==========================================
+-- PLANOS DE ASSINATURA SAAS INICIAIS
+-- ==========================================
+INSERT INTO public.cap_plans (id, name, slug, description, price, yearly_price, sort_order, interval, max_professionals, max_banners, max_whatsapp_messages, is_featured, badge_label, features, marketing_features, extra_professional_price, is_active)
+VALUES 
+(
+    '82efb0c4-7b6e-4519-b758-ca834579d1c3',
+    'Básico',
+    'basico',
+    'Solução completa para o seu salão de beleza.',
+    69.90,
+    699.00,
+    1,
+    'month',
+    2,
+    1,
+    0,
+    FALSE,
+    NULL,
+    '["dashboard", "agenda", "clientes", "servicos", "push_notifications", "coupons", "minisite", "estoque", "caixa"]'::jsonb,
+    '["Profissionais ilimitados", "Agenda online com link exclusivo", "App com a sua marca e cores", "WhatsApp ilimitado", "Suporte via WhatsApp"]'::jsonb,
+    15.00,
+    TRUE
+),
+(
+    'e7575321-7884-4246-97c1-0f8247bee41d',
+    'Essencial',
+    'essencial',
+    'Para salões e estúdios em crescimento que precisam de controle operacional e financeiro.',
+    79.90,
+    799.00,
+    2,
+    'month',
+    3,
+    2,
+    0,
+    FALSE,
+    NULL,
+    '["dashboard", "agenda", "clientes", "servicos", "push_notifications", "coupons", "minisite", "estoque", "financeiro", "comissoes", "caixa"]'::jsonb,
+    '["Até 3 profissionais", "Tudo do plano Básico", "Controle de estoque de produtos & insumos", "Controle de caixa & fluxo financeiro", "Cálculo automático de comissões", "Relatórios gerenciais essenciais", "Suporte por WhatsApp em horário comercial"]'::jsonb,
+    15.00,
+    TRUE
+),
+(
+    'ef2a03e2-a6ca-41eb-b091-c2b9bd990c98',
+    'Premium',
+    'premium',
+    'O pacote completo de retenção, fidelidade e automação de agendamentos.',
+    129.90,
+    1299.00,
+    3,
+    'month',
+    6,
+    3,
+    200,
+    TRUE,
+    'Mais Escolhido',
+    '["dashboard", "agenda", "clientes", "servicos", "push_notifications", "coupons", "minisite", "estoque", "financeiro", "comissoes", "caixa", "clube", "cashback", "packages", "anamnesis", "reviews", "waitlist", "campaigns", "referrals"]'::jsonb,
+    '["Até 6 profissionais", "Tudo do plano Essencial", "Clube de fidelidade & cashback automático", "Pacotes de sessões pré-pagos", "Anamnese digital & termos com assinatura", "Avaliações & impulsionador Google Reviews", "Lista de espera inteligente", "Campanhas automáticas (aniversário & retorno)", "Indique e Ganhe (programa de embaixadoras)", "200 mensagens WhatsApp/mês incluídas", "3 banners promocionais no app", "Suporte prioritário por WhatsApp"]'::jsonb,
+    15.00,
+    TRUE
+),
+(
+    '532158cd-2624-464e-ad27-6598a1ddb4df',
+    'Signature',
+    'signature',
+    'Experiência exclusiva para grandes salões, redes e clínicas que exigem o máximo de controle.',
+    199.90,
+    1999.00,
+    4,
+    'month',
+    12,
+    5,
+    500,
+    FALSE,
+    'Alta Performance',
+    '["dashboard", "agenda", "clientes", "servicos", "push_notifications", "coupons", "minisite", "estoque", "financeiro", "comissoes", "caixa", "clube", "cashback", "packages", "anamnesis", "reviews", "waitlist", "campaigns", "referrals", "pdv", "vales", "giftcards", "whatsapp_gateway", "bi_reports", "custom_domain", "priority_support"]'::jsonb,
+    '["Até 12 profissionais (R$ 15/adicional)", "Tudo do plano Premium", "PDV unificado com conferência cega de caixa", "Vales-presente digitais (Gift Cards)", "Gateway nativo de WhatsApp conectado", "Relatórios analíticos avançados & BI", "500 mensagens WhatsApp/mês incluídas", "5 banners promocionais simultâneos", "Importação assistida de dados", "Gerente de conta dedicado"]'::jsonb,
+    15.00,
+    TRUE
+)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    slug = EXCLUDED.slug,
+    description = EXCLUDED.description,
+    price = EXCLUDED.price,
+    yearly_price = EXCLUDED.yearly_price,
+    sort_order = EXCLUDED.sort_order,
+    max_professionals = EXCLUDED.max_professionals,
+    max_banners = EXCLUDED.max_banners,
+    max_whatsapp_messages = EXCLUDED.max_whatsapp_messages,
+    is_featured = EXCLUDED.is_featured,
+    badge_label = EXCLUDED.badge_label,
+    features = EXCLUDED.features,
+    marketing_features = EXCLUDED.marketing_features,
+    extra_professional_price = EXCLUDED.extra_professional_price,
+    is_active = EXCLUDED.is_active;
 
 -- ==========================================
 -- ÍNDICES DE PERFORMANCE

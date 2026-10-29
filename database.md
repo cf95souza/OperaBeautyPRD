@@ -50,14 +50,39 @@ CREATE EXTENSION IF NOT EXISTS btree_gist;
 CREATE TABLE public.cap_plans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
+    slug VARCHAR(50) UNIQUE,
+    description TEXT,
     price NUMERIC(10, 2) NOT NULL,
+    yearly_price NUMERIC(10, 2),
+    sort_order INT DEFAULT 0,
     interval TEXT DEFAULT 'month',
     max_professionals INT, -- NULL ou 0 significa ilimitado
     max_banners INT DEFAULT 1, -- Limite de banners promocionais
+    max_whatsapp_messages INT DEFAULT 0,
+    is_featured BOOLEAN DEFAULT FALSE,
+    badge_label VARCHAR(50),
     features JSONB DEFAULT '[]'::jsonb,
+    marketing_features JSONB DEFAULT '[]'::jsonb,
+    extra_professional_price NUMERIC(10, 2) DEFAULT 15.00,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 2.1.1 Tabela de Tokens de Sessão e Atualização (C3)
+CREATE TABLE public.cap_refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked BOOLEAN DEFAULT FALSE,
+    replaced_by_token TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    family_id UUID NOT NULL,
+    device_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cap_refresh_tokens_device ON public.cap_refresh_tokens(device_id);
 
 -- 2.2 Tabela de Configurações Globais da Plataforma
 CREATE TABLE public.cap_platform_settings (

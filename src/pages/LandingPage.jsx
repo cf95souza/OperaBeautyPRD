@@ -94,21 +94,21 @@ export default function LandingPage() {
   // Planos Dinâmicos da API e Ciclo de Cobrança
   const [plans, setPlans] = useState([
     {
-      id: 'solo',
-      slug: 'solo',
-      name: 'Solo',
-      description: 'Ideal para autônomos, manicures e estúdios individuais.',
-      price: 49.90,
-      max_staff: 1,
-      max_whatsapp_messages: 100,
+      id: 'basico',
+      slug: 'basico',
+      name: 'Básico',
+      description: 'Solução completa para o seu salão de beleza.',
+      price: 69.90,
+      max_staff: 2,
+      max_whatsapp_messages: 0,
       is_featured: false,
       badge_label: null,
       marketing_features: [
-        '1 profissional incluso',
+        'Profissionais ilimitados',
         'Agenda online com link exclusivo',
         'App com a sua marca e cores',
-        'Controle de clientes e histórico',
-        '100 lembretes WhatsApp/mês'
+        'WhatsApp ilimitado',
+        'Suporte via WhatsApp'
       ]
     },
     {
