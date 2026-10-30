@@ -2469,3 +2469,24 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * **Testes e Build**:
       - Suítes de testes `onboardingD11.test.js`, `cobrancaAutomaticaSaaSD18.test.js`, `indiqueGanheD19.test.js` e `operacoesAtomicasC10.test.js` aprovadas com 100% de sucesso.
       - Build Vite de produção gerado com sucesso em 2.74s sem erros.
+
+- **29/10/2026 - Paridade Integral de Schema para Operação Real do Cliente (PDV, Waitlist, Anamnese, Campanhas, Avaliações e Minisite) - G13 [Concluída]:**
+  - **1. Incidente e Causa Raiz Diagnosticada (`erro.md`)**:
+    * Durante a reconfiguração do ambiente de um cliente real em produção (`https://operabeauty.tech`), as seguintes telas apresentaram falha HTTP 500:
+      - **Clientes / Lista de Espera**: `GET /api/waitlist` -> `relation cap_waitlist does not exist`.
+      - **PDV / Caixa Atual**: `GET /api/cash-register/current` -> `relation cap_cash_registers does not exist`.
+      - **Ficha de Anamnese**: `GET /api/anamnesis/template/:tenantId` -> `column terms_text does not exist` em `cap_anamnesis_templates`.
+      - **Campanhas de Retenção**: `GET /api/campaigns` -> `relation cap_marketing_campaigns does not exist`.
+      - **Avaliações / Reviews**: `GET /api/reviews?limit=100` -> `column r.is_public does not exist` em `cap_reviews`.
+      - **Mini Site do Salão**: `GET /api/minisite/:slug` -> Falhava na consulta relacional de avaliações públicas (`r.is_public = TRUE`).
+  - **2. Arquitetura de Planos e Proteção em 2 Camadas**:
+    * Validado e documentado o comportamento da plataforma quando clientes contratam planos inferiores ao Signature:
+      - O bloqueio de funcionalidades opera em 2 camadas de segurança estritas:
+        - **Frontend**: Componente `FeatureProtectedRoute` intercepta a navegação e redireciona de maneira graciosa para a página `/admin/upgrade-required`, exibindo botão de upgrade e link direto para suporte/WhatsApp sem crash ou tela vermelha.
+        - **Backend**: Middleware `requireFeature` valida o token JWT do salão contra os limites e flags do plano contratado, emitindo `HTTP 403 Forbidden` (`Este recurso não está disponível no plano atual`).
+      - Nenhum bloqueio de plano resulta em erro 500. Os erros reportados eram exclusivamente descompassos estruturais no banco de dados.
+  - **3. Engenharia de Reparo Idempotente e Não-Destrutivo**:
+    * Criação e consolidação de `migrations/phase46_production_schema_repair.sql` abrangendo todas as tabelas, colunas, índices, RLS e grants necessários.
+    * Scripts estruturados exclusivamente com cláusulas `CREATE TABLE IF NOT EXISTS` e `ALTER TABLE ADD COLUMN IF NOT EXISTS`, garantindo preservação integral de dados existentes de clientes reais.
+    * Atualização sincronizada de `database.md`, `init.sql`, `fase.md` e `documentacao.md`.
+

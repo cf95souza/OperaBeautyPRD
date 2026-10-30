@@ -2594,6 +2594,49 @@ ALTER TABLE public.cap_clients
     ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES public.cap_clients(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS no_show_count INT DEFAULT 0,
     ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS blocked_reason TEXT;
+    ADD COLUMN IF NOT EXISTS blocked_reason TEXT,
+    ADD COLUMN IF NOT EXISTS marketing_opt_out BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS opt_out_at TIMESTAMPTZ;
+
+-- 6. cap_anamnesis_templates & cap_client_anamnesis
+ALTER TABLE public.cap_anamnesis_templates
+    ADD COLUMN IF NOT EXISTS terms_text TEXT NOT NULL DEFAULT 'Declaro para os devidos fins que as informações acima prestadas são verdadeiras e completas. Autorizo a realização dos procedimentos estéticos e capilares indicados e estou ciente das orientações e cuidados pós-atendimento.',
+    ADD COLUMN IF NOT EXISTS terms_version INTEGER NOT NULL DEFAULT 1,
+    ADD COLUMN IF NOT EXISTS require_terms BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS require_signature BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE public.cap_client_anamnesis
+    ADD COLUMN IF NOT EXISTS answers_encrypted TEXT,
+    ADD COLUMN IF NOT EXISTS terms_accepted BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS terms_version INTEGER DEFAULT 1,
+    ADD COLUMN IF NOT EXISTS consented_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS consent_ip_address VARCHAR(45),
+    ADD COLUMN IF NOT EXISTS consent_user_agent TEXT,
+    ADD COLUMN IF NOT EXISTS consent_hash VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS signature_data TEXT;
+
+-- 7. cap_reviews
+ALTER TABLE public.cap_reviews
+    ADD COLUMN IF NOT EXISTS service_id UUID REFERENCES public.cap_services(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS staff_reply TEXT,
+    ADD COLUMN IF NOT EXISTS replied_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS replied_by UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL;
+
+-- 8. Tabelas Consolidadas da Plataforma (Idempotência Total)
+-- public.cap_waitlist
+-- public.cap_cash_registers
+-- public.cap_cash_movements
+-- public.cap_orders
+-- public.cap_order_items
+-- public.cap_order_payments
+-- public.cap_client_evolutions
+-- public.cap_marketing_campaigns
+-- public.cap_campaign_logs
+-- public.cap_lookbook
+-- public.cap_whatsapp_instances
+-- public.cap_whatsapp_auth_keys
+-- public.cap_whatsapp_messages
+-- public.cap_privacy_requests
 ```
 

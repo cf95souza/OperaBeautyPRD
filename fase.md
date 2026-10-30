@@ -1248,3 +1248,21 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     * **Testes e Build**:
       - Suítes de testes `onboardingD11.test.js`, `cobrancaAutomaticaSaaSD18.test.js`, `indiqueGanheD19.test.js` e `operacoesAtomicasC10.test.js` aprovadas com 100% de sucesso.
       - Build Vite de produção gerado com sucesso em 2.74s sem erros.
+- [x] **G13 (P1) — Paridade Integral do Banco de Dados para Operação Real do Cliente (PDV, Waitlist, Anamnese, Campanhas, Avaliações e Minisite)**:
+  - **1. Diagnóstico dos Erros 500 Reportados em Produção (`erro.md`)**:
+    * Análise dos logs das telas da aplicação do cliente revelou ausência de tabelas e colunas que não haviam sido sincronizadas na VPS:
+      - `GET /api/waitlist`: falha por ausência da tabela `cap_waitlist` (Lista de Espera Inteligente).
+      - `GET /api/cash-register/current`: falha por ausência das tabelas `cap_cash_registers`, `cap_cash_movements`, `cap_orders`, `cap_order_items`, `cap_order_payments` (PDV e Caixa).
+      - `GET /api/anamnesis/template/:tenantId`: falha por ausência das colunas `terms_text`, `terms_version`, `require_terms`, `require_signature` em `cap_anamnesis_templates` e tabelas de prontuário e evolução clínica.
+      - `GET /api/campaigns`: falha por ausência das tabelas `cap_marketing_campaigns`, `cap_campaign_logs` e coluna `marketing_opt_out` em `cap_clients`.
+      - `GET /api/reviews?limit=100`: falha por ausência das colunas `service_id`, `is_public`, `staff_reply`, `replied_at`, `replied_by` em `cap_reviews`.
+      - `GET /api/minisite/:slug`: falha por tentar consultar `WHERE r.is_public = TRUE` em `cap_reviews`, derrubando o mini-site inteiro.
+  - **2. Arquitetura de Planos e Proteção em 2 Camadas**:
+    * Esclarecido e documentado o funcionamento do controle de funcionalidades por plano (ex: Plano Signature com acesso irrestrito):
+      - Frontend: `FeatureProtectedRoute` intercepta a navegação e redireciona de forma amigável para a página de upgrade (`/admin/upgrade-required`), nunca gerando erro 500 de quebra de tela.
+      - Backend: `requireFeature` valida no servidor as permissões do plano ativo do salão e retorna HTTP 403 Forbidden seguro (`Este recurso não está disponível no plano atual`).
+      - A causa raiz dos erros 500 atuais era exclusivamente ausência de tabelas/colunas no PostgreSQL da VPS, e não bloqueio de plano.
+  - **3. Consolidação e Idempotência Total (`phase46_production_schema_repair.sql`, `init.sql` e `database.md`)**:
+    * Estruturação de script mestre 100% não destrutivo com `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, índices com `IF NOT EXISTS`, políticas de RLS completas e `GRANT` de permissões para a role `opera_app`.
+    * Cobertura de: `cap_waitlist`, `cap_cash_registers`, `cap_cash_movements`, `cap_orders`, `cap_order_items`, `cap_order_payments`, `cap_anamnesis_templates`, `cap_client_anamnesis`, `cap_client_evolutions`, `cap_marketing_campaigns`, `cap_campaign_logs`, `cap_reviews`, `cap_lookbook`, `cap_whatsapp_instances`, `cap_whatsapp_auth_keys`, `cap_whatsapp_messages`, `cap_privacy_requests`.
+    * Validação local em container Docker `operabeauty-db` com código de retorno 0.
