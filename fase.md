@@ -1266,3 +1266,9 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     * Estruturação de script mestre 100% não destrutivo com `CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, índices com `IF NOT EXISTS`, políticas de RLS completas e `GRANT` de permissões para a role `opera_app`.
     * Cobertura de: `cap_waitlist`, `cap_cash_registers`, `cap_cash_movements`, `cap_orders`, `cap_order_items`, `cap_order_payments`, `cap_anamnesis_templates`, `cap_client_anamnesis`, `cap_client_evolutions`, `cap_marketing_campaigns`, `cap_campaign_logs`, `cap_reviews`, `cap_lookbook`, `cap_whatsapp_instances`, `cap_whatsapp_auth_keys`, `cap_whatsapp_messages`, `cap_privacy_requests`.
     * Validação local em container Docker `operabeauty-db` com código de retorno 0.
+  - **4. Resolução Definitiva de 500 em /api/waitlist (Agenda Profissional)**:
+    * Adicionados blocos `ALTER TABLE public.cap_waitlist ADD COLUMN IF NOT EXISTS ...` para garantir que todas as colunas sejam criadas mesmo se a tabela já existisse previamente no banco de dados.
+    * Refatorado endpoint `GET /api/waitlist` com suporte a fallback de `tenant_id` e sanitização estrita de `date` para evitar `invalid input syntax for type date`.
+    * Refatorado `src/lib/api.js` para serializar automaticamente `options.params` em query strings HTTP.
+    * Blindada chamada de waitlist em `AgendaProfissional.jsx` e `WaitlistManagerModal.jsx` utilizando `api.waitlist.list`.
+    * Build de produção e testes validados com sucesso.

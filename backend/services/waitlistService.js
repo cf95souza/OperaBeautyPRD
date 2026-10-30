@@ -50,33 +50,39 @@ export const addToWaitlist = async ({
  * Lista entradas da fila de espera do inquilino (visão do gestor)
  */
 export const listWaitlist = async (tenantId, status = 'pending', date = null) => {
+  if (!tenantId) {
+    return [];
+  }
+
   let query = `
     SELECT w.id, w.desired_date, w.status, w.preferred_time_range, w.offered_at, w.expires_at, w.created_at,
            c.id as client_id, c.name as client_name, c.phone as client_phone,
            s.id as service_id, s.name as service_name, s.price as service_price,
            p.id as professional_id, p.name as professional_name
     FROM public.cap_waitlist w
-    JOIN public.cap_clients c ON w.client_id = c.id
+    LEFT JOIN public.cap_clients c ON w.client_id = c.id
     LEFT JOIN public.cap_services s ON w.service_id = s.id
     LEFT JOIN public.cap_staff p ON w.professional_id = p.id
     WHERE w.tenant_id = $1
   `;
   const params = [tenantId];
 
-  if (status && status !== 'all') {
+  if (status && status !== 'all' && status !== 'undefined' && status !== 'null') {
     params.push(status);
     query += ` AND w.status = $${params.length}`;
   }
 
-  if (date) {
-    params.push(date);
+  // Prevenir erro de sintaxe SQL se date for "undefined", "null" ou formato inválido
+  const isValidDate = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date.trim());
+  if (isValidDate) {
+    params.push(date.trim());
     query += ` AND w.desired_date = $${params.length}`;
   }
 
   query += ` ORDER BY w.created_at ASC`;
 
   const result = await tenantQuery(tenantId, query, params);
-  return result.rows;
+  return result.rows || [];
 };
 
 /**

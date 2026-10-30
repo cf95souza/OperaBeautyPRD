@@ -144,12 +144,16 @@ router.delete('/:id', authMiddleware, async (req, res) => {
  * GET /api/waitlist - Listagem da fila (Gestor/Equipe)
  */
 router.get('/', authMiddleware, async (req, res) => {
-  const tenantId = req.user.tenant_id;
   const userRole = req.user.role;
+  const tenantId = req.user.tenant_id || req.query.tenant_id || req.headers['x-tenant-id'];
   const { status, date } = req.query;
 
   if (userRole === 'client') {
     return res.status(403).json({ error: 'Acesso negado.' });
+  }
+
+  if (!tenantId) {
+    return res.json([]);
   }
 
   try {
@@ -157,10 +161,13 @@ router.get('/', authMiddleware, async (req, res) => {
     await expireOffersAndAdvance(tenantId).catch(() => {});
 
     const list = await listWaitlist(tenantId, status, date);
-    return res.json(list);
+    return res.json(list || []);
   } catch (error) {
     req.log.error(error, 'Erro ao listar fila de espera');
-    return res.status(500).json({ error: 'Erro interno ao consultar lista de espera.' });
+    return res.status(500).json({ 
+      error: 'Erro interno ao consultar lista de espera.',
+      detail: error.message 
+    });
   }
 });
 

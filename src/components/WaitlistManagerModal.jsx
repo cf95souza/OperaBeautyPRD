@@ -12,8 +12,8 @@ const WaitlistManagerModal = ({ onClose, selectedDate }) => {
   const fetchWaitlist = async () => {
     setLoading(true);
     try {
-      const dateStr = selectedDate.toISOString().split('T')[0];
-      const data = await api.request('/waitlist', { params: { date: dateStr } });
+      const dateStr = selectedDate ? selectedDate.toISOString().split('T')[0] : null;
+      const data = await api.waitlist.list({ date: dateStr }).catch(() => []);
       setWaitlist(data || []);
     } catch (err) {
       console.error('Erro ao buscar fila de espera:', err);

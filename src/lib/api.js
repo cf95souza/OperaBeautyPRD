@@ -48,7 +48,21 @@ async function request(path, options = {}) {
     credentials: 'include',
   };
 
-  let response = await fetch(`${API_BASE}${path}`, config);
+  let url = `${API_BASE}${path}`;
+  if (options.params && typeof options.params === 'object') {
+    const searchParams = new URLSearchParams();
+    Object.entries(options.params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        searchParams.append(key, value);
+      }
+    });
+    const queryString = searchParams.toString();
+    if (queryString) {
+      url += (url.includes('?') ? '&' : '?') + queryString;
+    }
+  }
+
+  let response = await fetch(url, config);
   
   // Interceptar 401 para tentar o refresh
   const isAuthRoute = path.startsWith('/auth/login') || path === '/auth/refresh-token' || path === '/auth/logout';

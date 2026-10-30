@@ -2047,6 +2047,19 @@ CREATE TABLE IF NOT EXISTS public.cap_waitlist (
     appointment_id UUID REFERENCES public.cap_appointments(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.cap_waitlist
+    ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
+    ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES public.cap_clients(id) ON DELETE CASCADE,
+    ADD COLUMN IF NOT EXISTS service_id UUID REFERENCES public.cap_services(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS professional_id UUID REFERENCES public.cap_staff(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS desired_date DATE,
+    ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS preferred_time_range TEXT DEFAULT 'any',
+    ADD COLUMN IF NOT EXISTS offered_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS appointment_id UUID REFERENCES public.cap_appointments(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 CREATE INDEX IF NOT EXISTS idx_cap_waitlist_pending_order ON public.cap_waitlist(tenant_id, desired_date, status, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_cap_waitlist_expired_offers ON public.cap_waitlist(status, expires_at) WHERE status = 'offered';
 

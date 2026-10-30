@@ -138,9 +138,13 @@ const AgendaProfissional = () => {
       setAppointments(data || []);
 
       if (isManager && tenant?.features?.waitlist) {
-        const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        const waitData = await api.request('/waitlist', { params: { date: dateStr } }).catch(() => []);
-        setWaitlistCount(Array.isArray(waitData) ? waitData.length : 0);
+        try {
+          const dateStr = format(selectedDate, 'yyyy-MM-dd');
+          const waitData = await api.waitlist.list({ date: dateStr }).catch(() => []);
+          setWaitlistCount(Array.isArray(waitData) ? waitData.length : 0);
+        } catch {
+          setWaitlistCount(0);
+        }
       }
     } catch (err) {
       console.error('Erro ao carregar agenda:', err);

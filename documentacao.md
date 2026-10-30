@@ -2489,4 +2489,10 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Criação e consolidação de `migrations/phase46_production_schema_repair.sql` abrangendo todas as tabelas, colunas, índices, RLS e grants necessários.
     * Scripts estruturados exclusivamente com cláusulas `CREATE TABLE IF NOT EXISTS` e `ALTER TABLE ADD COLUMN IF NOT EXISTS`, garantindo preservação integral de dados existentes de clientes reais.
     * Atualização sincronizada de `database.md`, `init.sql`, `fase.md` e `documentacao.md`.
+  - **4. Resolução Definitiva de 500 em /api/waitlist (Agenda Profissional)**:
+    * Adição de `ALTER TABLE public.cap_waitlist ADD COLUMN IF NOT EXISTS ...` no script de reparo para assegurar todas as colunas mesmo quando a tabela já existia.
+    * Refatoração do endpoint `GET /api/waitlist` com suporte a fallback de tenant (`req.user.tenant_id || req.query.tenant_id || req.headers['x-tenant-id']`) e retorno gracioso caso tenant não seja informado.
+    * Sanitização estrita de datas no serviço (`isValidDate = /^\d{4}-\d{2}-\d{2}$/`) impedindo falhas SQL de parsing como `"undefined"`.
+    * Serialização automática de `options.params` em `src/lib/api.js` e migração das chamadas em `AgendaProfissional.jsx` e `WaitlistManagerModal.jsx` para o cliente oficial `api.waitlist.list`.
+
 
