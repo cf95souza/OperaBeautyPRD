@@ -1319,3 +1319,14 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **3. Validação**:
     * Testes Jest de onboarding aprovados com sucesso.
     * Build de produção Vite concluído em 2.60s.
+- [x] **G17 (P1) — Resolução da Impressão em Branco e Exportação da Arte Completa do Display de Balcão (QR Code)**:
+  - **1. Diagnóstico dos Problemas Reportados em Produção**:
+    * **Folhas em Branco na Impressão**: O container modal possuía a classe `.no-print` (`display: none !important`), que desativava o nó pai do `#printable-display-area`. Pela especificação do CSS, elementos descendentes de nós com `display: none` jamais são renderizados, resultando em 3 folhas em branco no diálogo nativo de impressão.
+    * **Download Apenas do QR Code**: O botão "Baixar Imagem" executava download direto de `qrDataUrl`, baixando exclusivamente a matriz pura do código QR sem a arte do display de balcão (nome do salão, logo, chamada de agendamento e passos).
+  - **2. Arquitetura e Engenharia de Resolução**:
+    * **Impressão Isolada via Iframe Dedicado**: Implementada renderização com criação de documento limpo em `iframe` isolado com estilos de página A4 `@page { size: A4 portrait; margin: 10mm; }` e `-webkit-print-color-adjust: exact`. Isso garante 1 única folha de papel com a arte do display centralizada e com cores perfeitas, sem conflitos com estilos da SPA.
+    * **Motor de Exportação Gráfica via Canvas 2D**: Criada a função `drawDisplayToCanvas()` que desenha a placa de recepção completa em alta definição (1200 x 1750 px, proporção 2:3 pronta para impressão/gráfica), incluindo moldura arredondada, gradiente da marca, logotipo com fallback para monograma de texto, tipografia editorial, código QR centralizado, os 3 passos ilustrados e badge com o link do salão.
+    * **Ações Duplas no Modal**: Mantido o botão primário "Baixar Imagem do Display" (PNG completo de alta resolução) e adicionado botão secundário "Baixar apenas o QR Code avulso (.png)" para flexibilidade do salão.
+  - **3. Validação**:
+    * Build Vite de produção executado com êxito em 3.27s.
+    * Testes Jest de onboarding e DDL validados com 100% de sucesso.

@@ -2548,4 +2548,18 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Testes Jest validados com sucesso.
     * Compilação de produção Vite gerada sem erros.
 
+- **30/10/2026 - Resolução da Impressão em Branco e Exportação da Arte do Display de Balcão - G17 [Concluída]:**
+  - **1. Incidente Reportado em Produção (`https://operabeauty.tech`)**:
+    * Ao abrir o modal "Display de Balcão & QR Code" no Dashboard do Gestor e acionar a impressão ("Imprimir Display"), a tela de pré-visualização do navegador abria 3 páginas completamente em branco.
+    * Ao clicar em "Baixar Imagem", o sistema realizava o download unicamente da imagem matricial do código QR, sem a arte da placa física de recepção (com nome do salão, logotipo, tema de cores, chamada de agendamento e instruções).
+  - **2. Análise da Causa Raiz Técnica**:
+    * O elemento raiz do modal possuía a classe `.no-print`. Na folha de estilos de `@media print`, `.no-print` definia `display: none !important`. Na especificação CSS, nenhum elemento filho (mesmo marcado com `visibility: visible`) pode ser renderizado se seu ascendente possuir `display: none`.
+    * A função `handleBaixarImagem` estava vinculada diretamente a `qrDataUrl` (Data URL do QR Code gerado pela lib `qrcode`), em vez de capturar a placa completa.
+  - **3. Solução de Engenharia em Duas Frentes**:
+    * **Impressão Perfeita via Iframe Isolado**: Ao clicar em "Imprimir Display", a aplicação cria um iframe oculto temporário contendo um documento HTML puro e estilizado com `@page { size: A4 portrait; margin: 10mm; }` e `-webkit-print-color-adjust: exact`. Isso isola 100% o Display de Balcão de qualquer classe da SPA, garantindo exatamente 1 folha A4 com o card centralizado, bordas nítidas e cores preservadas.
+    * **Gerador de Imagem de Alta Resolução via Canvas 2D**: Criada a rotina assíncrona `drawDisplayToCanvas()` que desenha a placa de recepção completa em 1200 x 1750 px (300 DPI ready, proporção 2:3 ideal para moldura A5/A4 ou foto 10x15/15x21), com tratamento de CORS e fallback suave de logotipo para monograma, gerando um PNG profissional para impressão ou divulgação digital (`display-balcao-{slug}.png`).
+    * **Flexibilidade**: Mantido botão primário "Baixar Imagem do Display" e disponibilizado link secundário para "Baixar apenas o QR Code avulso (.png)".
+  - **4. Testes e Build**:
+    * Build de produção Vite concluído com êxito em 3.27s.
+
 
