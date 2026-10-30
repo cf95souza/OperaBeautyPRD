@@ -2537,4 +2537,15 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Suítes de testes automatizados executadas com sucesso (53/53 testes passando): `onboardingD11.test.js`, `importacaoPlanilhaD10.test.js` e `pacotesSessoesD13.test.js`.
     * Compilação de produção Vite (`npm run build`) concluída com êxito.
 
+- **30/10/2026 - Correção da Rota do Card de Identidade Visual no Guia de Ativação - G16 [Concluída]:**
+  - **1. Descrição do Problema**:
+    * No Card de Onboarding do Dashboard do Gestor (`CardOnboarding.jsx`), o Passo 4 ("Personalizar Identidade Visual (Logo & Tema)") possuía URL de destino apontando para `/:slug/staff/admin/configuracoes?tab=branding`.
+    * A rota correta e oficial configurada no sistema para gestão de identidade visual, temas white-label e logomarca é `/:slug/staff/admin/branding` (`BrandingCustomizacao.jsx`).
+  - **2. Resolução Aplicada**:
+    * No backend (`onboardingService.js`), atualizado o `actionUrl` do checklist de onboarding para emitir `/${tenant.slug}/staff/admin/branding`.
+    * No frontend (`CardOnboarding.jsx`), adicionada proteção no manipulador de clique `handleAction` para garantir que qualquer clique no passo `branding` (ou qualquer URL legada com `tab=branding`) seja redirecionado imediatamente para `/${slug}/staff/admin/branding`.
+  - **3. Testes e Compilação**:
+    * Testes Jest validados com sucesso.
+    * Compilação de produção Vite gerada sem erros.
+
 

@@ -428,7 +428,7 @@ export const getOnboardingStatus = async (tenantId) => {
       completed: isBrandingDone,
       actionType: 'navigate',
       actionLabel: isBrandingDone ? 'Editar Visual' : 'Configurar Logo & Cores',
-      actionUrl: `/${tenant.slug}/staff/admin/configuracoes?tab=branding`
+      actionUrl: `/${tenant.slug}/staff/admin/branding`
     },
     {
       id: 'qr_code',

@@ -1310,3 +1310,12 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **3. Validação de Testes e Build**:
     * Suítes de testes executadas com 100% de aprovação (53/53 testes): `onboardingD11.test.js`, `importacaoPlanilhaD10.test.js` e `pacotesSessoesD13.test.js`.
     * Build Vite de produção validado com sucesso.
+- [x] **G16 (P1) — Correção de Redirecionamento do Card de Identidade Visual no Guia de Ativação**:
+  - **1. Diagnóstico**:
+    * O Passo 4 do Guia de Ativação ("Personalizar Identidade Visual (Logo & Tema)") no Card de Onboarding do Dashboard estava apontando para `/:slug/staff/admin/configuracoes?tab=branding` em vez da rota canônica `/:slug/staff/admin/branding` (`BrandingCustomizacao.jsx`).
+  - **2. Correção em 2 Camadas**:
+    * **Backend (`onboardingService.js`)**: Atualizado `actionUrl` da etapa `'branding'` para `/${tenant.slug}/staff/admin/branding`.
+    * **Frontend (`CardOnboarding.jsx`)**: Adicionada interceptação resiliente no `handleAction` mapeando o passo `'branding'` ou qualquer URL contendo `tab=branding` para `/${slug}/staff/admin/branding`, protegendo sessões ativas e evitando descompassos de cache.
+  - **3. Validação**:
+    * Testes Jest de onboarding aprovados com sucesso.
+    * Build de produção Vite concluído em 2.60s.

@@ -76,6 +76,12 @@ export default function CardOnboarding({
       return;
     }
 
+    if (step.id === 'branding' || step.actionUrl?.includes('tab=branding')) {
+      const slug = tenant?.slug || (step.actionUrl ? step.actionUrl.split('/')[1] : '');
+      navigate(`/${slug}/staff/admin/branding`);
+      return;
+    }
+
     if (step.actionUrl) {
       navigate(step.actionUrl);
     }
