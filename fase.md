@@ -1372,3 +1372,13 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **3. Validação**:
     - Build Vite de produção concluído com sucesso.
     - Suíte de testes `minisiteD20.test.js` aprovada com 100% de sucesso.
+- [x] **G22 (P1) — Integração Direta da API do Mercado Pago para Mensalidades SaaS e Baixa Automática**:
+  - **1. Geração Dinâmica de Cobrança na API do Mercado Pago**:
+    - Função `generateSaaSPixPayload` atualizada para realizar chamada oficial a `POST https://api.mercadopago.com/v1/payments` usando o `Access Token` criptografado configurado no Super Admin.
+    - O QR Code gerado nas faturas agora é emitido diretamente pelo Mercado Pago / Banco Central, registrando o pagamento na conta do titular da plataforma.
+    - Faturas pendentes existentes são automaticamente sincronizadas e registradas na API do Mercado Pago ao serem visualizadas no painel do salão.
+  - **2. Validação Oficial de Status no Webhook**:
+    - No recebimento do webhook do Mercado Pago, o sistema consulta a API oficial (`GET /v1/payments/:id`) para validar o status real `approved` antes de executar `paySaaSInvoice`.
+  - **3. Validação e Compilação**:
+    - Build Vite de produção concluído com êxito em 4.12s.
+    - Suíte de testes Jest 100% aprovada.

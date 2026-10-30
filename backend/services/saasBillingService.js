@@ -1,6 +1,7 @@
 import pool from '../config/db.js';
 import redisClient from '../config/redis.js';
 import { logAudit } from './auditService.js';
+import { decrypt } from '../utils/crypto.js';
 import crypto from 'crypto';
 
 /**
@@ -8,26 +9,106 @@ import crypto from 'crypto';
  */
 
 /**
- * Gera payload estruturado de PIX Copia e Cola no padrão EMV BR Code para a fatura do SaaS
+ * Gera payload estruturado de PIX para a fatura do SaaS.
+ * Se o Mercado Pago estiver configurado no Super Admin com Access Token, cria a cobrança
+ * oficial diretamente na API do Mercado Pago (PIX dinâmico com baixa automática).
  */
-export const generateSaaSPixPayload = ({ amount, invoiceId, referenceMonth, tenantSlug }) => {
+export const generateSaaSPixPayload = async ({ amount, invoiceId, referenceMonth, tenantSlug, tenantId }) => {
   const formattedAmount = Number(amount).toFixed(2);
   const cleanId = String(invoiceId).replace(/-/g, '').slice(0, 20);
-  
-  // Payload mock/real BR Code
-  const pixKey = process.env.SAAS_PIX_KEY || 'financeiro@operabeauty.com.br';
+
+  // 1. Tentar gerar cobrança oficial via API do Mercado Pago (se configurado no Super Admin)
+  try {
+    const platformRes = await pool.query(
+      'SELECT payment_gateway, gateway_api_key, pix_key, pix_key_type, environment FROM public.cap_platform_settings LIMIT 1'
+    );
+    const settings = platformRes.rows[0];
+
+    if (settings?.payment_gateway === 'mercadopago' && settings.gateway_api_key) {
+      let token = null;
+      try {
+        token = decrypt(settings.gateway_api_key);
+      } catch (decErr) {
+        token = settings.gateway_api_key;
+      }
+
+      if (token && (token.startsWith('APP_USR-') || token.startsWith('TEST-'))) {
+        let managerEmail = `financeiro@${tenantSlug || 'salao'}.operabeauty.tech`;
+        let managerName = 'Gestor Salão';
+
+        if (tenantId) {
+          const staffRes = await pool.query(
+            "SELECT email, name FROM public.cap_staff WHERE tenant_id = $1 AND role = 'manager' AND is_active = true ORDER BY created_at ASC LIMIT 1",
+            [tenantId]
+          );
+          if (staffRes.rows.length > 0) {
+            managerEmail = staffRes.rows[0].email || managerEmail;
+            managerName = staffRes.rows[0].name || managerName;
+          }
+        }
+
+        const appUrl = process.env.APP_URL || 'https://operabeauty.tech';
+        const nameParts = (managerName || 'Gestor').trim().split(' ');
+        const firstName = nameParts[0] || 'Cliente';
+        const lastName = nameParts.slice(1).join(' ') || 'Assinante';
+
+        const mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': `inv_${String(invoiceId).slice(0, 32)}`
+          },
+          body: JSON.stringify({
+            transaction_amount: Number(formattedAmount),
+            description: `Mensalidade OperaBeauty SaaS - ${tenantSlug || 'Salão'} (${referenceMonth || 'Atual'})`,
+            payment_method_id: 'pix',
+            payer: {
+              email: managerEmail,
+              first_name: firstName,
+              last_name: lastName
+            },
+            notification_url: `${appUrl}/api/invoices/webhook/mercadopago`
+          })
+        });
+
+        if (mpRes.ok) {
+          const mpData = await mpRes.json();
+          const mpId = String(mpData.id);
+          const pixCode = mpData.point_of_interaction?.transaction_data?.qr_code || '';
+          const pixQr = mpData.point_of_interaction?.transaction_data?.qr_code_base64
+            ? `data:image/png;base64,${mpData.point_of_interaction.transaction_data.qr_code_base64}`
+            : `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(pixCode)}&margin=10`;
+
+          return {
+            pix_copy_paste: pixCode,
+            pix_qr_code: pixQr,
+            gateway_transaction_id: mpId,
+            gateway_invoice_url: mpData.point_of_interaction?.transaction_data?.ticket_url || null
+          };
+        } else {
+          const errData = await mpRes.text();
+          console.error('Mercado Pago API error:', mpRes.status, errData);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Falha ao gerar cobrança Mercado Pago para fatura SaaS:', err);
+  }
+
+  // 2. Fallback: payload estruturado com chave institucional cadastrada no Super Admin
+  const platformRes = await pool.query('SELECT pix_key FROM public.cap_platform_settings LIMIT 1');
+  const pixKey = platformRes.rows[0]?.pix_key || process.env.SAAS_PIX_KEY || 'financeiro@operabeauty.com.br';
   const merchantName = 'OPERA BEAUTY SAAS';
   const merchantCity = 'SAO PAULO';
 
-  // String EMV padronizada para PIX BR Code
   const pixCopyPaste = `00020126580014br.gov.bcb.pix0136${pixKey}0218OPERA-${cleanId}520400005303986540${formattedAmount.length}${formattedAmount}5802BR59${merchantName.length}${merchantName}60${merchantCity.length}${merchantCity}62070503***6304ABCD`;
-
-  // URL de renderização rápida de QR Code em SVG/PNG
   const pixQrCode = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(pixCopyPaste)}&margin=10`;
 
   return {
     pix_copy_paste: pixCopyPaste,
-    pix_qr_code: pixQrCode
+    pix_qr_code: pixQrCode,
+    gateway_transaction_id: `inv_tx_${crypto.randomBytes(8).toString('hex')}`
   };
 };
 
@@ -138,6 +219,32 @@ export const getTenantBillingStatus = async (tenantId) => {
     }
   }
 
+  // Se a fatura pendente ainda estiver com ID provisório local (inv_tx_), tenta registrá-la no Mercado Pago se configurado
+  if (activePendingInvoice && (!activePendingInvoice.gateway_transaction_id || activePendingInvoice.gateway_transaction_id.startsWith('inv_tx_'))) {
+    try {
+      const dynamicPix = await generateSaaSPixPayload({
+        amount: activePendingInvoice.amount,
+        invoiceId: activePendingInvoice.id,
+        referenceMonth: activePendingInvoice.reference_month,
+        tenantSlug: tenant.slug,
+        tenantId
+      });
+      if (dynamicPix && dynamicPix.gateway_transaction_id && !dynamicPix.gateway_transaction_id.startsWith('inv_tx_')) {
+        await pool.query(
+          `UPDATE public.cap_invoices
+           SET pix_copy_paste = $1, pix_qr_code = $2, gateway_transaction_id = $3
+           WHERE id = $4`,
+          [dynamicPix.pix_copy_paste, dynamicPix.pix_qr_code, dynamicPix.gateway_transaction_id, activePendingInvoice.id]
+        );
+        activePendingInvoice.pix_copy_paste = dynamicPix.pix_copy_paste;
+        activePendingInvoice.pix_qr_code = dynamicPix.pix_qr_code;
+        activePendingInvoice.gateway_transaction_id = dynamicPix.gateway_transaction_id;
+      }
+    } catch (regErr) {
+      console.error('Erro ao registrar fatura pendente no Mercado Pago:', regErr);
+    }
+  }
+
   // Avaliação de bloqueio gradual
   const isLocked = Boolean(tenant.billing_locked_at || tenant.status === 'overdue' || tenant.status === 'suspended');
   const inGracePeriod = hasOverdueInvoice && !isGracePeriodExpired;
@@ -213,14 +320,16 @@ export const createSaaSInvoice = async ({
   const slug = tenantRes.rows[0]?.slug || 'salao';
 
   const invoiceId = crypto.randomUUID();
-  const txId = `inv_tx_${crypto.randomBytes(8).toString('hex')}`;
 
-  const pixData = generateSaaSPixPayload({
+  const pixData = await generateSaaSPixPayload({
     amount,
     invoiceId,
     referenceMonth,
-    tenantSlug: slug
+    tenantSlug: slug,
+    tenantId
   });
+
+  const txId = pixData.gateway_transaction_id || `inv_tx_${crypto.randomBytes(8).toString('hex')}`;
 
   const result = await pool.query(
     `INSERT INTO public.cap_invoices (
@@ -396,7 +505,31 @@ export const processBillingWebhook = async (gateway, payload) => {
 
   if (gateway === 'mercadopago') {
     transactionId = payload?.data?.id || payload?.id;
-    status = payload?.action === 'payment.created' || payload?.action === 'payment.updated' ? 'paid' : payload?.status;
+
+    if (transactionId) {
+      try {
+        const platformRes = await pool.query('SELECT gateway_api_key FROM public.cap_platform_settings LIMIT 1');
+        const encryptedKey = platformRes.rows[0]?.gateway_api_key;
+        let token = null;
+        if (encryptedKey) {
+          try { token = decrypt(encryptedKey); } catch (_) { token = encryptedKey; }
+        }
+        if (token) {
+          const mpCheck = await fetch(`https://api.mercadopago.com/v1/payments/${transactionId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (mpCheck.ok) {
+            const mpJson = await mpCheck.json();
+            status = mpJson.status; // 'approved', 'pending', etc.
+          }
+        }
+      } catch (checkErr) {
+        console.error('Erro ao verificar status no Mercado Pago via Webhook:', checkErr);
+      }
+    }
+    if (!status) {
+      status = payload?.action === 'payment.created' || payload?.action === 'payment.updated' ? 'paid' : payload?.status;
+    }
   } else if (gateway === 'asaas') {
     transactionId = payload?.payment?.id;
     status = payload?.event === 'PAYMENT_RECEIVED' || payload?.event === 'PAYMENT_CONFIRMED' ? 'paid' : 'pending';

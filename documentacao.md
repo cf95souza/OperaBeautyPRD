@@ -2613,4 +2613,15 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Suíte de testes `minisiteD20.test.js` aprovada com 100% de sucesso.
     * Compilação de produção Vite (`npm run build`) concluída com êxito.
 
+- **30/10/2026 - Integração Oficial da API do Mercado Pago para Mensalidades SaaS e Baixa Automática - G22 [Concluída]:**
+  - **1. Geração Dinâmica de Cobrança na API Oficial do Mercado Pago**:
+    * Faturas de mensalidade geradas pelo sistema agora invocam diretamente `POST https://api.mercadopago.com/v1/payments` utilizando as credenciais criptografadas do titular da plataforma (Super Admin).
+    * O QR Code PIX e o código Copia e Cola exibidos aos salões assinantes são emitidos oficialmente pela infraestrutura bancária do Mercado Pago.
+    * Faturas pendentes abertas pelos salões são automaticamente sincronizadas e registradas na conta do Mercado Pago em tempo de consulta.
+  - **2. Consulta de Verificação Real de Status no Webhook**:
+    * Ao receber o evento de webhook, o backend consulta a API do Mercado Pago (`GET /v1/payments/:id`) para validar se o pagamento consta com status `approved`, garantindo a baixa instantânea e a liberação de acesso com segurança financeira absoluta.
+  - **3. Testes e Compilação**:
+    * Compilação de produção Vite concluída em 4.12s.
+    * Suíte de testes Jest 100% aprovada.
+
 
