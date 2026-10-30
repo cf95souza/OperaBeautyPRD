@@ -1363,3 +1363,12 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Garantida a passagem correta dos parâmetros `(gateway, payload)` para `processBillingWebhook`, com resolução de contingência pelo gateway ativo da plataforma (`cap_platform_settings`).
   - **2. Validação**:
     - Suíte de testes `minisiteD20.test.js` aprovada com 100% de sucesso (6/6 testes).
+- [x] **G21 (P1) — Blindagem de Segurança do Botão de Simulação Sandbox e Restrição de Baixa de Faturas**:
+  - **1. Diagnóstico de Risco de Negócio**:
+    - O botão de simulação de baixa (`Simular Baixa (Sandbox)`) no modal de PIX de mensalidade SaaS estava visível para qualquer gestor de salão cliente, permitindo que salões clientes dessem baixa em suas próprias faturas sem efetuar o pagamento.
+  - **2. Arquitetura de Proteção em Dupla Camada**:
+    - **Backend (`invoices.js` e `saasBillingService.js`)**: Endpoint `POST /api/invoices/:id/simulate-pay` restrito compulsoriamente apenas a `superadmin` (`requireRole(['superadmin'])`). Adicionada verificação server-side que rejeita imediatamente (HTTP 403 Forbidden) qualquer tentativa de simulação se a plataforma estiver configurada em `production`.
+    - **Frontend (`ModalPagamentoPixSaaS.jsx`)**: O botão de simulação é completamente removido da interface quando a plataforma estiver em produção, ficando disponível exclusivamente para o Super Admin ou quando em ambiente de testes/sandbox.
+  - **3. Validação**:
+    - Build Vite de produção concluído com sucesso.
+    - Suíte de testes `minisiteD20.test.js` aprovada com 100% de sucesso.

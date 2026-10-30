@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useNotification } from '../../context/NotificationProvider';
+import { useTenant } from '../../context/TenantContext';
 import { api } from '../../lib/api';
 
 /**
@@ -27,9 +28,15 @@ const ModalPagamentoPixSaaS = ({
   onPaymentSuccess 
 }) => {
   const { showSuccess, showError } = useNotification();
+  const { session } = useTenant();
   const [copied, setCopied] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [checking, setChecking] = useState(false);
+
+  const isSuperAdmin = session?.role === 'superadmin';
+  const isSandbox = Boolean(billingStatus?.is_sandbox);
+  // O botão de simulação só aparece se estiver em ambiente Sandbox ou para o SuperAdmin da plataforma
+  const canSimulate = isSandbox || isSuperAdmin;
 
   // Polling automático enquanto o modal estiver aberto para detectar baixa imediata
   useEffect(() => {
@@ -261,17 +268,19 @@ const ModalPagamentoPixSaaS = ({
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            {/* Botão de teste Sandbox / Homologação */}
-            <button
-              type="button"
-              disabled={simulating}
-              onClick={handleSimulatePayment}
-              className="w-full sm:w-auto px-4 py-2.5 rounded-full border border-stone-300 bg-white hover:bg-stone-100 text-stone-700 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
-              title="Dispara a compensação imediata para fins de homologação e demonstração"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>{simulating ? 'Compensando...' : 'Simular Baixa (Sandbox)'}</span>
-            </button>
+            {/* Botão de teste Sandbox / Homologação (Oculto em produção para clientes do salão) */}
+            {canSimulate && (
+              <button
+                type="button"
+                disabled={simulating}
+                onClick={handleSimulatePayment}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-full border border-stone-300 bg-white hover:bg-stone-100 text-stone-700 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+                title="Dispara a compensação imediata para fins de homologação e demonstração"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>{simulating ? 'Compensando...' : 'Simular Baixa (Sandbox)'}</span>
+              </button>
+            )}
 
             <button
               type="button"

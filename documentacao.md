@@ -2602,4 +2602,15 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
   - **3. Testes e Homologação**:
     * Suíte de testes `minisiteD20.test.js` 100% aprovada (6/6 testes).
 
+- **30/10/2026 - Blindagem de Segurança do Botão de Simulação Sandbox e Restrição de Baixa de Faturas - G21 [Concluída]:**
+  - **1. Correção Crítica de Regra de Negócio e Segurança**:
+    * O botão de simulação de baixa (`Simular Baixa (Sandbox)`) no modal de faturas SaaS (`ModalPagamentoPixSaaS.jsx`) estava acessível para qualquer gestor de salão comum, permitindo que clientes fechassem suas próprias faturas sem o pagamento.
+  - **2. Blindagem Arquitetural**:
+    * **Backend**: O endpoint `POST /api/invoices/:id/simulate-pay` foi restrito estritamente a `superadmin` (`requireRole(['superadmin'])`), rejeitando gestores comuns (`manager`) com HTTP 403 Forbidden.
+    * Adicionada trava de segurança no serviço `saasBillingService.js` impedindo compulsoriamente a simulação se o ambiente configurado no Super Admin for `production`.
+    * **Frontend**: O botão de simulação agora é condicionado a `canSimulate` (`is_sandbox || isSuperAdmin`), ficando 100% invisível para qualquer cliente quando a plataforma estiver operando em Produção.
+  - **3. Testes e Homologação**:
+    * Suíte de testes `minisiteD20.test.js` aprovada com 100% de sucesso.
+    * Compilação de produção Vite (`npm run build`) concluída com êxito.
+
 

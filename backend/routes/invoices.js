@@ -50,8 +50,8 @@ router.get('/status', authMiddleware, async (req, res) => {
   }
 });
 
-// Simular pagamento de fatura SaaS (Ambiente Sandbox / Demonstração)
-router.post('/:id/simulate-pay', authMiddleware, requireRole(['manager', 'superadmin']), async (req, res) => {
+// Simular pagamento de fatura SaaS (Ambiente Sandbox / Demonstração - EXCLUSIVO SUPERADMIN)
+router.post('/:id/simulate-pay', authMiddleware, requireRole(['superadmin']), async (req, res) => {
   const { id } = req.params;
 
   try {

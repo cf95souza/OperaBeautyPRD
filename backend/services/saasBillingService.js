@@ -55,6 +55,11 @@ export const getTenantBillingStatus = async (tenantId) => {
   const tenant = tenantRes.rows[0];
   const graceDays = Number(tenant.grace_period_days || 5);
 
+  // Consulta ambiente da plataforma (sandbox vs production)
+  const platformRes = await pool.query('SELECT environment FROM public.cap_platform_settings LIMIT 1');
+  const platformEnv = platformRes.rows[0]?.environment || 'sandbox';
+  const isSandbox = platformEnv === 'sandbox';
+
   // Buscar faturas do salão
   const invoicesRes = await pool.query(
     `SELECT id, tenant_id, amount, status, due_date, paid_at, payment_method,
@@ -143,6 +148,7 @@ export const getTenantBillingStatus = async (tenantId) => {
     : Number(tenant.plan_price || tenant.plan_catalog_price || 99.90);
 
   return {
+    is_sandbox: isSandbox,
     tenant: {
       id: tenant.id,
       name: tenant.name,
@@ -515,9 +521,18 @@ export const checkOverdueInvoicesAndEnforceGracePeriod = async () => {
 };
 
 /**
- * Simulador instantâneo de pagamento para Sandbox/Dev
+ * Simulador instantâneo de pagamento para Sandbox/Dev (Exclusivo SuperAdmin em modo Sandbox)
  */
 export const simulateSaaSInvoicePayment = async (invoiceId) => {
+  // Impede execução de simulação se a plataforma estiver em produção
+  const platformRes = await pool.query('SELECT environment FROM public.cap_platform_settings LIMIT 1');
+  const env = platformRes.rows[0]?.environment || 'sandbox';
+  if (env === 'production') {
+    const error = new Error('Operação de simulação bloqueada em ambiente de produção.');
+    error.statusCode = 403;
+    throw error;
+  }
+
   return await paySaaSInvoice({
     invoiceId,
     paymentMethod: 'pix',
