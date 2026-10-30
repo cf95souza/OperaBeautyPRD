@@ -1344,3 +1344,16 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **3. Validação**:
     * Suíte de testes `minisiteD20.test.js` aprovada com 100% de sucesso (6/6 testes).
     * Build de produção Vite concluído em 3.37s.
+- [x] **G19 (P1) — Redirecionamento de Agendamento do Mini-Site para Autenticação Segura (Login/Fluxo do Salão)**:
+  - **1. Diagnóstico de Experiência do Usuário (UX/Fluxo de Conversão)**:
+    - Ao clicar em "Agendar Atendimento Online" vindo do Mini-site público, se o cliente deslogado for enviado diretamente para a tela de escolha de serviços (`/agendar/servicos`), ele gasta tempo selecionando procedimentos, especialistas e horários para somente no último passo ser barrado por uma tela de login/cadastro, gerando a falsa impressão de que seu atendimento já estava finalizado.
+  - **2. Arquitetura da Solução Implementada**:
+    - **Detecção de Sessão no Mini-Site (`MiniSiteSalao.jsx`)**:
+      - Integrado o hook `useTenant` para inspecionar `session` e o token ativo no `localStorage` (`operabeauty_token`).
+      - Se o cliente **já estiver autenticado**: a função `handleGoToBooking` direciona diretamente para `/${slug}/agendar/servicos`, permitindo selecionar procedimentos com sua identidade já vinculada.
+      - Se o cliente **não estiver autenticado**: `handleGoToBooking` direciona para a tela de entrada do salão (`/${slug}/login` — `AcessoTelefone.jsx`), onde ele insere seu telefone e senha (ou se cadastra se for nova cliente) seguindo o fluxo natural sem frustrações.
+    - **Proteção Reativa de Sessão na Tela de Login (`AcessoTelefone.jsx`)**:
+      - Adicionado efeito reativo com `useTenant` para que clientes que já possuem sessão ativa e acessem `/${tenant_slug}/login` sejam automaticamente encaminhados para a `/${tenant_slug}/home` do salão.
+  - **3. Validação e Homologação**:
+    - Suíte de testes `minisiteD20.test.js` aprovada com 100% de sucesso (6/6 testes).
+    - Build de produção do Vite executado com sucesso.

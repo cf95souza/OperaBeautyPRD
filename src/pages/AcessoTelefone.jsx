@@ -30,7 +30,14 @@ const InstagramIcon = ({ size = 15, className = '' }) => (
 const AcessoTelefone = () => {
   const { tenant_slug } = useParams();
   const navigate = useNavigate();
-  const { tenant } = useTenant();
+  const { tenant, session } = useTenant();
+
+  // Se o cliente já estiver com login ativo, redireciona para o sistema
+  useEffect(() => {
+    if (session?.id) {
+      navigate(`/${tenant_slug}/home`, { replace: true });
+    }
+  }, [session, tenant_slug, navigate]);
 
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);

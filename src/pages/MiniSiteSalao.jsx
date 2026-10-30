@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useTenant } from '../context/TenantContext';
 import { api } from '../lib/api';
 import { useSEO } from '../hooks/useSEO';
 import { 
@@ -46,6 +47,7 @@ const DIAS_SEMANA = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira',
 export const MiniSiteSalao = () => {
   const { tenant_slug } = useParams();
   const navigate = useNavigate();
+  const { session } = useTenant();
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
@@ -192,7 +194,14 @@ export const MiniSiteSalao = () => {
 
   const handleGoToBooking = () => {
     const slug = tenant?.slug || tenant_slug;
-    navigate(`/${slug}/agendar/servicos`);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('operabeauty_token') : null;
+    const isLoggedIn = Boolean(session?.id || token);
+
+    if (isLoggedIn) {
+      navigate(`/${slug}/agendar/servicos`);
+    } else {
+      navigate(`/${slug}/login`);
+    }
   };
 
   const handleOpenWhatsApp = () => {

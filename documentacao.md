@@ -2579,4 +2579,18 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Suíte de testes `minisiteD20.test.js` 100% aprovada (6/6 testes).
     * Compilação de produção Vite (`npm run build`) concluída com êxito em 3.37s.
 
+- **30/10/2026 - Redirecionamento de Agendamento do Mini-Site para Autenticação Segura (Login/Fluxo do Salão) - G19 [Concluída]:**
+  - **1. Requisito de Negócio e UX de Conversão**:
+    * No Mini-site público do salão (`/:tenant_slug/site`), direcionar um cliente não autenticado diretamente para a grade de seleção de serviços (`/agendar/servicos`) criava atrito e frustração: a cliente selecionava procedimentos, profissionais e horários para, somente na etapa de confirmação final, ser surpreendida com a solicitação de login ou cadastro, gerando a falsa expectativa de que o horário já estava agendado.
+  - **2. Resolução Arquitetural Implementada**:
+    * **Verificação de Sessão no Mini-Site (`MiniSiteSalao.jsx`)**:
+      - Integrado o hook `useTenant` para obter a `session` ativa do usuário e conferido token no `localStorage` (`operabeauty_token`).
+      - Se a cliente **já estiver logada**: `handleGoToBooking` direciona para `/${slug}/agendar/servicos`, permitindo o agendamento direto com sua identificação e histórico de fidelidade ativos.
+      - Se a cliente **não estiver logada**: `handleGoToBooking` direciona para o fluxo oficial de login do salão (`/${slug}/login` — `AcessoTelefone.jsx`), onde ela informa o telefone -> é direcionada para senha ou cadastro simplificado -> e acessa o sistema de forma transparente e segura.
+    * **Proteção Reativa de Sessão na Tela de Login (`AcessoTelefone.jsx`)**:
+      - Adicionado efeito no `AcessoTelefone` que detecta se a cliente já possui sessão ativa (`session?.id`), redirecionando-a automaticamente para `/${tenant_slug}/home` caso acesse a rota de login por engano.
+  - **3. Testes e Homologação**:
+    * Suíte de testes `minisiteD20.test.js` 100% aprovada (6/6 testes).
+    * Compilação de produção Vite (`npm run build`) concluída com êxito sem erros.
+
 
