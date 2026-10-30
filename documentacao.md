@@ -2518,4 +2518,23 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
   - **4. Homologação e Build**:
     * Compilação de produção com `npm run build` gerando novos bundles e service worker sem advertências ou quebras.
 
+- **30/10/2026 - Resolução de Erro 500 no Guia de Ativação do Salão (apply-catalog-template) - G15 [Concluída]:**
+  - **1. Incidente Reportado em Produção (`https://operabeauty.tech`)**:
+    * Ao tentar cadastrar serviços modelo através do Guia de Ativação / Onboarding do Salão, o navegador disparava `POST https://operabeauty.tech/api/onboarding/apply-catalog-template 500 (Internal Server Error)`.
+    * A mensagem de erro capturada no console era: `Erro ao aplicar catálogo modelo: Error: syntax error at or near "$1"`.
+  - **2. Análise da Causa Raiz Técnica**:
+    * No PostgreSQL, comandos utilitários de configuração de sessão como `SET` e `SET LOCAL` não aceitam marcadores de parâmetros de prepared statement (`$1`, `$2`).
+    * O comando `SET LOCAL app.current_tenant_id = $1` resultava compulsoriamente no código de erro PostgreSQL `42601` (`syntax error at or near "$1"`).
+  - **3. Correção Arquitetural e Blindagem Multi-Tenant**:
+    * O mecanismo de injeção de variáveis de sessão para Row Level Security (RLS) foi corrigido para utilizar a função interna do PostgreSQL `SELECT set_config($1, $2, true)` com passagem segura de parâmetros (`['app.current_tenant_id', String(tenantId)]`), onde o terceiro argumento booleano garante o escopo exclusivo da transação corrente (`is_local = true`).
+    * A correção foi estendida e padronizada em todos os serviços do backend que continham a mesma chamada vulnerável:
+      - `backend/services/onboardingService.js` (`applyCatalogTemplate`)
+      - `backend/services/packageService.js` (`sellPackageToClient`)
+      - `backend/services/clientService.js` (`importClients`)
+      - `backend/services/catalogService.js` (`importServices`)
+    * O escopo RLS foi também injetado explicitamente dentro do bloco transacional (`BEGIN`) de importação de clientes e serviços.
+  - **4. Homologação Automatizada e Testes**:
+    * Suítes de testes automatizados executadas com sucesso (53/53 testes passando): `onboardingD11.test.js`, `importacaoPlanilhaD10.test.js` e `pacotesSessoesD13.test.js`.
+    * Compilação de produção Vite (`npm run build`) concluída com êxito.
+
 

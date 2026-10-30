@@ -65,7 +65,8 @@ export const importClients = async (tenantId, clientsList, options = {}, userId 
   let skipped = 0;
 
   try {
-    await client.query('SET LOCAL app.current_tenant_id = $1', [tenantId]);
+    // Isolamento RLS compulsório (SET LOCAL app.current_tenant_id = $1 via set_config)
+    await client.query('SELECT set_config($1, $2, true)', ['app.current_tenant_id', String(tenantId)]);
 
     // 1. Verificar se o inquilino existe e está ativo
     const tenantRes = await client.query(
@@ -189,6 +190,7 @@ export const importClients = async (tenantId, clientsList, options = {}, userId 
 
     // 4. Executar transação no banco de dados
     await client.query('BEGIN');
+    await client.query('SELECT set_config($1, $2, true)', ['app.current_tenant_id', String(tenantId)]);
 
     for (const item of validRows) {
       const existing = existingMap.get(item.phone);

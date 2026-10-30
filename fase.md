@@ -1295,3 +1295,18 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     * Em desktops e notebooks (onde `safe-area-inset-*` é `0px`), a altura e o padding permanecem inalterados.
     * Em dispositivos móveis com qualquer formato de câmera ou notch, o conteúdo é empurrado automaticamente para a área 100% segura e visível.
     * `npm run build` executado e aprovado com sucesso.
+- [x] **G15 (P1) — Resolução de Erro 500 no Guia de Ativação do Salão (apply-catalog-template)**:
+  - **1. Diagnóstico e Causa Raiz Identificada em Produção**:
+    * Ao tentar cadastrar os serviços modelo no Onboarding/Guia de Ativação do Salão (`POST /api/onboarding/apply-catalog-template`), a API retornava **HTTP 500 (Internal Server Error)** com mensagem `syntax error at or near "$1"`.
+    * No PostgreSQL, comandos de sessão como `SET` ou `SET LOCAL` não aceitam parâmetros de prepared statement (`$1`, `$2`). A instrução `SET LOCAL app.current_tenant_id = $1` falha compulsoriamente no analisador gramatical do Postgres com erro de sintaxe 42601 (`syntax error at or near "$1"`).
+  - **2. Correção Arquitetural e Blindagem Multi-Tenant**:
+    * Substituída a sintaxe inválida pela função oficial e segura do PostgreSQL `SELECT set_config($1, $2, true)` com parâmetros `['app.current_tenant_id', String(tenantId)]`.
+    * A correção foi estendida e padronizada em todos os serviços afetados que continham a mesma falha latente:
+      - `backend/services/onboardingService.js` (`applyCatalogTemplate`)
+      - `backend/services/packageService.js` (`sellPackageToClient`)
+      - `backend/services/clientService.js` (`importClients`)
+      - `backend/services/catalogService.js` (`importServices`)
+    * Garantida ativação explícita de RLS dentro do bloco transacional (`BEGIN`).
+  - **3. Validação de Testes e Build**:
+    * Suítes de testes executadas com 100% de aprovação (53/53 testes): `onboardingD11.test.js`, `importacaoPlanilhaD10.test.js` e `pacotesSessoesD13.test.js`.
+    * Build Vite de produção validado com sucesso.

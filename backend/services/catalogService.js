@@ -323,7 +323,8 @@ export const importServices = async (tenantId, servicesList, options = {}, userI
   let skipped = 0;
 
   try {
-    await client.query('SET LOCAL app.current_tenant_id = $1', [tenantId]);
+    // Isolamento RLS compulsório (SET LOCAL app.current_tenant_id = $1 via set_config)
+    await client.query('SELECT set_config($1, $2, true)', ['app.current_tenant_id', String(tenantId)]);
 
     // Verificar inquilino
     const tenantRes = await client.query(
@@ -436,6 +437,7 @@ export const importServices = async (tenantId, servicesList, options = {}, userI
 
     // 3. Executar transação
     await client.query('BEGIN');
+    await client.query('SELECT set_config($1, $2, true)', ['app.current_tenant_id', String(tenantId)]);
 
     for (const item of validRows) {
       const existing = existingMap.get(item.name.toLowerCase());

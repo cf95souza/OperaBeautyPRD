@@ -153,7 +153,8 @@ export const sellPackageToClient = async (tenantId, {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('SET LOCAL app.current_tenant_id = $1', [tenantId]);
+    // Isolamento RLS compulsório (SET LOCAL app.current_tenant_id via set_config)
+    await client.query('SELECT set_config($1, $2, true)', ['app.current_tenant_id', String(tenantId)]);
 
     // 1. Busca dados do pacote
     const pkgRes = await client.query(

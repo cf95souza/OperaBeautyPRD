@@ -528,8 +528,8 @@ export const applyCatalogTemplate = async (tenantId, segmentKey, customServicesL
   try {
     await client.query('BEGIN');
 
-    // Isolamento RLS compulsório
-    await client.query('SET LOCAL app.current_tenant_id = $1', [tenantId]);
+    // Isolamento RLS compulsório (SET LOCAL app.current_tenant_id via set_config)
+    await client.query('SELECT set_config($1, $2, true)', ['app.current_tenant_id', String(tenantId)]);
 
     // Verificar se tenant existe e está ativo
     const tenantCheck = await client.query(
