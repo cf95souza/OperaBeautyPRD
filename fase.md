@@ -1357,3 +1357,9 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **3. Validação e Homologação**:
     - Suíte de testes `minisiteD20.test.js` aprovada com 100% de sucesso (6/6 testes).
     - Build de produção do Vite executado com sucesso.
+- [x] **G20 (P1) — Blindagem de Rota Webhook de Faturas e Suporte a Mercado Pago no Super Admin**:
+  - **1. Arquitetura da Rota de Webhook (`invoices.js`)**:
+    - Padronizada a rota de webhook para aceitar `/webhook` e `/webhook/:gateway`.
+    - Garantida a passagem correta dos parâmetros `(gateway, payload)` para `processBillingWebhook`, com resolução de contingência pelo gateway ativo da plataforma (`cap_platform_settings`).
+  - **2. Validação**:
+    - Suíte de testes `minisiteD20.test.js` aprovada com 100% de sucesso (6/6 testes).

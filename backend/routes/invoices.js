@@ -1,4 +1,5 @@
 import express from 'express';
+import pool from '../config/db.js';
 import { authMiddleware, requireRole } from '../middlewares/auth.js';
 import { z } from 'zod';
 import { validate } from '../middlewares/validate.js';
@@ -63,10 +64,18 @@ router.post('/:id/simulate-pay', authMiddleware, requireRole(['manager', 'supera
   }
 });
 
-// Webhook para baixa automática do SaaS por gateways de pagamento
-router.post('/webhook', express.json(), async (req, res) => {
+// Webhook para baixa automática do SaaS por gateways de pagamento (Mercado Pago, Asaas, etc.)
+router.post(['/webhook', '/webhook/:gateway'], express.json(), async (req, res) => {
   try {
-    const result = await processBillingWebhook(req.body);
+    let gateway = req.params.gateway;
+    const payload = req.body;
+
+    if (!gateway) {
+      const platformRes = await pool.query('SELECT payment_gateway FROM public.cap_platform_settings LIMIT 1');
+      gateway = platformRes.rows[0]?.payment_gateway || 'mercadopago';
+    }
+
+    const result = await processBillingWebhook(gateway, payload);
     return res.json(result);
   } catch (error) {
     req.log.error(error, 'Erro ao processar webhook de fatura SaaS');

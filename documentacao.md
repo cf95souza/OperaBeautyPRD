@@ -2593,4 +2593,13 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Suíte de testes `minisiteD20.test.js` 100% aprovada (6/6 testes).
     * Compilação de produção Vite (`npm run build`) concluída com êxito sem erros.
 
+- **30/10/2026 - Blindagem do Webhook de Faturas SaaS e Integração Mercado Pago no Super Admin - G20 [Concluída]:**
+  - **1. Ajuste na Assinatura e Resolução de Webhook (`invoices.js`)**:
+    * Corrigida a chamada da rota de webhook para aceitar `/webhook` e `/webhook/:gateway`, passando corretamente `(gateway, payload)` para `processBillingWebhook()`.
+    * Adicionada recuperação dinâmica do gateway padrão cadastrado em `cap_platform_settings` caso o webhook seja disparado na rota base.
+  - **2. Parametrização no Super Admin (`SettingsAdmin.jsx`)**:
+    * Configuração de credenciais de produção e sandbox (Access Token, Public Key, Chave PIX e Webhook Secret com encriptação AES-256 no banco).
+  - **3. Testes e Homologação**:
+    * Suíte de testes `minisiteD20.test.js` 100% aprovada (6/6 testes).
+
 
