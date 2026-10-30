@@ -1406,3 +1406,5 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Nova suíte de testes `pixEmvGateway.test.js` 100% aprovada (6/6 testes).
     - Suíte de regressão `cobrancaAutomaticaSaaSD18.test.js` 100% aprovada (13/13 testes).
     - Build de produção do Vite compilado com sucesso.
+  - **7. Homologação em Produção (VPS)**:
+    - Homologado e confirmado com sucesso pelo usuário em ambiente de produção na VPS (`srv1827901`) em 30/10/2026. Fatura SaaS de R$ 1,00 gerada no Mercado Pago, QR Code lido perfeitamente e pagamento compensado.

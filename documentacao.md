@@ -2648,5 +2648,6 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Nova suíte de testes `pixEmvGateway.test.js` 100% aprovada (6/6 testes).
     * Suíte de testes `cobrancaAutomaticaSaaSD18.test.js` 100% aprovada (13/13 testes).
     * Compilação de produção Vite (`npm run build`) concluída com sucesso.
+    * **Homologação em Produção (VPS)**: Teste real de geração de fatura e pagamento Pix via Mercado Pago executado em produção com 100% de êxito em 30/10/2026.
 
 
