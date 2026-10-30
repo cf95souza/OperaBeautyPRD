@@ -29,9 +29,14 @@ const ModalPagamentoPixSaaS = ({
 }) => {
   const { showSuccess, showError } = useNotification();
   const { session } = useTenant();
+  const [currentInvoice, setCurrentInvoice] = useState(invoice);
   const [copied, setCopied] = useState(false);
   const [simulating, setSimulating] = useState(false);
-  const [checking, setChecking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    setCurrentInvoice(invoice);
+  }, [invoice]);
 
   const isSuperAdmin = session?.role === 'superadmin';
   const isSandbox = Boolean(billingStatus?.is_sandbox);
@@ -40,15 +45,15 @@ const ModalPagamentoPixSaaS = ({
 
   // Polling automático enquanto o modal estiver aberto para detectar baixa imediata
   useEffect(() => {
-    if (!isOpen || !invoice || !invoice.id) return;
+    if (!isOpen || !currentInvoice || !currentInvoice.id) return;
 
     const interval = setInterval(async () => {
       try {
         const status = await api.invoices.getBillingStatus();
-        const currentInv = status?.active_invoices?.find(inv => inv.id === invoice.id);
+        const found = status?.active_invoices?.find(inv => inv.id === currentInvoice.id);
         
         // Se a fatura não estiver mais ativa ou não tiver faturas pendentes, foi paga!
-        if (!currentInv || currentInv.status === 'paid' || status?.active_invoices?.length === 0) {
+        if (!found || found.status === 'paid' || status?.active_invoices?.length === 0) {
           showSuccess('Pagamento confirmado com sucesso! Sua assinatura foi regularizada.');
           if (onPaymentSuccess) onPaymentSuccess();
           onClose();
@@ -59,18 +64,18 @@ const ModalPagamentoPixSaaS = ({
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [isOpen, invoice, onClose, onPaymentSuccess, showSuccess]);
+  }, [isOpen, currentInvoice, onClose, onPaymentSuccess, showSuccess]);
 
-  if (!isOpen || !invoice) return null;
+  if (!isOpen || !currentInvoice) return null;
 
   const handleCopy = async () => {
-    if (!invoice.pix_copy_paste) return;
+    if (!currentInvoice.pix_copy_paste) return;
     try {
       if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(invoice.pix_copy_paste);
+        await navigator.clipboard.writeText(currentInvoice.pix_copy_paste);
       } else {
         const textArea = document.createElement('textarea');
-        textArea.value = invoice.pix_copy_paste;
+        textArea.value = currentInvoice.pix_copy_paste;
         document.body.appendChild(textArea);
         textArea.select();
         document.execCommand('copy');
@@ -84,10 +89,26 @@ const ModalPagamentoPixSaaS = ({
     }
   };
 
+  const handleRefreshPix = async () => {
+    if (!currentInvoice?.id) return;
+    setRefreshing(true);
+    try {
+      const res = await api.invoices.refreshPix(currentInvoice.id);
+      if (res?.invoice) {
+        setCurrentInvoice(res.invoice);
+        showSuccess('QR Code PIX atualizado com sucesso!');
+      }
+    } catch (err) {
+      showError(err.message || 'Falha ao atualizar QR Code.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleSimulatePayment = async () => {
     setSimulating(true);
     try {
-      const res = await api.invoices.simulatePayment(invoice.id);
+      const res = await api.invoices.simulatePayment(currentInvoice.id);
       showSuccess(res.message || 'Pagamento compensado com sucesso! Salão reativado.');
       if (onPaymentSuccess) onPaymentSuccess();
       onClose();
@@ -117,7 +138,7 @@ const ModalPagamentoPixSaaS = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold uppercase tracking-wider text-brand">
-                  Fatura SaaS • {invoice.reference_month}
+                  Fatura SaaS • {currentInvoice.reference_month}
                 </span>
                 {isBlocked ? (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
@@ -174,22 +195,22 @@ const ModalPagamentoPixSaaS = ({
             <div>
               <span className="text-xs text-ink-soft font-medium uppercase tracking-wider">Valor da mensalidade</span>
               <p className="text-xs text-ink-soft mt-0.5">
-                Vencimento: <strong className="text-ink">{formatDate(invoice.due_date)}</strong>
+                Vencimento: <strong className="text-ink">{formatDate(currentInvoice.due_date)}</strong>
               </p>
             </div>
             <div className="text-right">
               <span className="font-display font-bold text-2xl sm:text-3xl text-brand tabular-nums">
-                {formatCurrency(invoice.amount)}
+                {formatCurrency(currentInvoice.amount)}
               </span>
             </div>
           </div>
 
           {/* QR Code PIX Central */}
           <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-line shadow-2xs">
-            <div className="p-2.5 rounded-xl bg-white border border-stone-200 shadow-xs mb-3">
-              {invoice.pix_qr_code ? (
+            <div className="p-2.5 rounded-xl bg-white border border-stone-200 shadow-xs mb-2">
+              {currentInvoice.pix_qr_code ? (
                 <img 
-                  src={invoice.pix_qr_code} 
+                  src={currentInvoice.pix_qr_code} 
                   alt="QR Code PIX para pagamento da fatura SaaS" 
                   className="w-44 h-44 object-contain"
                 />
@@ -200,9 +221,32 @@ const ModalPagamentoPixSaaS = ({
                 </div>
               )}
             </div>
+
             <p className="text-xs text-ink-soft text-center flex items-center gap-1.5 font-medium">
               <Smartphone className="w-3.5 h-3.5 text-brand" />
               Aponte a câmera do aplicativo do seu banco para escanear
+            </p>
+
+            <button
+              type="button"
+              disabled={refreshing}
+              onClick={handleRefreshPix}
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-line bg-stone-50 hover:bg-stone-100 text-[11px] font-semibold text-ink-soft hover:text-ink transition-colors cursor-pointer disabled:opacity-50"
+              title="Gera um novo QR Code válido caso o anterior tenha expirado no seu banco"
+            >
+              <RefreshCw className={`w-3 h-3 text-brand ${refreshing ? 'animate-spin' : ''}`} />
+              <span>{refreshing ? 'Atualizando cobrança...' : 'Código expirado? Gerar Novo QR Code'}</span>
+            </button>
+          </div>
+
+          {/* Dica de Segurança e Testes */}
+          <div className="p-3.5 rounded-xl bg-stone-50 border border-line/60 text-[11px] text-ink-soft space-y-1">
+            <div className="flex items-center gap-1.5 font-semibold text-ink">
+              <Sparkles className="w-3.5 h-3.5 text-brand" />
+              <span>Dica de Teste em Produção</span>
+            </div>
+            <p className="leading-relaxed">
+              Caso esteja testando via app do Mercado Pago, utilize uma conta de titularidade diferente do Super Admin (o sistema bancário bloqueia pagamentos entre a mesma conta). No Nubank, Itaú ou outros bancos, o pagamento cai normalmente.
             </p>
           </div>
 
@@ -216,7 +260,7 @@ const ModalPagamentoPixSaaS = ({
               <input
                 type="text"
                 readOnly
-                value={invoice.pix_copy_paste || ''}
+                value={currentInvoice.pix_copy_paste || ''}
                 className="w-full text-xs font-mono bg-stone-50 text-ink-soft px-3.5 py-3 pr-28 rounded-xl border border-line focus:outline-none select-all"
               />
               <button

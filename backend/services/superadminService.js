@@ -505,6 +505,90 @@ export const getPlatformSettings = async () => {
   return settings;
 };
 
+export const testGatewayConnection = async ({ payment_gateway, gateway_api_key }) => {
+  const targetGateway = payment_gateway || 'mercadopago';
+
+  if (targetGateway === 'mercadopago') {
+    let token = gateway_api_key;
+    if (!token || token.startsWith('****')) {
+      const res = await pool.query('SELECT gateway_api_key FROM public.cap_platform_settings LIMIT 1');
+      token = res.rows[0]?.gateway_api_key;
+    }
+    if (token) {
+      try {
+        const decrypted = decrypt(token);
+        if (decrypted) token = decrypted;
+      } catch (_) {}
+      if (typeof token === 'string') token = token.trim();
+    }
+
+    if (!token) {
+      return {
+        success: false,
+        message: 'Nenhum Access Token foi informado ou configurado para o Mercado Pago.'
+      };
+    }
+
+    // Validação de formato básico
+    if (!token.startsWith('APP_USR-') && !token.startsWith('TEST-')) {
+      return {
+        success: false,
+        message: 'Formato de Access Token inválido. O token do Mercado Pago deve iniciar com "APP_USR-" (Produção) ou "TEST-" (Sandbox).'
+      };
+    }
+
+    try {
+      const mpRes = await fetch('https://api.mercadopago.com/users/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await mpRes.json();
+
+      if (mpRes.ok) {
+        const isSandbox = token.startsWith('TEST-');
+        return {
+          success: true,
+          provider: 'mercadopago',
+          collector_id: data.id,
+          nickname: data.nickname || data.first_name || 'Conta Mercado Pago',
+          email: data.email,
+          country: data.site_id,
+          is_sandbox: isSandbox,
+          message: isSandbox
+            ? 'Conectado com sucesso em modo SANDBOX. ATENÇÃO: Bancos reais (Nubank, Itaú, etc.) rejeitam Pix de teste com "QR code inválido/expirado". Para cobranças reais, utilize o Access Token de Produção (APP_USR-).'
+            : 'Conectado com sucesso ao Mercado Pago em PRODUÇÃO! Sua conta está autenticada e apta a gerar cobranças Pix reais.'
+        };
+      } else {
+        return {
+          success: false,
+          status: mpRes.status,
+          message: data.message === 'Unauthorized' || mpRes.status === 401
+            ? 'Token não autorizado (401). Certifique-se de que copiou o "Access Token" (e não a "Public Key") nas credenciais da sua aplicação do Mercado Pago.'
+            : (data.message || 'Falha ao autenticar no Mercado Pago.')
+        };
+      }
+    } catch (err) {
+      return {
+        success: false,
+        message: `Falha de rede ao conectar com a API do Mercado Pago: ${err.message}`
+      };
+    }
+  }
+
+  if (targetGateway === 'sandbox') {
+    return {
+      success: true,
+      provider: 'sandbox',
+      is_sandbox: true,
+      message: 'Simulador nativo OperaBeauty ativo para testes locais.'
+    };
+  }
+
+  return {
+    success: false,
+    message: `Teste automatizado não disponível para o gateway "${targetGateway}".`
+  };
+};
+
 export const savePlatformSettings = async ({
   payment_gateway,
   gateway_api_key,

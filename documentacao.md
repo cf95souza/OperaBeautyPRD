@@ -2624,4 +2624,29 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Compilação de produção Vite concluída em 4.12s.
     * Suíte de testes Jest 100% aprovada.
 
+- **30/10/2026 - Blindagem da Geração de Pix SaaS, Padrão BACEN EMV BR Code e Diagnóstico de Gateway Mercado Pago - G23 [Concluída]:**
+  - **1. Diagnóstico do Erro de QR Code Inválido/Expirado**:
+    * Identificado que quando a API do Mercado Pago falhava ou quando o fallback institucional era acionado, o sistema montava uma string BR Code com CRC16 estático falso (`6304ABCD`) e tamanho de tag fixo `58`. Ao ser escaneado por aplicativos bancários reais (Nubank, Itaú, Bradesco, etc.), o leitor de QR Code validava o checksum CRC16-CCITT, identificava corrupção de payload e retornava ao usuário: "Esse Pix ou QR code não é mais válido".
+    * No payload enviado à API do Mercado Pago, a ausência de `date_of_expiration` delegava a validade ao TTL padrão de 15 a 30 minutos em certas configurações, gerando cobranças que já expiravam antes da conferência.
+    * Além disso, caso o usuário utilize o aplicativo do Mercado Pago para efetuar o pagamento de teste na mesma conta da chave recebedora, o banco recusa a operação por transferência para a própria titularidade.
+  - **2. Utilitário Oficial BACEN EMV BR Code (`backend/utils/pixEmv.js`)**:
+    * Implementado algoritmo de CRC16-CCITT (Polinômio 0x1021, valor inicial 0xFFFF) em estrita conformidade com o Banco Central do Brasil.
+    * Função `buildPixStaticPayload` com montagem TLV rigorosa para todas as tags EMV (00, 26, 52, 53, 54, 58, 59, 60, 62, 63).
+  - **3. Blindagem de Cobrança e Renovação Contínua (`backend/services/saasBillingService.js` e `invoices.js`)**:
+    * Adição obrigatória de `date_of_expiration` com janela mínima de 3 dias no futuro para o Mercado Pago.
+    * Idempotency key dinâmica com timestamp para evitar reutilização de cobranças canceladas/expiradas em cache.
+    * Saneamento e proteção de e-mail do pagador (`payer.email`) para prevenir erros cadastrais.
+    * Verificação e renovação reativa de faturas pendentes expiradas no Mercado Pago via `getTenantBillingStatus`.
+    * Novo endpoint `POST /api/invoices/:id/refresh-pix` permitindo regeneração instantânea de QR code.
+  - **4. Diagnóstico em Tempo Real no Super Admin (`SettingsAdmin.jsx` e `superadminService.js`)**:
+    * Novo endpoint `POST /api/superadmin/settings/test-gateway` conectado a `GET https://api.mercadopago.com/users/me`.
+    * Botão "Testar Conexão com Gateway" na interface com identificação da conta, nickname, e-mail e aviso proativo caso credenciais de Sandbox (`TEST-`) sejam utilizadas com a plataforma em modo Produção.
+  - **5. Interface do Modal de Pagamento (`ModalPagamentoPixSaaS.jsx`)**:
+    * Botão "Código expirado? Gerar Novo QR Code" com reemissão imediata de código válido.
+    * Card informativo com orientações para testes de homologação entre contas bancárias distintas.
+  - **6. Testes e Homologação**:
+    * Nova suíte de testes `pixEmvGateway.test.js` 100% aprovada (6/6 testes).
+    * Suíte de testes `cobrancaAutomaticaSaaSD18.test.js` 100% aprovada (13/13 testes).
+    * Compilação de produção Vite (`npm run build`) concluída com sucesso.
+
 

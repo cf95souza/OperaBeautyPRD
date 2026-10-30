@@ -2,6 +2,7 @@ import pool from '../config/db.js';
 import redisClient from '../config/redis.js';
 import { logAudit } from './auditService.js';
 import { decrypt } from '../utils/crypto.js';
+import { buildPixStaticPayload } from '../utils/pixEmv.js';
 import crypto from 'crypto';
 
 /**
@@ -13,7 +14,15 @@ import crypto from 'crypto';
  * Se o Mercado Pago estiver configurado no Super Admin com Access Token, cria a cobrança
  * oficial diretamente na API do Mercado Pago (PIX dinâmico com baixa automática).
  */
-export const generateSaaSPixPayload = async ({ amount, invoiceId, referenceMonth, tenantSlug, tenantId }) => {
+export const generateSaaSPixPayload = async ({
+  amount,
+  invoiceId,
+  referenceMonth,
+  tenantSlug,
+  tenantId,
+  attempt = 1,
+  expirationDays = 3
+}) => {
   const formattedAmount = Number(amount).toFixed(2);
   const cleanId = String(invoiceId).replace(/-/g, '').slice(0, 20);
 
@@ -31,6 +40,8 @@ export const generateSaaSPixPayload = async ({ amount, invoiceId, referenceMonth
       } catch (decErr) {
         token = settings.gateway_api_key;
       }
+      if (!token) token = settings.gateway_api_key;
+      if (typeof token === 'string') token = token.trim();
 
       if (token && (token.startsWith('APP_USR-') || token.startsWith('TEST-'))) {
         let managerEmail = `financeiro@${tenantSlug || 'salao'}.operabeauty.tech`;
@@ -52,19 +63,30 @@ export const generateSaaSPixPayload = async ({ amount, invoiceId, referenceMonth
         const firstName = nameParts[0] || 'Cliente';
         const lastName = nameParts.slice(1).join(' ') || 'Assinante';
 
+        // Validação e formatação de e-mail seguro para o Mercado Pago
+        let safeEmail = managerEmail.trim().toLowerCase();
+        if (!safeEmail.includes('@') || safeEmail.endsWith('.local') || safeEmail.endsWith('.invalid')) {
+          safeEmail = `contato.${cleanId.slice(0, 8)}@operabeauty.tech`;
+        }
+
+        // Data de expiração formal (pelo menos 3 dias no futuro para evitar expiração prematura)
+        const expirationDate = new Date(Date.now() + (expirationDays || 3) * 24 * 60 * 60 * 1000);
+        const idempotencyKey = `inv_${cleanId}_${attempt || 1}_${Math.floor(Date.now() / 10000)}`;
+
         const mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
-            'X-Idempotency-Key': `inv_${String(invoiceId).slice(0, 32)}`
+            'X-Idempotency-Key': idempotencyKey
           },
           body: JSON.stringify({
             transaction_amount: Number(formattedAmount),
             description: `Mensalidade OperaBeauty SaaS - ${tenantSlug || 'Salão'} (${referenceMonth || 'Atual'})`,
             payment_method_id: 'pix',
+            date_of_expiration: expirationDate.toISOString(),
             payer: {
-              email: managerEmail,
+              email: safeEmail,
               first_name: firstName,
               last_name: lastName
             },
@@ -84,31 +106,51 @@ export const generateSaaSPixPayload = async ({ amount, invoiceId, referenceMonth
             pix_copy_paste: pixCode,
             pix_qr_code: pixQr,
             gateway_transaction_id: mpId,
-            gateway_invoice_url: mpData.point_of_interaction?.transaction_data?.ticket_url || null
+            gateway_invoice_url: mpData.point_of_interaction?.transaction_data?.ticket_url || null,
+            gateway_provider: 'mercadopago',
+            expires_at: expirationDate.toISOString()
           };
         } else {
           const errData = await mpRes.text();
-          console.error('Mercado Pago API error:', mpRes.status, errData);
+          console.error('[Mercado Pago SaaS] Falha na criação do PIX (HTTP ' + mpRes.status + '):', errData);
         }
+      } else {
+        console.warn('[Mercado Pago SaaS] Access Token não configurado ou formato inválido (deve iniciar com APP_USR- ou TEST-).');
       }
     }
   } catch (err) {
     console.error('Falha ao gerar cobrança Mercado Pago para fatura SaaS:', err);
   }
 
-  // 2. Fallback: payload estruturado com chave institucional cadastrada no Super Admin
-  const platformRes = await pool.query('SELECT pix_key FROM public.cap_platform_settings LIMIT 1');
-  const pixKey = platformRes.rows[0]?.pix_key || process.env.SAAS_PIX_KEY || 'financeiro@operabeauty.com.br';
+  // 2. Fallback: payload estruturado oficial EMV BR Code com CRC16 válido (Banco Central do Brasil)
+  let pixKey = process.env.SAAS_PIX_KEY || 'financeiro@operabeauty.tech';
+  try {
+    const platformRes = await pool.query('SELECT pix_key, pix_key_type FROM public.cap_platform_settings LIMIT 1');
+    if (platformRes.rows[0]?.pix_key) {
+      pixKey = platformRes.rows[0].pix_key;
+    }
+  } catch (_) {
+    // Resiliente caso banco esteja inacessível ou em testes isolados
+  }
   const merchantName = 'OPERA BEAUTY SAAS';
   const merchantCity = 'SAO PAULO';
 
-  const pixCopyPaste = `00020126580014br.gov.bcb.pix0136${pixKey}0218OPERA-${cleanId}520400005303986540${formattedAmount.length}${formattedAmount}5802BR59${merchantName.length}${merchantName}60${merchantCity.length}${merchantCity}62070503***6304ABCD`;
+  const pixCopyPaste = buildPixStaticPayload({
+    pixKey,
+    merchantName,
+    merchantCity,
+    amount: formattedAmount,
+    txId: `OPERA-${cleanId}`,
+    description: `FATURA ${referenceMonth || 'SAAS'}`
+  });
+
   const pixQrCode = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(pixCopyPaste)}&margin=10`;
 
   return {
     pix_copy_paste: pixCopyPaste,
     pix_qr_code: pixQrCode,
-    gateway_transaction_id: `inv_tx_${crypto.randomBytes(8).toString('hex')}`
+    gateway_transaction_id: `inv_tx_${crypto.randomBytes(8).toString('hex')}`,
+    gateway_provider: 'institutional_pix'
   };
 };
 
@@ -219,29 +261,60 @@ export const getTenantBillingStatus = async (tenantId) => {
     }
   }
 
-  // Se a fatura pendente ainda estiver com ID provisório local (inv_tx_), tenta registrá-la no Mercado Pago se configurado
-  if (activePendingInvoice && (!activePendingInvoice.gateway_transaction_id || activePendingInvoice.gateway_transaction_id.startsWith('inv_tx_'))) {
-    try {
-      const dynamicPix = await generateSaaSPixPayload({
-        amount: activePendingInvoice.amount,
-        invoiceId: activePendingInvoice.id,
-        referenceMonth: activePendingInvoice.reference_month,
-        tenantSlug: tenant.slug,
-        tenantId
-      });
-      if (dynamicPix && dynamicPix.gateway_transaction_id && !dynamicPix.gateway_transaction_id.startsWith('inv_tx_')) {
-        await pool.query(
-          `UPDATE public.cap_invoices
-           SET pix_copy_paste = $1, pix_qr_code = $2, gateway_transaction_id = $3
-           WHERE id = $4`,
-          [dynamicPix.pix_copy_paste, dynamicPix.pix_qr_code, dynamicPix.gateway_transaction_id, activePendingInvoice.id]
-        );
-        activePendingInvoice.pix_copy_paste = dynamicPix.pix_copy_paste;
-        activePendingInvoice.pix_qr_code = dynamicPix.pix_qr_code;
-        activePendingInvoice.gateway_transaction_id = dynamicPix.gateway_transaction_id;
+  // Se a fatura pendente estiver com ID provisório local (inv_tx_) ou se o QR Code expirou no Mercado Pago, renova o PIX
+  if (activePendingInvoice) {
+    const isLocalTx = !activePendingInvoice.gateway_transaction_id || activePendingInvoice.gateway_transaction_id.startsWith('inv_tx_');
+    let shouldRenew = isLocalTx;
+
+    // Se tiver ID do Mercado Pago, checar se a cobrança expirou
+    if (!isLocalTx && activePendingInvoice.gateway_transaction_id) {
+      try {
+        const platformRes = await pool.query('SELECT gateway_api_key, payment_gateway FROM public.cap_platform_settings LIMIT 1');
+        const settings = platformRes.rows[0];
+        if (settings?.payment_gateway === 'mercadopago' && settings.gateway_api_key) {
+          let token = decrypt(settings.gateway_api_key) || settings.gateway_api_key;
+          if (token) token = token.trim();
+          if (token) {
+            const checkRes = await fetch(`https://api.mercadopago.com/v1/payments/${activePendingInvoice.gateway_transaction_id}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (checkRes.ok) {
+              const checkData = await checkRes.json();
+              if (checkData.status === 'cancelled' || checkData.status_detail === 'expired') {
+                shouldRenew = true;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Silencioso se der erro na verificação
       }
-    } catch (regErr) {
-      console.error('Erro ao registrar fatura pendente no Mercado Pago:', regErr);
+    }
+
+    if (shouldRenew) {
+      try {
+        const dynamicPix = await generateSaaSPixPayload({
+          amount: activePendingInvoice.amount,
+          invoiceId: activePendingInvoice.id,
+          referenceMonth: activePendingInvoice.reference_month,
+          tenantSlug: tenant.slug,
+          tenantId,
+          attempt: Date.now()
+        });
+        if (dynamicPix && dynamicPix.pix_copy_paste) {
+          await pool.query(
+            `UPDATE public.cap_invoices
+             SET pix_copy_paste = $1, pix_qr_code = $2, gateway_transaction_id = $3
+             WHERE id = $4`,
+            [dynamicPix.pix_copy_paste, dynamicPix.pix_qr_code, dynamicPix.gateway_transaction_id, activePendingInvoice.id]
+          );
+          activePendingInvoice.pix_copy_paste = dynamicPix.pix_copy_paste;
+          activePendingInvoice.pix_qr_code = dynamicPix.pix_qr_code;
+          activePendingInvoice.gateway_transaction_id = dynamicPix.gateway_transaction_id;
+        }
+      } catch (regErr) {
+        console.error('Erro ao registrar/renovar fatura pendente no Mercado Pago:', regErr);
+      }
     }
   }
 
@@ -672,4 +745,57 @@ export const simulateSaaSInvoicePayment = async (invoiceId) => {
     gatewayTransactionId: `sim_${Date.now()}`,
     source: 'simulator'
   });
+};
+
+/**
+ * Força a renovação do QR Code PIX de uma fatura SaaS (gerando nova cobrança no Mercado Pago ou com chave institucional)
+ */
+export const refreshSaaSInvoicePix = async (invoiceId) => {
+  const invRes = await pool.query(
+    `SELECT i.*, t.slug as tenant_slug
+     FROM public.cap_invoices i
+     JOIN public.cap_tenants t ON i.tenant_id = t.id
+     WHERE i.id = $1`,
+    [invoiceId]
+  );
+
+  if (invRes.rows.length === 0) {
+    const error = new Error('Fatura não encontrada.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const invoice = invRes.rows[0];
+  if (invoice.status === 'paid') {
+    const error = new Error('Esta fatura já se encontra liquidada e não pode ser renovada.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const dynamicPix = await generateSaaSPixPayload({
+    amount: invoice.amount,
+    invoiceId: invoice.id,
+    referenceMonth: invoice.reference_month,
+    tenantSlug: invoice.tenant_slug,
+    tenantId: invoice.tenant_id,
+    attempt: Date.now()
+  });
+
+  await pool.query(
+    `UPDATE public.cap_invoices
+     SET pix_copy_paste = $1, pix_qr_code = $2, gateway_transaction_id = $3
+     WHERE id = $4`,
+    [dynamicPix.pix_copy_paste, dynamicPix.pix_qr_code, dynamicPix.gateway_transaction_id, invoice.id]
+  );
+
+  return {
+    success: true,
+    message: 'QR Code PIX renovado com sucesso!',
+    invoice: {
+      ...invoice,
+      pix_copy_paste: dynamicPix.pix_copy_paste,
+      pix_qr_code: dynamicPix.pix_qr_code,
+      gateway_transaction_id: dynamicPix.gateway_transaction_id
+    }
+  };
 };

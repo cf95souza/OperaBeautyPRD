@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 describe('D18 (P1) — Cobrança Automática do SaaS, Carência e Bloqueio Gradual', () => {
 
   describe('1. Geração de Payload PIX Copia e Cola & QR Code EMV BR Code', () => {
-    test('generateSaaSPixPayload deve gerar código EMV BR Code com valor e merchant', () => {
-      const payload = generateSaaSPixPayload({
+    test('generateSaaSPixPayload deve gerar código EMV BR Code com valor e merchant', async () => {
+      const payload = await generateSaaSPixPayload({
         amount: 99.90,
         invoiceId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
         referenceMonth: 'Outubro/2026',
@@ -21,7 +21,8 @@ describe('D18 (P1) — Cobrança Automática do SaaS, Carência e Bloqueio Gradu
 
       expect(payload).toBeDefined();
       expect(payload.pix_copy_paste).toBeDefined();
-      expect(payload.pix_copy_paste).toContain('00020126580014br.gov.bcb.pix');
+      expect(payload.pix_copy_paste).toContain('000201');
+      expect(payload.pix_copy_paste).toContain('br.gov.bcb.pix');
       expect(payload.pix_copy_paste).toContain('OPERA BEAUTY SAAS');
       expect(payload.pix_copy_paste).toContain('99.90');
 
@@ -29,8 +30,8 @@ describe('D18 (P1) — Cobrança Automática do SaaS, Carência e Bloqueio Gradu
       expect(payload.pix_qr_code).toContain('create-qr-code');
     });
 
-    test('Deve formatar valores decimais com 2 casas com precisão', () => {
-      const payload = generateSaaSPixPayload({
+    test('Deve formatar valores decimais com 2 casas com precisão', async () => {
+      const payload = await generateSaaSPixPayload({
         amount: 150,
         invoiceId: '12345678-1234-1234-1234-123456789012',
         referenceMonth: 'Novembro/2026',

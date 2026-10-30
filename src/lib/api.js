@@ -786,6 +786,12 @@ export const api = {
         body: JSON.stringify(payload),
       });
     },
+    async testGateway(payload) {
+      return request('/superadmin/settings/test-gateway', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
     async listAdmins() {
       return request('/superadmin/admins');
     },
@@ -1186,6 +1192,11 @@ export const api = {
     },
     async checkOverdue() {
       return request('/invoices/check-overdue', {
+        method: 'POST'
+      });
+    },
+    async refreshPix(id) {
+      return request(`/invoices/${id}/refresh-pix`, {
         method: 'POST'
       });
     }

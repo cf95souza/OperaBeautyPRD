@@ -43,6 +43,8 @@ const SettingsAdmin = () => {
   // Estados de Carregamento e Interface
   const [loading, setLoading] = useState(true);
   const [savingGateway, setSavingGateway] = useState(false);
+  const [testingGateway, setTestingGateway] = useState(false);
+  const [testResult, setTestResult] = useState(null);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
 
   // Estados de Segurança e Troca de Senha Mestre
@@ -109,6 +111,29 @@ const SettingsAdmin = () => {
       showError(error.message || 'Erro ao salvar as configurações.');
     } finally {
       setSavingGateway(false);
+    }
+  };
+
+  const handleTestGateway = async () => {
+    setTestingGateway(true);
+    setTestResult(null);
+    try {
+      const res = await api.superadmin.testGateway({
+        payment_gateway: gateway,
+        gateway_api_key: apiKey
+      });
+      setTestResult(res);
+      if (res.success) {
+        showSuccess(res.message || 'Conexão validada com sucesso!');
+      } else {
+        showError(res.message || 'Falha na validação das credenciais.');
+      }
+    } catch (err) {
+      const failObj = { success: false, message: err.message || 'Erro ao conectar à API do gateway.' };
+      setTestResult(failObj);
+      showError(failObj.message);
+    } finally {
+      setTestingGateway(false);
     }
   };
 
@@ -306,6 +331,67 @@ const SettingsAdmin = () => {
                       {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+
+                  <div className="mt-2 flex items-center justify-between">
+                    <button
+                      type="button"
+                      disabled={testingGateway}
+                      onClick={handleTestGateway}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line bg-stone-50 hover:bg-stone-100 text-xs font-semibold text-ink transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {testingGateway ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-brand" />
+                          <span>Validando no Mercado Pago...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-3.5 h-3.5 text-brand" />
+                          <span>Testar Conexão com Gateway</span>
+                        </>
+                      )}
+                    </button>
+                    <span className="text-[11px] text-ink-soft">
+                      {gateway === 'mercadopago' ? 'Copie o "Access Token" (APP_USR-)' : 'Valida conexão oficial'}
+                    </span>
+                  </div>
+
+                  {/* Diagnóstico em tempo real */}
+                  {testResult && (
+                    <div className={`mt-3 p-3.5 rounded-xl text-xs border ${
+                      testResult.success 
+                        ? testResult.is_sandbox && environment === 'production'
+                          ? 'bg-amber-50 border-amber-200 text-amber-900'
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-rose-50 border-rose-200 text-rose-900'
+                    }`}>
+                      <div className="flex items-start gap-2">
+                        {testResult.success ? (
+                          testResult.is_sandbox && environment === 'production' ? (
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          ) : (
+                            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          )
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        )}
+                        <div className="space-y-1">
+                          <p className="font-semibold leading-tight">{testResult.message}</p>
+                          {testResult.nickname && (
+                            <div className="text-[11px] opacity-90 space-y-0.5 pt-1">
+                              <div>Conta: <strong>{testResult.nickname}</strong> ({testResult.email || 'sem e-mail'})</div>
+                              <div>Ambiente da Chave: <strong>{testResult.is_sandbox ? 'Sandbox (Testes)' : 'Produção Real'}</strong> • País: <strong>{testResult.country || 'MLB'}</strong></div>
+                            </div>
+                          )}
+                          {testResult.is_sandbox && environment === 'production' && (
+                            <p className="text-[11px] font-bold text-amber-800 pt-1">
+                              Aviso Crítico: Chaves TEST- não podem ser pagas por aplicativos bancários reais (Nubank, etc.). Para testes reais de R$ 1, utilize as Credenciais de Produção.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Chave Pública */}

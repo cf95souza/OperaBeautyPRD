@@ -22,7 +22,8 @@ import {
   resetStaffPassword,
   createInitialStaff,
   getPlatformSettings,
-  savePlatformSettings
+  savePlatformSettings,
+  testGatewayConnection
 } from '../services/superadminService.js';
 import * as auditService from '../services/auditService.js';
 import * as storageService from '../services/storageService.js';
@@ -388,6 +389,17 @@ const handleSaveSettings = async (req, res) => {
 
 router.post('/settings', validate(savePlatformSettingsSchema), handleSaveSettings);
 router.put('/settings', validate(savePlatformSettingsSchema), handleSaveSettings);
+
+// Testar conexão com gateway de pagamento SaaS (Mercado Pago, etc.)
+router.post('/settings/test-gateway', async (req, res) => {
+  try {
+    const result = await testGatewayConnection(req.body || {});
+    return res.json(result);
+  } catch (error) {
+    req.log.error(error, 'Erro ao testar credenciais do gateway no Super Admin');
+    return res.status(500).json({ error: error.message || 'Erro ao testar credenciais do gateway.' });
+  }
+});
 
 
 const adminCreateSchema = z.object({

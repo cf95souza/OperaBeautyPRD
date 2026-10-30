@@ -8,7 +8,8 @@ import {
   getTenantBillingStatus,
   simulateSaaSInvoicePayment,
   processBillingWebhook,
-  checkOverdueInvoicesAndEnforceGracePeriod
+  checkOverdueInvoicesAndEnforceGracePeriod,
+  refreshSaaSInvoicePix
 } from '../services/saasBillingService.js';
 
 const router = express.Router();
@@ -64,10 +65,24 @@ router.post('/:id/simulate-pay', authMiddleware, requireRole(['superadmin']), as
   }
 });
 
-// Webhook para baixa automática do SaaS por gateways de pagamento (Mercado Pago, Asaas, etc.)
-router.post(['/webhook', '/webhook/:gateway'], express.json(), async (req, res) => {
+// Renovar QR Code PIX de Fatura SaaS (Gera nova cobrança no Mercado Pago ou com chave institucional)
+router.post('/:id/refresh-pix', authMiddleware, requireRole(['superadmin', 'manager']), async (req, res) => {
+  const { id } = req.params;
+
   try {
-    let gateway = req.params.gateway;
+    const result = await refreshSaaSInvoicePix(id);
+    return res.json(result);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao renovar QR Code PIX da fatura');
+    return res.status(500).json({ error: error.message || 'Erro ao renovar PIX da fatura.' });
+  }
+});
+
+// Manipulador comum de Webhook de Faturas SaaS
+const handleBillingWebhook = async (req, res) => {
+  try {
+    let gateway = req.params?.gateway;
     const payload = req.body;
 
     if (!gateway) {
@@ -81,7 +96,11 @@ router.post(['/webhook', '/webhook/:gateway'], express.json(), async (req, res) 
     req.log.error(error, 'Erro ao processar webhook de fatura SaaS');
     return res.status(400).json({ error: error.message || 'Falha ao processar webhook.' });
   }
-});
+};
+
+// Webhook para baixa automática do SaaS por gateways de pagamento (Mercado Pago, Asaas, etc.)
+router.post('/webhook', express.json(), handleBillingWebhook);
+router.post('/webhook/:gateway', express.json(), handleBillingWebhook);
 
 // Rotina periódica / manual para checar faturas vencidas, aplicar carência e bloqueio gradual
 router.post('/check-overdue', authMiddleware, requireRole(['superadmin', 'manager']), async (req, res) => {
