@@ -262,7 +262,8 @@ function App() {
             {/* Rotas Públicas do Salão */}
             <Route path="site" element={<MiniSiteSalao />} />
             <Route path="home" element={<HomeCliente />} />
-            <Route path="agendar" element={<Navigate to="servicos" replace />} />
+            <Route path="agendar" element={<Navigate to="agendar/servicos" replace />} />
+            <Route path="servicos" element={<Navigate to="agendar/servicos" replace />} />
             <Route path="agendar/servicos" element={<AgendamentoServicos />} />
             <Route path="agendar/profissionais" element={<AgendamentoProfissionais />} />
             <Route path="agendar/horarios" element={<AgendamentoHorarios />} />

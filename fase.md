@@ -1330,3 +1330,17 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **3. Validação**:
     * Build Vite de produção executado com êxito em 3.27s.
     * Testes Jest de onboarding e DDL validados com 100% de sucesso.
+- [x] **G18 (P1) — Correção dos Botões de Agendamento Online no Mini-Site do Salão**:
+  - **1. Causa Raiz Diagnosticada**:
+    * No Mini-Site do Salão (`MiniSiteSalao.jsx`), a função `handleGoToBooking` navegava para `/${tenant.slug}/servicos`.
+    * A rota `servicos` não existia no roteador do salão (`App.jsx`), fazendo com que o React Router caísse na rota coringa `<Route path="*" element={<Navigate to="/" replace />} />`.
+    * Como resultado, clicar em "Agendar Atendimento Online" (Hero), "Agendar Horário" (Navbar), "Agendar com {profissional}" (Equipe) ou na barra fixa mobile redirecionava o cliente para fora do salão e abria a Landing Page institucional do sistema OperaBeauty.
+  - **2. Resolução**:
+    * **MiniSite (`MiniSiteSalao.jsx`)**: Atualizada a função `handleGoToBooking` para navegar diretamente para a rota oficial de catálogo e agendamento: `/${slug}/agendar/servicos`.
+    * **Roteador Global (`App.jsx`)**: Adicionados redirecionamentos canônicos automáticos para compatibilidade retroativa:
+      - `<Route path="servicos" element={<Navigate to="agendar/servicos" replace />} />`
+      - `<Route path="agendar" element={<Navigate to="agendar/servicos" replace />} />`
+    * **Governança de Migrações**: Criada a migração `phase34_salon_minisite.sql` garantindo paridade na suíte de testes.
+  - **3. Validação**:
+    * Suíte de testes `minisiteD20.test.js` aprovada com 100% de sucesso (6/6 testes).
+    * Build de produção Vite concluído em 3.37s.

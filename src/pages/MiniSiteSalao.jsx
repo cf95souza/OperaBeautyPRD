@@ -191,7 +191,8 @@ export const MiniSiteSalao = () => {
   const brandColor = tenant.brand_hex || tenant.primary_color || '#8E3B4E';
 
   const handleGoToBooking = () => {
-    navigate(`/${tenant.slug}/servicos`);
+    const slug = tenant?.slug || tenant_slug;
+    navigate(`/${slug}/agendar/servicos`);
   };
 
   const handleOpenWhatsApp = () => {

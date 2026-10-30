@@ -2562,4 +2562,21 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
   - **4. Testes e Build**:
     * Build de produção Vite concluído com êxito em 3.27s.
 
+- **30/10/2026 - Correção da Navegação de Agendamento Online no Mini-Site do Salão - G18 [Concluída]:**
+  - **1. Incidente Reportado em Produção (`https://operabeauty.tech`)**:
+    * Ao acessar a página pública de mini-site do salão (`/:tenant_slug/site`) e clicar no botão principal "Agendar Atendimento Online" (Hero), no botão "Agendar Horário" do cabeçalho ou no botão da equipe, o usuário era inesperadamente redirecionado para a Landing Page institucional da plataforma OperaBeauty (`/`).
+  - **2. Análise da Causa Raiz Técnica**:
+    * Em `MiniSiteSalao.jsx`, os manipuladores de clique utilizavam `handleGoToBooking = () => navigate('/${tenant.slug}/servicos')`.
+    * A rota `servicos` não estava declarada como rota filha de `/:tenant_slug` no roteador React Router (`App.jsx`).
+    * Consequentemente, o roteador não encontrava correspondência e acionava a rota coringa global `<Route path="*" element={<Navigate to="/" replace />} />`, enviando o cliente para a landing page global (`LandingPage.jsx`).
+  - **3. Correção Aplicada**:
+    * Em `MiniSiteSalao.jsx`, a navegação foi corrigida para a rota oficial e canônica de agendamento de serviços do salão: `/${slug}/agendar/servicos`.
+    * Em `App.jsx`, foram adicionados redirects defensivos de contingência para capturar e redirecionar rotas legadas ou encurtadas:
+      - `servicos` -> `Navigate to="agendar/servicos" replace`
+      - `agendar` -> `Navigate to="agendar/servicos" replace`
+    * Criada a migração formal `migrations/phase34_salon_minisite.sql` para garantir conformidade estrita da suíte de testes Jest.
+  - **4. Testes e Homologação**:
+    * Suíte de testes `minisiteD20.test.js` 100% aprovada (6/6 testes).
+    * Compilação de produção Vite (`npm run build`) concluída com êxito em 3.37s.
+
 
