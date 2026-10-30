@@ -205,7 +205,7 @@ const PaginaPlanos = () => {
       )}
 
       {/* Header Fixo */}
-      <header className="sticky top-0 z-40 bg-[#FBF7F5]/90 backdrop-blur-md border-b border-[#EADFDC]/70">
+      <header className="sticky top-0 z-40 bg-[#FBF7F5]/90 backdrop-blur-md border-b border-[#EADFDC]/70 safe-top">
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">
             <span className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-[#2B2327] group-hover:text-[#8E3B4E] transition">

@@ -44,7 +44,7 @@ export default function DemoBanner() {
       {/* Barra Superior Fixa de Demonstração */}
       <div 
         id="demo-banner-topbar" 
-        className="sticky top-0 z-50 bg-[#1F171C]/95 backdrop-blur-md text-white border-b border-[#D4AF37]/35 shadow-md px-3 sm:px-4 py-2 transition-all duration-300"
+        className="sticky top-0 z-50 bg-[#1F171C]/95 backdrop-blur-md text-white border-b border-[#D4AF37]/35 shadow-md px-3 sm:px-4 safe-banner-top pb-2 transition-all duration-300"
       >
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           

@@ -72,7 +72,7 @@ const SuperAdminLayout = () => {
       `}>
         
         {/* Header da Sidebar Super Admin */}
-        <div className="h-16 px-5 border-b border-line flex items-center justify-between shrink-0">
+        <div className="safe-header px-5 border-b border-line flex items-center justify-between shrink-0">
           <Link 
             to="/superadmin"
             className="flex items-center gap-2.5 group"
@@ -137,7 +137,7 @@ const SuperAdminLayout = () => {
         </nav>
         
         {/* Rodapé Fixo da Sidebar com Identificação Master e Sair */}
-        <div className="p-3 border-t border-line shrink-0 bg-surface flex flex-col gap-2">
+        <div className="p-3 safe-bottom border-t border-line shrink-0 bg-surface flex flex-col gap-2">
           <div className="flex items-center gap-2.5 p-2 rounded-xl bg-surface-variant/40">
             <div className="w-9 h-9 rounded-full bg-brand-tint flex items-center justify-center text-brand font-bold text-sm shrink-0 border border-brand/20">
               SA
@@ -166,7 +166,7 @@ const SuperAdminLayout = () => {
       <div className="flex-1 w-full md:ml-[264px] flex flex-col min-h-screen">
         
         {/* TopAppBar Mobile */}
-        <header className="md:hidden h-16 border-b border-line bg-surface/90 backdrop-blur-md sticky top-0 z-30 shrink-0 px-6 flex items-center justify-between">
+        <header className="md:hidden safe-header border-b border-line bg-surface/90 backdrop-blur-md sticky top-0 z-30 shrink-0 px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button 
               className="text-brand hover:opacity-80 transition-opacity p-1.5 -ml-2 rounded-lg"

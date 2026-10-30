@@ -623,7 +623,7 @@ export default function LandingPage() {
       {/* =========================================================================
           1. HEADER / NAVBAR
       ========================================================================= */}
-      <header className="sticky top-0 z-50 bg-[#FBF7F5]/90 backdrop-blur-md border-b border-[#EADFDC]/60 transition-all duration-200">
+      <header className="sticky top-0 z-50 bg-[#FBF7F5]/90 backdrop-blur-md border-b border-[#EADFDC]/60 transition-all duration-200 safe-top">
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
           
           {/* Logo */}

@@ -107,7 +107,7 @@ const AdminLayout = () => {
       `}>
         
         {/* Header da Sidebar */}
-        <div className="h-16 px-5 border-b border-line flex items-center justify-between shrink-0">
+        <div className="safe-header px-5 border-b border-line flex items-center justify-between shrink-0">
           <Link 
             to={`/${tenant_slug}/home`}
             className="flex items-center gap-2.5 group"
@@ -179,7 +179,7 @@ const AdminLayout = () => {
         </nav>
         
         {/* Rodapé Fixo da Sidebar com Perfil e Sair */}
-        <div className="p-3 border-t border-line shrink-0 bg-surface flex flex-col gap-2">
+        <div className="p-3 safe-bottom border-t border-line shrink-0 bg-surface flex flex-col gap-2">
           <Link 
             to={`/${tenant_slug}/staff/perfil`}
             onClick={() => setIsMobileMenuOpen(false)}
@@ -214,7 +214,7 @@ const AdminLayout = () => {
       <div className="flex-1 w-full lg:ml-[264px] flex flex-col min-h-screen">
         
         {/* TopAppBar (Mobile & Desktop) */}
-        <header className="h-16 border-b border-line bg-surface/90 backdrop-blur-md sticky top-0 z-30 shrink-0 px-4 sm:px-6 flex items-center justify-between">
+        <header className="safe-header border-b border-line bg-surface/90 backdrop-blur-md sticky top-0 z-30 shrink-0 px-4 sm:px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button 
               className="lg:hidden text-brand hover:opacity-80 transition-opacity p-2 -ml-2 rounded-xl border border-line/60 bg-surface-variant/40 active:scale-95 flex items-center justify-center cursor-pointer shadow-2xs"

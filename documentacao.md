@@ -2495,4 +2495,27 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Sanitização estrita de datas no serviço (`isValidDate = /^\d{4}-\d{2}-\d{2}$/`) impedindo falhas SQL de parsing como `"undefined"`.
     * Serialização automática de `options.params` em `src/lib/api.js` e migração das chamadas em `AgendaProfissional.jsx` e `WaitlistManagerModal.jsx` para o cliente oficial `api.waitlist.list`.
 
+- **30/10/2026 - Suporte Universal a Safe Area (Notch, Dynamic Island e Câmeras Frontais em Smartphones) - G14 [Concluída]:**
+  - **1. Diagnóstico do Problema Físico em iPhones / Android**:
+    * Testes em smartphones físicos (iPhones com notch/entalhe, Dynamic Island e dispositivos Android com câmera perfurada "punch-hole" no centro/topo da tela) evidenciaram que os cabeçalhos fixos e barras superiores estavam sendo cobertos pela câmera física.
+    * Telas afetadas identificadas:
+      - **SuperAdminLayout**: Header móvel (`md:hidden`) com altura fixa cortando o logotipo e o título "Super Admin".
+      - **DemoBanner**: Barra superior fixa (`sticky top-0`) cortando textos do "Modo Demonstração" e botões ("Voltar ao Site" / "Criar Meu Salão").
+      - **AdminLayout**: Header superior e drawer lateral colidindo com a área do notch/câmera.
+      - **Headers Institucionais e Mini-site**: Falta de espaçamento seguro no topo para visualização contínua.
+  - **2. Criação de Utilitários de Safe Area (`src/index.css`)**:
+    * Criação de classes utilitárias consumindo as CSS Environment Variables (`env(safe-area-inset-*, 0px)`):
+      - `.safe-top`: Aplica `padding-top: env(safe-area-inset-top, 0px)`.
+      - `.safe-bottom`: Aplica `padding-bottom: env(safe-area-inset-bottom, 0px)`.
+      - `.safe-left` e `.safe-right`: Para rotação de tela e bordas laterais.
+      - `.safe-header`: Define `padding-top: env(safe-area-inset-top, 0px)` com `min-height: calc(4rem + env(safe-area-inset-top, 0px))`, assegurando que o elemento permaneça centralizado verticalmente abaixo do recorte do hardware.
+      - `.safe-banner-top`: Aplica `padding-top: max(env(safe-area-inset-top, 0px), 0.5rem)` para banners de alerta e demonstração.
+  - **3. Atualização dos Componentes e Páginas**:
+    * `SuperAdminLayout.jsx`: Aplicado `safe-header` no header móvel e no header da sidebar; `safe-bottom` no rodapé.
+    * `DemoBanner.jsx`: Aplicado `safe-banner-top pb-2`.
+    * `AdminLayout.jsx`: Aplicado `safe-header` no TopAppBar do salão e no drawer; `safe-bottom` no rodapé.
+    * `LandingPage.jsx`, `MiniSiteSalao.jsx`, `PaginaPlanos.jsx`, `PainelRevendedor.jsx`: Aplicado `safe-top` nos cabeçalhos `<header>`.
+  - **4. Homologação e Build**:
+    * Compilação de produção com `npm run build` gerando novos bundles e service worker sem advertências ou quebras.
+
 

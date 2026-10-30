@@ -167,6 +167,20 @@
   --safe-right: env(safe-area-inset-right, 0px);
 }
 
+/* Safe Area Utilities for Notches, Dynamic Island & Mobile Gestures */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-left {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+.safe-right {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
 body {
   @apply bg-background text-on-background antialiased min-h-screen;
   height: 100dvh;
@@ -261,4 +275,25 @@ td,
 @utility font-numeric-aligned {
   font-variant-numeric: lining-nums tabular-nums;
   font-feature-settings: "lnum" 1, "tnum" 1;
+}
+
+/* Utilitários de Safe Area para Dispositivos Móveis (Notch, Dynamic Island, Câmera Central/Frontal e Barras Inferiores) */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-left {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+.safe-right {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.safe-header {
+  padding-top: env(safe-area-inset-top, 0px);
+  min-height: calc(4rem + env(safe-area-inset-top, 0px));
+}
+.safe-banner-top {
+  padding-top: max(env(safe-area-inset-top, 0px), 0.5rem);
 }

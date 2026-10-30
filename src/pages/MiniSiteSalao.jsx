@@ -205,7 +205,7 @@ export const MiniSiteSalao = () => {
     <div className="min-h-screen bg-[#FBF7F5] text-ink antialiased font-sans selection:bg-brand-tint selection:text-brand">
       
       {/* 1. Header / Navbar Flutuante Editorial */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-line/60 transition-all">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-line/60 transition-all safe-top">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between gap-4">
           
           {/* Logo e Nome */}
