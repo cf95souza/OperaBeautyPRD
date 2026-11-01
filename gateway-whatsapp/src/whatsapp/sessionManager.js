@@ -47,6 +47,11 @@ class WhatsAppSessionManager {
           tenantId,
         };
       }
+      // Se não estiver conectada (troca de método ou retry), fecha o socket anterior
+      try {
+        existing.sock?.end();
+      } catch (_) {}
+      this.sessions.delete(tenantId);
     }
 
     const { state, saveCreds } = await usePostgresAuthState(tenantId);
@@ -203,9 +208,34 @@ class WhatsAppSessionManager {
       }
     }
 
+    // Se método QR Code e não registrado, aguarda o QR inicial ser emitido pelo Baileys
+    if ((options.method === 'qr' || !options.phoneNumber) && !sock.authState.creds.registered) {
+      if (!sessionData.qr) {
+        await new Promise((resolve) => {
+          const timeout = setTimeout(resolve, 4000);
+          const qrListener = (update) => {
+            if (update.qr) {
+              clearTimeout(timeout);
+              sock.ev.off('connection.update', qrListener);
+              resolve();
+            }
+          };
+          sock.ev.on('connection.update', qrListener);
+        });
+      }
+
+      return {
+        status: sessionData.status === 'CONNECTED' ? 'CONNECTED' : 'SCAN_QR',
+        qr: sessionData.qr,
+        qr_code: sessionData.qr,
+        tenantId,
+      };
+    }
+
     return {
       status: sessionData.status,
       qr: sessionData.qr,
+      qr_code: sessionData.qr,
       pairingCode: sessionData.pairingCode,
       tenantId,
     };

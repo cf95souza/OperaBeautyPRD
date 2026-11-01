@@ -2676,6 +2676,21 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
   - **5. Homologação**:
     * Testes de regressão Jest e compilação de produção Vite (`npm run build`) 100% aprovados.
 
+- **01/11/2026 - Pareamento Dual WhatsApp (QR Code & Código de 8 Dígitos) e Desconexão Limpa - G26 [Concluída]:**
+  - **1. Motivação e Resolução de Problema de UX em iPhones (iOS)**:
+    * No ecossistema iOS (ex: iPhone X e modelos superiores), ao abrir "Aparelhos Conectados" > "Conectar um Aparelho", a câmera é acionada imediatamente, dificultando ou ocultando o pareamento exclusivo por código de telefone.
+  - **2. Interface com Abas Dinâmicas (`ConfiguracoesOperacionais.jsx`)**:
+    * Implementado seletor com abas claras: `Escanear QR Code (iPhone/PC)` e `Código de 8 Dígitos`.
+    * Renderização nativa da matriz de QR Code gerada pelo Baileys na tela através de `QRCode.toDataURL`.
+    * Atualização contínua com polling de 3 segundos no frontend, com detecção automática de conexão e transição imediata para o estado `Conectado` assim que o QR Code for lido.
+  - **3. Troca de Linha e Reset de Conexão**:
+    * Botão "Desconectar / Trocar de Número" implementado no painel, disparando desvinculação em nível de socket (`logout()`), limpeza das credenciais criptográficas em banco e liberação para novo pareamento.
+    * Suporte a desvinculação iniciada diretamente pelo próprio aparelho celular.
+  - **4. Testes e Compilação**:
+    * Suíte de testes `whatsappGatewayD2.test.js` 100% aprovada (14/14 testes).
+    * Build Vite de produção concluído com sucesso em 3.65s.
+
+
 
 
 

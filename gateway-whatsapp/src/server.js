@@ -81,6 +81,17 @@ app.get('/internal/instances/:tenantId/status', async (req, res) => {
   const { tenantId } = req.params;
 
   try {
+    const liveSession = sessionManager.sessions.get(tenantId);
+    if (liveSession?.status === 'CONNECTED' && liveSession.sock?.user) {
+      const phone = liveSession.sock.user.id.split(':')[0].split('@')[0];
+      return res.json({
+        status: 'CONNECTED',
+        phone_number: phone,
+        phoneNumber: phone,
+        tenantId,
+      });
+    }
+
     const dbResult = await pool.query(
       `SELECT status, phone_number, pairing_code, qr_code, connected_at, last_activity_at 
        FROM public.cap_whatsapp_instances 
@@ -92,9 +103,16 @@ app.get('/internal/instances/:tenantId/status', async (req, res) => {
       return res.json({ status: 'DISCONNECTED', tenantId });
     }
 
+    const row = dbResult.rows[0];
+    const effectiveQr = liveSession?.qr || row.qr_code;
+    const effectiveStatus = liveSession?.status || row.status;
+
     res.json({
       tenantId,
-      ...dbResult.rows[0],
+      ...row,
+      status: effectiveStatus,
+      qr_code: effectiveQr,
+      qr: effectiveQr,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

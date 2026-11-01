@@ -1435,3 +1435,15 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **5. Validação**:
     - Testes unitários e de integração aprovados (16/16 em gateway/Pix, 9/9 em CRM).
     - Compilação de produção Vite (`npm run build`) concluída com êxito.
+
+- [x] **G26 (UX/Feature) – Pareamento Dual WhatsApp (QR Code iPhone/Android & Código 8 Dígitos) e Desconexão Limpa**:
+  - **1. Suporte Universal à Câmera do iPhone (iOS) e Web via QR Code**:
+    - `ConfiguracoesOperacionais.jsx`: Adicionadas abas de seleção de método (`Escanear QR Code` vs `Código de 8 Dígitos`).
+    - Renderização nativa da imagem do QR Code em tela via `QRCode.toDataURL` com instruções dedicadas para iPhone e Android.
+    - Polling reativo em tempo real (intervalo de 3s) durante o pareamento, detectando aprovação no celular e transicionando o painel automaticamente para `Conectado`.
+  - **2. Desconexão e Troca de Número Descomplicada**:
+    - Botão destacado "Desconectar / Trocar de Número" no painel com confirmação preventiva.
+    - `sessionManager.js`: Tratamento de desconexão ativa via `logout()`, expurgo de credenciais de autenticação em `cap_whatsapp_auth_keys` e suporte a desconexão reativa quando acionada pelo próprio celular (`DisconnectReason.loggedOut`).
+  - **3. Validação**:
+    - Suíte de testes `whatsappGatewayD2.test.js` 100% aprovada (14/14 testes).
+    - Compilação de produção Vite (`npm run build`) concluída com êxito em 3.65s.
