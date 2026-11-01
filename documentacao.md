@@ -2660,8 +2660,22 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * **P1 - Alto**: Fallback do webhook de mensalidades SaaS tratando `payment.created` como faturas pagas em caso de instabilidade na API; Porta `5001:5000` da API exposta em `0.0.0.0` no Docker Compose, contornando o Caddy.
     * **P2 - Médio**: Rotina diária de cron renovando assinaturas de clientes com sessões gratuitas sem cobrança periódica; Rotas de criação de novos clientes e captura de leads sem taxa limite de requisição (`rate-limit`).
     * **P3 - Baixo**: Passagem de JWT na query string em `privateUploads.js`; Segredo interno M2M com fallback em texto puro no gateway WhatsApp.
-  - **4. Próximos Passos**:
-    * Implementação das correções prioritárias da Etapa 1 e homologação na VPS.
+- **01/11/2026 - Execução das Correções de Segurança e Blindagem de Produção - G25 [Concluída]:**
+  - **1. Blindagem de Pagamentos e Webhooks (P0/P1)**:
+    * `backend/routes/payments.js`: A rota `POST /simulate-paid/:appointmentId` foi bloqueada compulsoriamente em produção (`process.env.NODE_ENV === 'production'`) retornando HTTP 403 Forbidden. No frontend (`AgendamentoConfirmado.jsx`), o botão de simulação agora só renderiza em ambiente de desenvolvimento local (`import.meta.env.DEV`), sendo removido do bundle de produção.
+    * `backend/routes/payments.js` & `paymentGatewayService.js`: O webhook de depósito de sinal (`/api/payments/webhook/:tenantId/:provider`) agora consulta a API oficial do Mercado Pago / Asaas para confirmar o status `approved` antes de processar qualquer baixa. Em `confirmDepositPayment`, foi removido o fallback permissivo `OR a.id::text = $2`, exigindo correspondência estrita com `deposit_payment_id`.
+    * `backend/services/saasBillingService.js`: Corrigido o fallback do webhook SaaS para nunca tratar `payment.created` como faturado (`paid`), prevenindo liberação indevida durante a geração de QR codes.
+  - **2. Isolamento de Perímetro (P1)**:
+    * `docker-compose.yml` e `docker-compose.staging.yml`: As portas da API Express (5001/5002) foram amarradas a `127.0.0.1`, impedindo acesso direto pelo IP público da VPS sem passar pelo Caddy e sem HTTPS.
+  - **3. Resiliência de Assinaturas e Proteção Anti-Abuso (P2)**:
+    * `backend/cron/reminders.js`: Assinaturas expiradas agora mudam para o status `'past_due'` em vez de receberem 30 dias e sessões gratuitas infinitas.
+    * `backend/routes/auth.js` & `backend/routes/leads.js`: Adicionados middlewares de rate-limit (`registerClientLimiter` e `leadLimiter`) prevenindo criação automatizada de contas e flood de formulários.
+  - **4. Headers de Privacidade e Segredo M2M (P3)**:
+    * `backend/routes/privateUploads.js`: Adicionados cabeçalhos `Referrer-Policy: no-referrer` e `Cache-Control: private, no-store, max-age=0` nas respostas de imagens do CRM.
+    * `backend/routes/whatsappRoutes.js`, `gateway-whatsapp/src/server.js` e `.env.example`: Alertas em produção para ausência de `INTERNAL_SECRET` e documentação de configuração.
+  - **5. Homologação**:
+    * Testes de regressão Jest e compilação de produção Vite (`npm run build`) 100% aprovados.
+
 
 
 

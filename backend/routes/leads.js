@@ -1,10 +1,21 @@
 import express from 'express';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import { validate } from '../middlewares/validate.js';
 import { authMiddleware, requireRole } from '../middlewares/auth.js';
 import { createLead, listLeads } from '../services/leadService.js';
 
 const router = express.Router();
+
+// [SEGURANÇA OWASP / FALHA 06]: Rate limit para captura pública de leads (10 por 15 min por IP)
+const leadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Muitos envios de formulário a partir deste endereço. Por favor, aguarde alguns minutos.' },
+  statusCode: 429
+});
 
 const leadSchema = z.object({
   body: z.object({
@@ -16,7 +27,7 @@ const leadSchema = z.object({
   query: z.any(), params: z.any()
 });
 
-router.post('/', validate(leadSchema), async (req, res) => {
+router.post('/', leadLimiter, validate(leadSchema), async (req, res) => {
   const { name, email, phone, salon_name } = req.body;
 
   try {

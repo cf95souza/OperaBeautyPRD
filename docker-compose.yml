@@ -64,7 +64,8 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "${API_PORT:-5001}:5000"
+      # [SEGURANÇA OWASP / FALHA 04]: Vinculado estritamente a 127.0.0.1 para não expor a API diretamente ao perímetro público
+      - "127.0.0.1:${API_PORT:-5001}:5000"
     environment:
       # O backend vai conectar no DB usando o nome do container "db" em vez de localhost
       DB_HOST: db

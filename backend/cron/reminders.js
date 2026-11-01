@@ -38,9 +38,11 @@ export const initCronJobs = () => {
         console.error('❌ [CRON] Erro ao executar campanhas automáticas:', campErr);
       }
 
-      // 3. Renovação do Clube de Assinaturas (30 dias)
+      // 3. Verificação do Clube de Assinaturas (vencimento do ciclo de 30 dias)
+      // [SEGURANÇA REGRA DE NEGÓCIO / FALHA 05]: Bloqueio de renovação gratuita infinita.
+      // Assinaturas cujo ciclo venceu entram em 'past_due' até que o pagamento recorrente seja confirmado.
       const expiredMemberships = await pool.query(`
-        SELECT cm.id, cm.current_period_end, sm.usage_limit
+        SELECT cm.id, cm.current_period_end, sm.name as plan_name
         FROM public.cap_client_memberships cm
         JOIN public.cap_salon_memberships sm ON cm.membership_id = sm.id
         WHERE cm.status = 'active'
@@ -50,11 +52,10 @@ export const initCronJobs = () => {
       for (const mem of expiredMemberships.rows) {
         await pool.query(`
           UPDATE public.cap_client_memberships
-          SET remaining_sessions = $1,
-              current_period_start = current_period_end,
-              current_period_end = current_period_end + INTERVAL '30 days'
-          WHERE id = $2
-        `, [mem.usage_limit, mem.id]);
+          SET status = 'past_due'
+          WHERE id = $1
+        `, [mem.id]);
+        console.log(`[CRON] Assinatura ${mem.id} (${mem.plan_name}) expirou o ciclo e foi atualizada para 'past_due'.`);
       }
 
       console.log('✅ [CRON] Rotinas diárias concluídas.');

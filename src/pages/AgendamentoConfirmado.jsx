@@ -468,18 +468,20 @@ const AgendamentoConfirmado = () => {
                 <span>Aguardando confirmação do banco...</span>
               </div>
 
-              {/* Botão de Homologação / Simulação no Sandbox */}
-              <div className="pt-2 border-t border-line/40 text-center">
-                <button
-                  type="button"
-                  onClick={handleSimulatePayment}
-                  disabled={simulating}
-                  className="text-xs text-brand/80 hover:text-brand font-medium hover:underline inline-flex items-center gap-1 cursor-pointer py-1"
-                >
-                  <Sparkles size={13} />
-                  <span>{simulating ? 'Confirmando...' : '⚡ Simular Pagamento Aprovado'}</span>
-                </button>
-              </div>
+              {/* Botão de Homologação / Simulação no Sandbox (Exclusivo para Ambiente de Desenvolvimento) */}
+              {import.meta.env.DEV && (
+                <div className="pt-2 border-t border-line/40 text-center">
+                  <button
+                    type="button"
+                    onClick={handleSimulatePayment}
+                    disabled={simulating}
+                    className="text-xs text-brand/80 hover:text-brand font-medium hover:underline inline-flex items-center gap-1 cursor-pointer py-1"
+                  >
+                    <Sparkles size={13} />
+                    <span>{simulating ? 'Confirmando...' : '⚡ Simular Pagamento Aprovado (Dev)'}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Botão Secundário de Consulta */}

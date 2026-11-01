@@ -125,10 +125,11 @@ router.get('/crm/:tenantId/:filename', requireCrmAccess, (req, res) => {
   }
 
   // Cabeçalhos de segurança contra vazamento e cache compartilhado
-  res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+  res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
 
   return res.sendFile(filePath);
 });
@@ -173,8 +174,9 @@ router.get('/crm/:filename', async (req, res) => {
       return res.status(404).json({ error: 'Arquivo do prontuário não encontrado.' });
     }
 
-    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate, max-age=0');
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
     return res.sendFile(targetPath);
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao carregar prontuário.' });

@@ -248,10 +248,75 @@ router.post('/webhook/:tenantId/:provider', async (req, res) => {
       return res.status(200).send('OK (sem ID de pagamento)');
     }
 
-    // Confirmar pagamento
+    // [SEGURANÇA OWASP / FALHA 02]: Validação obrigatória do status real junto à API oficial do gateway
+    let isApproved = false;
+
+    if (provider === 'mercadopago') {
+      const gatewayConfig = await getTenantGatewayConfig(tenantId);
+      const token = gatewayConfig?.credentials?.accessToken;
+
+      if (!token) {
+        req.log.warn({ tenantId }, 'Webhook recebido mas salão não possui token de acesso do Mercado Pago configurado');
+        return res.status(200).json({ received: true, ignored: true, reason: 'Gateway credentials missing' });
+      }
+
+      try {
+        const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (mpRes.ok) {
+          const mpData = await mpRes.json();
+          if (mpData.status === 'approved') {
+            isApproved = true;
+          } else {
+            req.log.info({ paymentId, status: mpData.status }, 'Webhook MP: pagamento ainda não aprovado');
+            return res.status(200).json({ received: true, status: mpData.status });
+          }
+        } else {
+          req.log.warn({ paymentId, status: mpRes.status }, 'Falha na consulta à API do Mercado Pago');
+          return res.status(502).json({ error: 'Erro ao validar status com Mercado Pago' });
+        }
+      } catch (mpErr) {
+        req.log.error(mpErr, 'Erro de rede ao consultar Mercado Pago');
+        return res.status(502).json({ error: 'Falha de comunicação com gateway' });
+      }
+    } else if (provider === 'asaas') {
+      const event = req.body?.event;
+      if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED') {
+        isApproved = true;
+      } else {
+        const gatewayConfig = await getTenantGatewayConfig(tenantId);
+        const apiKey = gatewayConfig?.credentials?.apiKey;
+        if (apiKey) {
+          const baseUrl = gatewayConfig.sandbox_mode ? 'https://sandbox.asaas.com/api/v3' : 'https://api.asaas.com/v3';
+          const asaasRes = await fetch(`${baseUrl}/payments/${paymentId}`, {
+            headers: { 'access_token': apiKey }
+          });
+          if (asaasRes.ok) {
+            const asaasData = await asaasRes.json();
+            if (asaasData.status === 'RECEIVED' || asaasData.status === 'CONFIRMED') {
+              isApproved = true;
+            } else {
+              return res.status(200).json({ received: true, status: asaasData.status });
+            }
+          }
+        }
+      }
+    } else {
+      // Provedores não oficiais não podem ter confirmação automática cega sem verificação
+      req.log.warn({ provider }, 'Tentativa de webhook para provedor não suportado');
+      return res.status(400).json({ error: 'Provedor não suportado para webhook automático.' });
+    }
+
+    if (!isApproved) {
+      return res.status(200).json({ received: true, status: 'not_approved' });
+    }
+
+    // Confirmar pagamento de forma atômica
     await confirmDepositPayment(tenantId, paymentId, provider);
 
-    return res.status(200).json({ received: true });
+    return res.status(200).json({ received: true, confirmed: true });
   } catch (error) {
     req.log.error(error, `Erro ao processar webhook do gateway ${provider}`);
     // Retorna 200 para o gateway não ficar floodando com retry se for agendamento não encontrado
@@ -263,11 +328,19 @@ router.post('/webhook/:tenantId/:provider', async (req, res) => {
  * 6. Simular Pagamento Aprovado (Exclusivo para Sandbox / Desenvolvimento Local)
  */
 router.post('/simulate-paid/:appointmentId', async (req, res) => {
+  // [SEGURANÇA OWASP / FALHA 01]: Bloqueio compulsório em produção
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Endpoint indisponível em ambiente de produção.' });
+  }
+
   const { appointmentId } = req.params;
 
   try {
     const apptRes = await pool.query(
-      `SELECT tenant_id, deposit_payment_id, deposit_status FROM public.cap_appointments WHERE id = $1`,
+      `SELECT a.tenant_id, a.deposit_payment_id, a.deposit_status, g.sandbox_mode
+       FROM public.cap_appointments a
+       LEFT JOIN public.cap_tenant_gateway_configs g ON g.tenant_id = a.tenant_id
+       WHERE a.id = $1`,
       [appointmentId]
     );
 
@@ -275,10 +348,14 @@ router.post('/simulate-paid/:appointmentId', async (req, res) => {
       return res.status(404).json({ error: 'Agendamento não encontrado.' });
     }
 
-    const { tenant_id, deposit_payment_id } = apptRes.rows[0];
+    const { tenant_id, deposit_payment_id, sandbox_mode } = apptRes.rows[0];
+
+    if (sandbox_mode === false) {
+      return res.status(403).json({ error: 'Simulação permitida apenas quando o gateway estiver configurado em modo Sandbox.' });
+    }
 
     // Confirma usando o ID do pagamento registrado
-    const result = await confirmDepositPayment(tenant_id, deposit_payment_id || appointmentId, 'simulator');
+    const result = await confirmDepositPayment(tenant_id, deposit_payment_id, 'simulator');
 
     return res.json({
       message: 'Pagamento de sinal simulado com sucesso! Horário confirmado.',

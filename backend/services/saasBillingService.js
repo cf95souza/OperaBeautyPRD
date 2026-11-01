@@ -601,7 +601,15 @@ export const processBillingWebhook = async (gateway, payload) => {
       }
     }
     if (!status) {
-      status = payload?.action === 'payment.created' || payload?.action === 'payment.updated' ? 'paid' : payload?.status;
+      // [SEGURANÇA OWASP / FALHA 03]: 'payment.created' NUNCA deve ser considerado como 'paid'.
+      // Apenas 'approved' confirmado pelo Mercado Pago autoriza a baixa da fatura.
+      if (payload?.action === 'payment.created') {
+        status = 'pending';
+      } else if (payload?.data?.status === 'approved' || payload?.status === 'approved') {
+        status = 'approved';
+      } else {
+        status = payload?.data?.status || payload?.status || 'pending';
+      }
     }
   } else if (gateway === 'asaas') {
     transactionId = payload?.payment?.id;

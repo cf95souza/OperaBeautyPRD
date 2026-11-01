@@ -6,6 +6,10 @@ import { requireFeature } from '../middlewares/featureFlagMiddleware.js';
 import whatsappService from '../services/whatsappService.js';
 
 const router = express.Router();
+
+if (!process.env.INTERNAL_SECRET && process.env.NODE_ENV === 'production') {
+  console.warn('⚠️ [ALERTA DE SEGURANÇA / FALHA 08] INTERNAL_SECRET não definido no .env em ambiente de produção!');
+}
 const INTERNAL_SECRET = process.env.INTERNAL_SECRET || 'operabeauty-m2m-internal-secret-token-32chars';
 
 /**

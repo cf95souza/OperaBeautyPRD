@@ -275,14 +275,14 @@ export const createDepositCharge = async ({
  * Confirma o pagamento do sinal de forma atômica e idempotente
  */
 export const confirmDepositPayment = async (tenantId, paymentId, provider = null) => {
-  // 1. Localizar o agendamento
+  // 1. Localizar o agendamento exclusivamente pelo deposit_payment_id registrado
   const apptRes = await pool.query(
     `SELECT a.id, a.tenant_id, a.client_id, a.deposit_status, a.deposit_amount, a.status,
             c.name as client_name, s.name as service_name
      FROM public.cap_appointments a
      JOIN public.cap_clients c ON a.client_id = c.id
      JOIN public.cap_services s ON a.service_id = s.id
-     WHERE a.tenant_id = $1 AND (a.deposit_payment_id = $2 OR a.id::text = $2)`,
+     WHERE a.tenant_id = $1 AND a.deposit_payment_id = $2`,
     [tenantId, String(paymentId)]
   );
 

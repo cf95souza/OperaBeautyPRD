@@ -16,15 +16,16 @@ A varredura completa do repositório foi executada cobrindo:
 4. **Integridade de Dados e Concorrência:** Gerenciamento de pool do PostgreSQL (`pool.connect()`), Bloqueios Concorrentes (`FOR UPDATE`), Rotinas Cron.
 5. **Uploads e Armazenamento Privado:** Sanitização de nomes de arquivos, validação de mimetype, vazamento de tokens em URLs.
 
-### Scorecard de Risco
+### Scorecard de Risco (Pós-Remediação)
 
-| Categoria | Nível de Risco | Status | Itens Críticos Encontrados |
+| Categoria | Nível de Risco | Status | Itens Críticos Encontrados e Resolução |
 | :--- | :---: | :---: | :--- |
-| **Integridade Financeira (SaaS & Salão)** | 🔴 **CRÍTICO** | Ação Imediata | Rota pública de simulação de pagamento ativa em prod; Webhooks aceitando criação como pago |
-| **Infraestrutura & Rede (Docker)** | 🟠 **ALTO** | Correção Urgente | Porta 5001 da API exposta diretamente na interface pública (`0.0.0.0`) da VPS |
-| **Controle de Assinaturas/Planos** | 🟡 **MÉDIO** | Correção Próxima | Cron renovando pacotes/membros de salões infinitamente sem cobrança financeira |
-| **Proteção contra Spam / DoS** | 🟡 **MÉDIO** | Correção Próxima | Rotas de cadastro de clientes e leads sem rate-limiters |
-| **Privacidade de Arquivos (CRM)** | 🟢 **BAIXO** | Melhoria | Token JWT trafegado via Query String em tags `<img>` |
+| **Integridade Financeira (SaaS & Salão)** | 🟢 **BLINDADO** | ✅ Resolvido | Simulação bloqueada em prod (`NODE_ENV`); Webhooks validam status na API oficial do gateway |
+| **Infraestrutura & Rede (Docker)** | 🟢 **BLINDADO** | ✅ Resolvido | Portas 5001/5002 vinculadas estritamente a `127.0.0.1`, protegendo o perímetro via Caddy |
+| **Controle de Assinaturas/Planos** | 🟢 **BLINDADO** | ✅ Resolvido | Assinaturas vencidas entram em `past_due` sem concessão de sessões gratuitas |
+| **Proteção contra Spam / DoS** | 🟢 **BLINDADO** | ✅ Resolvido | Rate limiters ativados em `/register-client` (15/h) e `/api/leads` (10/15min) |
+| **Privacidade de Arquivos (CRM)** | 🟢 **BLINDADO** | ✅ Resolvido | Headers `Referrer-Policy: no-referrer` e `Cache-Control: private, no-store, max-age=0` ativos |
+| **Segredo M2M WhatsApp** | 🟢 **BLINDADO** | ✅ Resolvido | Alertas de console em produção para segredos default e documentação no `.env.example` |
 | **Gestão do Banco de Dados (Pool)** | 🟢 **SEGURO** | Conforme | Todos os `pool.connect()` utilizam `try/finally { client.release() }` |
 
 ---

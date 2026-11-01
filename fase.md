@@ -1409,7 +1409,7 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **7. Homologação em Produção (VPS)**:
     - Homologado e confirmado com sucesso pelo usuário em ambiente de produção na VPS (`srv1827901`) em 30/10/2026. Fatura SaaS de R$ 1,00 gerada no Mercado Pago, QR Code lido perfeitamente e pagamento compensado.
 
-## Fase 32: Auditoria Geral de Produção, Segurança e Resiliência (G24)
+## Fase 32: Auditoria Geral de Produção, Segurança e Resiliência (G24 & G25)
 - [x] **G24 (P0/P1/P2/P3) – Varredura Completa da Base de Código e Infraestrutura em Produção**:
   - **1. Auditoria Estrutural**:
     - Levantamento de riscos em infraestrutura Docker Compose, Caddy Reverse Proxy, camada de banco de dados PostgreSQL (pool leaks, locks concorrentes), controle de acesso JWT/cookies, M2M WhatsApp, rotinas de cron e integridade financeira nos fluxos SaaS e de salões.
@@ -1418,3 +1418,20 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Identificação de 2 vulnerabilidades críticas (`P0`: rota `/simulate-paid` pública e validação cega de webhook de sinal de agendamento), 2 altas (`P1`: fallback de webhook SaaS e porta 5001 exposta em `0.0.0.0`), 2 médias (`P2`: cron com renovação infinita de planos e ausência de rate-limit em rotas de cadastro/leads) e 2 baixas (`P3`: tokens em query strings e fallback hardcoded de segredo M2M).
   - **3. Plano de Remediação**:
     - Plano de ação estruturado em duas etapas (Etapa 1: blindagem financeira e rede; Etapa 2: resiliência e estabilidade) registrado na documentação técnica.
+
+- [x] **G25 (P0/P1/P2/P3) – Execução das Correções de Segurança e Blindagem de Produção**:
+  - **1. Blindagem de Pagamentos e Webhooks (P0/P1)**:
+    - `backend/routes/payments.js`: Rota `POST /simulate-paid/:appointmentId` bloqueada em produção (`NODE_ENV === 'production' -> 403 Forbidden`) e restrita a gateways em modo sandbox. Botão de simulação no frontend (`AgendamentoConfirmado.jsx`) condicionado estritamente a `import.meta.env.DEV`.
+    - `backend/routes/payments.js` & `paymentGatewayService.js`: Webhook de sinal de agendamentos (`/api/payments/webhook/:tenantId/:provider`) atualizado para consultar a API oficial do Mercado Pago / Asaas antes de confirmar pagamentos. Removido fallback permissivo de `a.id::text` em `confirmDepositPayment`, assegurando correspondência exclusiva por `deposit_payment_id`.
+    - `backend/services/saasBillingService.js`: Removida brecha no fallback que considerava `payment.created` como faturas quitadas.
+  - **2. Isolamento de Perímetro e Infraestrutura (P1)**:
+    - `docker-compose.yml` e `docker-compose.staging.yml`: Portas das APIs (5001/5002) vinculadas estritamente a `127.0.0.1`, impedindo bypass dos cabeçalhos de segurança do Caddy.
+  - **3. Resiliência de Assinaturas e Proteção Anti-Abuso (P2)**:
+    - `backend/cron/reminders.js`: Assinaturas expiradas são alteradas para `'past_due'` sem conceder sessões gratuitas nem estender ciclos sem faturamento.
+    - `backend/routes/auth.js` & `backend/routes/leads.js`: Adicionados `registerClientLimiter` (15/hora) e `leadLimiter` (10/15min) contra ataques de flood.
+  - **4. Privacidade e Segredos (P3)**:
+    - `backend/routes/privateUploads.js`: Adicionados cabeçalhos `Referrer-Policy: no-referrer` e `Cache-Control: private, no-store, max-age=0` na entrega de arquivos do prontuário CRM.
+    - `backend/routes/whatsappRoutes.js`, `gateway-whatsapp/src/server.js` e `.env.example`: Adicionado alerta explícito para ausência de `INTERNAL_SECRET` em produção e template de configuração.
+  - **5. Validação**:
+    - Testes unitários e de integração aprovados (16/16 em gateway/Pix, 9/9 em CRM).
+    - Compilação de produção Vite (`npm run build`) concluída com êxito.

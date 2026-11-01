@@ -72,7 +72,8 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "${STAGING_API_PORT:-5002}:5000"
+      # [SEGURANÇA OWASP / FALHA 04]: Vinculado estritamente a 127.0.0.1 para não expor a API diretamente ao perímetro público
+      - "127.0.0.1:${STAGING_API_PORT:-5002}:5000"
     environment:
       NODE_ENV: staging
       DB_HOST: db

@@ -41,6 +41,16 @@ export const clientOtpLimiter = rateLimit({
   statusCode: 429
 });
 
+// [SEGURANÇA OWASP / FALHA 06]: Rate limiter contra flood de novos cadastros de clientes
+export const registerClientLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 15, // max 15 cadastros por IP por hora
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Limite de cadastros excedido para este endereço IP. Tente novamente mais tarde.' },
+  statusCode: 429
+});
+
 // C12 (P1): Rate limiter por IP para impedir varredura em massa (30 req / 15 min)
 export const checkPhoneIpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -424,7 +434,7 @@ router.post(
   }
 );
 
-router.post('/register-client', validate(registerClientSchema), async (req, res) => {
+router.post('/register-client', registerClientLimiter, validate(registerClientSchema), async (req, res) => {
   const { tenant_id, name, phone, password, birth_date, ref } = req.body;
   try {
     const clientId = await registerClient(tenant_id, name, phone, password, birth_date, ref);
