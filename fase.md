@@ -1408,3 +1408,13 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Build de produção do Vite compilado com sucesso.
   - **7. Homologação em Produção (VPS)**:
     - Homologado e confirmado com sucesso pelo usuário em ambiente de produção na VPS (`srv1827901`) em 30/10/2026. Fatura SaaS de R$ 1,00 gerada no Mercado Pago, QR Code lido perfeitamente e pagamento compensado.
+
+## Fase 32: Auditoria Geral de Produção, Segurança e Resiliência (G24)
+- [x] **G24 (P0/P1/P2/P3) – Varredura Completa da Base de Código e Infraestrutura em Produção**:
+  - **1. Auditoria Estrutural**:
+    - Levantamento de riscos em infraestrutura Docker Compose, Caddy Reverse Proxy, camada de banco de dados PostgreSQL (pool leaks, locks concorrentes), controle de acesso JWT/cookies, M2M WhatsApp, rotinas de cron e integridade financeira nos fluxos SaaS e de salões.
+  - **2. Diagnóstico e Registro Formal**:
+    - Documento oficial de auditoria compilado e salvo no projeto: `AUDITORIA_PRODUCAO.md`.
+    - Identificação de 2 vulnerabilidades críticas (`P0`: rota `/simulate-paid` pública e validação cega de webhook de sinal de agendamento), 2 altas (`P1`: fallback de webhook SaaS e porta 5001 exposta em `0.0.0.0`), 2 médias (`P2`: cron com renovação infinita de planos e ausência de rate-limit em rotas de cadastro/leads) e 2 baixas (`P3`: tokens em query strings e fallback hardcoded de segredo M2M).
+  - **3. Plano de Remediação**:
+    - Plano de ação estruturado em duas etapas (Etapa 1: blindagem financeira e rede; Etapa 2: resiliência e estabilidade) registrado na documentação técnica.

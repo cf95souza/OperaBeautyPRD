@@ -21,6 +21,7 @@ REPO_URL.txt
 # Auditoria e Docs Locais
 *.md
 !README.md
+!AUDITORIA_PRODUCAO.md
 arquivados/
 security-auditor/
 stitch_telas/

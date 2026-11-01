@@ -2650,4 +2650,18 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Compilação de produção Vite (`npm run build`) concluída com sucesso.
     * **Homologação em Produção (VPS)**: Teste real de geração de fatura e pagamento Pix via Mercado Pago executado em produção com 100% de êxito em 30/10/2026.
 
+- **01/11/2026 - Auditoria Técnica Completa de Produção, Segurança e Infraestrutura - G24 [Concluída]:**
+  - **1. Escopo da Auditoria**:
+    * Varredura técnica minuciosa em toda a base de código do OperaBeauty (backend, frontend, Docker, Caddy, banco de dados, gateways e rotinas de agendamento/cron) com foco em resiliência e segurança após o go-live na VPS (`srv1827901`).
+  - **2. Compilação do Relatório Oficial**:
+    * Criação e versionamento do relatório oficial [`AUDITORIA_PRODUCAO.md`](file:///d:/Repositorios/OperaBeauty/AUDITORIA_PRODUCAO.md) contendo análise aprofundada, scorecards de maturidade, código vulnerável vs. remediado e matriz de risco.
+  - **3. Diagnóstico e Classificação**:
+    * **P0 - Crítico**: Rota `POST /api/payments/simulate-paid/:appointmentId` pública sem autenticação; Webhook do salão (`/api/payments/webhook/:tenantId/:provider`) confirmando depósitos sem consulta direta à API do gateway.
+    * **P1 - Alto**: Fallback do webhook de mensalidades SaaS tratando `payment.created` como faturas pagas em caso de instabilidade na API; Porta `5001:5000` da API exposta em `0.0.0.0` no Docker Compose, contornando o Caddy.
+    * **P2 - Médio**: Rotina diária de cron renovando assinaturas de clientes com sessões gratuitas sem cobrança periódica; Rotas de criação de novos clientes e captura de leads sem taxa limite de requisição (`rate-limit`).
+    * **P3 - Baixo**: Passagem de JWT na query string em `privateUploads.js`; Segredo interno M2M com fallback em texto puro no gateway WhatsApp.
+  - **4. Próximos Passos**:
+    * Implementação das correções prioritárias da Etapa 1 e homologação na VPS.
+
+
 
