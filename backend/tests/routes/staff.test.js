@@ -58,8 +58,11 @@ describe('Staff Routes Tests', () => {
 
   describe('POST /api/staff', () => {
     it('deve permitir manager criar novo staff', async () => {
-      // Mock para a query de inserção e para logAudit
-      db.query.mockResolvedValueOnce({ rows: [{ id: 'new-staff-id' }] });
+      // Mock para a query de verificação de plano, inserção, comissão e auditoria
+      db.query.mockResolvedValueOnce({ rows: [{ max_professionals: null }] });
+      db.query.mockResolvedValueOnce({ rows: [{ staff_id: 'new-staff-id' }] });
+      db.query.mockResolvedValueOnce({ rows: [] });
+      db.query.mockResolvedValueOnce({ rows: [] });
 
       const res = await request(app)
         .post('/api/staff')
@@ -126,6 +129,34 @@ describe('Staff Routes Tests', () => {
       expect(res.status).toBe(200);
       // Backend validará via service que a query updateSelf não altera role
       // A role não muda na query SQL.
+    });
+  });
+
+  describe('PUT /api/staff/:id', () => {
+    it('deve permitir manager atualizar serviços e dados com commission_rate como string numérica', async () => {
+      db.query
+        .mockResolvedValueOnce({ rows: [{ name: 'Ana', phone: '11999999999', email: 'ana@teste.com', role: 'professional', is_active: true, commission_rate: '15.00' }] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const res = await request(app)
+        .put('/api/staff/6f0f5bae-e8dd-48ed-926d-e40c3b6485c9')
+        .set('Authorization', `Bearer ${validTokenManager}`)
+        .send({
+          name: 'Ana',
+          phone: '11999999999',
+          email: 'ana@teste.com',
+          role: 'professional',
+          is_active: true,
+          commission_rate: '15.00',
+          service_ids: ['a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d']
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.commission_rate).toBe(15);
+      expect(res.body.service_ids).toHaveLength(1);
     });
   });
 });

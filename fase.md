@@ -1454,3 +1454,19 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **3. Validação**:
     - Suíte de testes `whatsappGatewayD2.test.js` 100% aprovada (14/14 testes).
     - Compilação de produção Vite (`npm run build`) concluída com êxito em 3.65s.
+
+- [x] **G27 (Fix/Backend) – Validação Zod e Atualização Parcial de Serviços do Staff (HTTP 400)**:
+  - **1. Coerção Numérica para Colunas NUMERIC no PostgreSQL**:
+    - `backend/routes/staff.js`: Utilizado `z.coerce.number()` em `commission_rate` para aceitar strings monetárias/percentuais retornadas pelo PostgreSQL (`"0.00"`).
+    - `updateStaffSchema`: Tornados opcionais campos cadastrais imutáveis (`name`, `phone`, `email`) e sanitização de `password` vazio/nulo.
+    - `role`: Inclusão de `salon_admin` no enum e permissão para gerenciar equipe.
+  - **2. Backend Service (`staffService.js`) & Frontend (`GestaoEquipe.jsx`)**:
+    - `updateStaff`: Fallback seguro para manter dados existentes de colunas obrigatórias quando o modal de Horários e Serviços enviar apenas a lista de `service_ids`.
+    - `GestaoEquipe.jsx`: Conversão explícita `Number(scheduleStaff.commission_rate) || 0`.
+
+- [x] **G28 (Fix/Resiliência) – Resiliência de Lembretes Automáticos de 2 Horas**:
+  - **1. Eliminação de Descartes Silenciosos da Meta no WhatsApp Baileys**:
+    - `messageQueue.js`: Substituição definitiva de mensagens interativas com botões (`buttonsMessage`) por texto estruturado legível ("Digite 1 para Confirmar, 2 para Remarcar").
+  - **2. Janela Contínua no Fallback do Cron (`reminders.js`)**:
+    - `backend/cron/reminders.js`: Cron ajustado para rodar a cada 15 minutos (`*/15 * * * *`) com janela entre 1h45m e 2h15m via `NOW() + INTERVAL`, eliminando falhas de timezone e fração de hora.
+    - Idempotência preservada via chave única no PostgreSQL.

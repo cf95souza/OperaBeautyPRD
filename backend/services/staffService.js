@@ -107,7 +107,7 @@ export const updateStaff = async (id, tenantId, isSelf, isManager, name, phone, 
   }
 
   const currentStaffResult = await pool.query(
-    'SELECT role, is_active, commission_rate FROM public.cap_staff WHERE id = $1 AND tenant_id = $2',
+    'SELECT name, phone, email, role, is_active, commission_rate FROM public.cap_staff WHERE id = $1 AND tenant_id = $2',
     [id, tenantId]
   );
 
@@ -119,15 +119,12 @@ export const updateStaff = async (id, tenantId, isSelf, isManager, name, phone, 
 
   const currentStaff = currentStaffResult.rows[0];
 
-  let finalRole = role;
-  let finalIsActive = is_active;
-  let finalCommissionRate = commission_rate;
-
-  if (!isManager) {
-    finalRole = currentStaff.role;
-    finalIsActive = currentStaff.is_active;
-    finalCommissionRate = currentStaff.commission_rate;
-  }
+  const finalName = name !== undefined && name !== null ? name : currentStaff.name;
+  const finalPhone = phone !== undefined && phone !== null ? phone : currentStaff.phone;
+  const finalEmail = email !== undefined && email !== null ? email : currentStaff.email;
+  const finalRole = isManager && role !== undefined ? role : currentStaff.role;
+  const finalIsActive = isManager && is_active !== undefined ? is_active : currentStaff.is_active;
+  const finalCommissionRate = isManager && commission_rate !== undefined ? commission_rate : currentStaff.commission_rate;
 
   // Verificar limite do plano se estiver reativando um funcionário
   if (finalIsActive === true && currentStaff.is_active === false) {
@@ -157,7 +154,7 @@ export const updateStaff = async (id, tenantId, isSelf, isManager, name, phone, 
 
   await pool.query(
     'SELECT cap_update_staff($1, $2, $3, $4, $5, $6, $7, $8)',
-    [id, tenantId, name, phone, email, password || null, finalRole, finalIsActive !== undefined ? finalIsActive : true]
+    [id, tenantId, finalName, finalPhone, finalEmail, password || null, finalRole, finalIsActive !== undefined ? finalIsActive : true]
   );
 
   if (isManager && finalCommissionRate !== undefined) {
@@ -182,9 +179,9 @@ export const updateStaff = async (id, tenantId, isSelf, isManager, name, phone, 
     currentStaff,
     updatedStaff: {
       id,
-      name,
-      phone,
-      email,
+      name: finalName,
+      phone: finalPhone,
+      email: finalEmail,
       role: finalRole,
       commission_rate: finalCommissionRate || 0.00,
       is_active: finalIsActive !== undefined ? finalIsActive : true,

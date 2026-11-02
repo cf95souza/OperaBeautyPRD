@@ -2715,6 +2715,15 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Suíte de testes `whatsappGatewayD2.test.js` 100% aprovada (14/14 testes).
     * Build Vite de produção concluído com sucesso em 3.65s.
 
+- **02/11/2026 - Correção de Validação Zod ao Editar Serviços da Equipe e Resiliência de Lembretes - G27/G28 [Concluída]:**
+  - **1. Erro de Validação HTTP 400 em `PUT /api/staff/:id`**:
+    * Corrigida rejeição de `commission_rate` string pelo Zod através de `z.coerce.number().min(0).max(100).optional()`.
+    * Permitida atualização parcial no modal de serviços e horários sem exigir reenvio obrigatório de `name`, `phone`, `email` ou senha.
+    * Ajustado `staffService.js` para manter dados existentes de colunas obrigatórias caso venham vazias no payload de atualização.
+  - **2. Resiliência de Lembretes WhatsApp de 2 Horas**:
+    * Identificado que mensagens com botões interativos (`buttonsMessage`) eram silenciosamente descartadas pela Meta no WhatsApp Web Multi-Device. Padronização para mensagens em texto puro formatado de alta legibilidade com respostas numéricas ("1" para confirmar, "2" para remarcar).
+    * Otimizada a rotina de cron de segurança (`backend/cron/reminders.js`) para executar a cada 15 minutos checando janela contínua (`start_time BETWEEN NOW() + 1h45m AND NOW() + 2h15m`), tornando-a imune a discrepâncias de fuso horário.
+
 
 
 

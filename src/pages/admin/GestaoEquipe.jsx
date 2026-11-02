@@ -249,7 +249,7 @@ const GestaoEquipe = () => {
         email: scheduleStaff.email,
         role: scheduleStaff.role,
         is_active: scheduleStaff.is_active,
-        commission_rate: scheduleStaff.commission_rate || 0,
+        commission_rate: Number(scheduleStaff.commission_rate) || 0,
         service_ids: selectedServices
       };
       await api.staff.update(scheduleStaff.id, payload);

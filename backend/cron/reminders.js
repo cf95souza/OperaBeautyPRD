@@ -67,11 +67,12 @@ export const initCronJobs = () => {
     timezone: "America/Sao_Paulo"
   });
 
-  // Lembretes de 2h: Roda a cada hora no minuto 0 (Ex: 09:00, 10:00, etc)
-  cron.schedule('0 * * * *', async () => {
+  // Lembretes de 2h (Safety Net Fallback): Roda a cada 15 minutos para cobrir qualquer fração de hora
+  cron.schedule('*/15 * * * *', async () => {
     console.log('⏳ [CRON] Checando lembretes de 2h...');
     
     try {
+      // Busca agendamentos iniciando na janela entre 1h45m e 2h15m a partir de agora
       const appts2h = await pool.query(`
         SELECT a.id, a.tenant_id, a.client_id, a.start_time, 
                c.name as client_name, c.phone as client_phone, 
@@ -82,9 +83,9 @@ export const initCronJobs = () => {
         JOIN public.cap_services s ON a.service_id = s.id
         JOIN public.cap_tenants t ON a.tenant_id = t.id
         LEFT JOIN public.cap_staff st ON a.staff_id = st.id
-        WHERE (a.start_time AT TIME ZONE 'America/Sao_Paulo')::date = CURRENT_DATE
-        AND a.status IN ('scheduled', 'confirmed')
-        AND EXTRACT(HOUR FROM (a.start_time AT TIME ZONE 'America/Sao_Paulo')) = EXTRACT(HOUR FROM (CURRENT_TIME AT TIME ZONE 'America/Sao_Paulo')) + 2
+        WHERE a.start_time >= NOW() + INTERVAL '1 hour 45 minutes'
+          AND a.start_time <= NOW() + INTERVAL '2 hours 15 minutes'
+          AND a.status IN ('scheduled', 'confirmed')
       `);
 
       for (const appt of appts2h.rows) {
