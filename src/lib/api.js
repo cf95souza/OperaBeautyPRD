@@ -1078,6 +1078,12 @@ export const api = {
         method: 'POST',
       });
     },
+    async sendTest(recipientPhone) {
+      return request('/whatsapp/test-message', {
+        method: 'POST',
+        body: JSON.stringify({ recipientPhone }),
+      });
+    },
     async getMessages(limit = 50) {
       return request(`/whatsapp/messages?limit=${limit}`);
     }

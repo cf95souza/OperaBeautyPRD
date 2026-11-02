@@ -1574,6 +1574,21 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     - Validação de chamada M2M via rede Docker interna (`http://wa-gateway:4000/health`) e verificação de bloqueio 401 sem token secreto.
     - Build do Vite (`npm run build`) concluído com sucesso limpo em 2.07s.
 
+- **01/11/2026 - Fase 44: Correção Crítica do Pipeline de Lembretes WhatsApp & Homologação em Tempo Real (D2) [Concluída]:**
+  - **Causa Raiz da Falha no Envio de Lembretes Automáticos de 2h**:
+    1. Trava de feature flag no worker (`notificationWorker.js`): o worker realizava uma consulta SQL estrita exigindo `p.features @> '["whatsapp_gateway"]'::jsonb` e `f.is_active_global = true`. Como salões em produção ou com variações de plano não possuíam essa chave exata no array JSON, a query retornava 0 linhas e o envio via WhatsApp era silenciosamente ignorado.
+    2. Sessões não restauradas no boot do Gateway (`operabeauty-wa-gateway`): as instâncias em RAM do Baileys eram perdidas ao reiniciar o contêiner, mesmo com as credenciais salvas no PostgreSQL.
+    3. Cron de fallback desativado: `initCronJobs()` importado mas não invocado no boot de `server.js`, e o cron horário de 2h não contemplava envio por WhatsApp.
+  - **Implementações e Correções de Engenharia**:
+    1. `notificationWorker.js`: simplificada a checagem para verificar diretamente `cap_whatsapp_instances WHERE tenant_id = $1 AND status = 'CONNECTED'`, garantindo disparo imediato para todo salão com linha conectada.
+    2. `sessionManager.js`: adicionada a rotina `restoreSavedSessions()` no boot do Gateway para auto-reconectar todos os salões com status `CONNECTED`.
+    3. `cron/reminders.js` & `server.js`: ativada a inicialização dos cron jobs no boot do Express e incluído o fallback de WhatsApp na verificação horária de 2h.
+    4. Rota M2M e Teste em Tempo Real: criados os endpoints `POST /internal/messages/send-test` no gateway e `POST /api/whatsapp/test-message` na API, integrados ao botão "Disparar Mensagem de Teste" na tela `ConfiguracoesOperacionais.jsx`.
+  - **Homologação e Testes**:
+    1. Disparo de teste executado com êxito em tempo real para o número real de cliente `(11) 94915-6525`.
+    2. Suíte Jest `backend/tests/whatsappGatewayD2.test.js` passando 100% (14/14 testes).
+    3. Compilação de produção com Vite limpa em 3.49s (`./dist`).
+
 - **24/10/2026 - Fase 46: G8 (P1) — Correção da Tela de Vale-Presente (Minified React Error #31) [Concluída]:**
   - **Causa Raiz Identificada**:
     - Em `GestaoGiftCards.jsx`, o subcomponente `EstadoVazio` recebia `icone={Gift}` (passando a referência direta do componente/objeto `forwardRef` em vez de um elemento JSX `<Gift className="..." />`). Quando a lista de vales-presente estava vazia (ou sem autenticação prévia), o React tentava renderizar o nó `{$$typeof, render, displayName}` diretamente no DOM, disparando a exceção fatal em tempo de execução `Minified React error #31`.

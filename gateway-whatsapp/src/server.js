@@ -218,7 +218,41 @@ Seu código para ${actionText} é:
   }
 });
 
+/**
+ * POST /internal/messages/send-test
+ * Dispara mensagem de teste imediata para homologação da conexão
+ */
+app.post('/internal/messages/send-test', async (req, res) => {
+  const { tenantId, recipientPhone, senderName } = req.body;
+
+  if (!tenantId || !recipientPhone) {
+    return res.status(400).json({ error: 'tenantId e recipientPhone são obrigatórios' });
+  }
+
+  try {
+    const messageText = 
+`⚡ *Teste de Conexão OperaBeauty*
+
+Olá! Esta é uma mensagem de verificação em tempo real do seu WhatsApp integrado ao OperaBeauty.
+
+✅ *Status*: Linha conectada e operacional!
+📅 *Data/Hora*: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
+👤 *Solicitado por*: ${senderName || 'Gestor'}
+
+Seus lembretes automáticos de 24h e 2h antes serão entregues normalmente a partir desta linha. 🌸`;
+
+    const result = await messageQueue.sendSimpleMessage(tenantId, recipientPhone, messageText);
+    res.json({ success: true, messageId: result?.key?.id });
+  } catch (error) {
+    console.error('[Gateway Server] Falha ao enviar mensagem de teste:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Inicialização do servidor
 app.listen(PORT, () => {
   console.log(`[WhatsApp Gateway] Microsserviço ativo na porta interna ${PORT}`);
+  sessionManager.restoreSavedSessions().catch((e) => {
+    console.warn('[WhatsApp Gateway] Falha inicial ao restaurar sessões salvas:', e.message);
+  });
 });

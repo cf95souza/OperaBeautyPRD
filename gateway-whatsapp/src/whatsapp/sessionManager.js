@@ -363,6 +363,25 @@ class WhatsAppSessionManager {
   }
 
   /**
+   * Auto-restaura conexões de WhatsApp ativas gravadas no banco na inicialização do gateway
+   */
+  async restoreSavedSessions() {
+    try {
+      const result = await pool.query(
+        "SELECT tenant_id, phone_number FROM public.cap_whatsapp_instances WHERE status = 'CONNECTED'"
+      );
+      for (const row of result.rows) {
+        console.log(`[WhatsApp Gateway] Auto-restaurando sessão salva para o salão ${row.tenant_id}...`);
+        this.connect(row.tenant_id, { phoneNumber: row.phone_number }).catch((err) => {
+          console.warn(`[WhatsApp Gateway] Falha ao auto-restaurar sessão para ${row.tenant_id}:`, err.message);
+        });
+      }
+    } catch (err) {
+      console.error('[WhatsApp Gateway] Erro ao buscar sessões para auto-restauração:', err.message);
+    }
+  }
+
+  /**
    * Desconecta e encerra a sessão
    */
   async disconnect(tenantId) {

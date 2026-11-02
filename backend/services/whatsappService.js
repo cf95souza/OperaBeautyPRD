@@ -127,6 +127,29 @@ export const whatsappService = {
       throw error;
     }
   },
+
+  /**
+   * Envia mensagem de teste imediata para o número especificado
+   */
+  async sendTestMessage({ tenantId, recipientPhone, senderName }) {
+    try {
+      const response = await fetch(`${WA_GATEWAY_URL}/internal/messages/send-test`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ tenantId, recipientPhone, senderName }),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`Erro do gateway WhatsApp (${response.status}): ${errBody}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`[whatsappService] Erro ao enviar mensagem de teste para ${recipientPhone}:`, error.message);
+      throw error;
+    }
+  },
 };
 
 export default whatsappService;

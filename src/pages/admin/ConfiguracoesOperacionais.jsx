@@ -29,7 +29,9 @@ import {
   RefreshCw,
   Copy,
   CreditCard,
-  ShieldCheck
+  ShieldCheck,
+  Send,
+  Loader2
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { formatCurrency } from '../../utils/formatters';
@@ -136,6 +138,8 @@ const ConfiguracoesOperacionais = () => {
   const [waInputPhone, setWaInputPhone] = useState('');
   const [waConnectTab, setWaConnectTab] = useState('qr');
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [waTestPhone, setWaTestPhone] = useState('11949156525');
+  const [waSendingTest, setWaSendingTest] = useState(false);
 
   // Política de Cancelamento e Faltas (Fase 44 - D8 P1)
   const [minCancellationHours, setMinCancellationHours] = useState(2);
@@ -347,6 +351,23 @@ const ConfiguracoesOperacionais = () => {
       }
     } catch (err) {
       showError('Não foi possível atualizar o status do WhatsApp.');
+    }
+  };
+
+  const handleSendTestMessage = async () => {
+    if (!waTestPhone.trim()) {
+      showError('Informe um número de telefone com DDD para o teste.');
+      return;
+    }
+    setWaSendingTest(true);
+    try {
+      const clean = waTestPhone.replace(/\D/g, '');
+      await api.whatsapp.sendTest(clean);
+      showSuccess(`🚀 Mensagem de teste enviada com sucesso para ${waTestPhone}! Verifique o WhatsApp.`);
+    } catch (err) {
+      showError(err.message || 'Erro ao enviar mensagem de teste via WhatsApp.');
+    } finally {
+      setWaSendingTest(false);
     }
   };
 
@@ -799,6 +820,44 @@ const ConfiguracoesOperacionais = () => {
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span>Confirmação e remarcação em 1 toque ativas</span>
                   </div>
+                </div>
+
+                {/* ÁREA DE TESTE IMEDIATO DE DISPARO */}
+                <div className="mt-4 pt-3.5 border-t border-emerald-200/70">
+                  <p className="text-xs font-bold text-emerald-950 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Send className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Testar Envio de Mensagem Imediato</span>
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="tel"
+                      value={waTestPhone}
+                      onChange={(e) => setWaTestPhone(e.target.value)}
+                      placeholder="DDD + Telefone (ex: 11949156525)"
+                      className="flex-1 px-3.5 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-mono text-ink placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                    />
+                    <button
+                      type="button"
+                      disabled={waSendingTest}
+                      onClick={handleSendTestMessage}
+                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      {waSendingTest ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Enviando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Disparar Mensagem de Teste</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 mt-1.5">
+                    Dispara um WhatsApp de verificação em tempo real diretamente da linha do salão para validar a entrega.
+                  </p>
                 </div>
               </div>
             ) : waStatus === 'SCAN_QR' ? (

@@ -166,6 +166,30 @@ router.post('/disconnect', requireRole(['manager', 'admin', 'salon_admin', 'supe
 });
 
 /**
+ * POST /api/whatsapp/test-message
+ * Envia uma mensagem de teste imediata para o número indicado
+ */
+router.post('/test-message', requireRole(['manager', 'admin', 'salon_admin', 'superadmin']), async (req, res) => {
+  const tenantId = req.user.tenant_id;
+  const { recipientPhone } = req.body;
+
+  if (!recipientPhone) {
+    return res.status(400).json({ error: 'Número de telefone do destinatário é obrigatório.' });
+  }
+
+  try {
+    const result = await whatsappService.sendTestMessage({
+      tenantId,
+      recipientPhone,
+      senderName: req.user.name || 'Gestor'
+    });
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /api/whatsapp/messages
  * Histórico de lembretes e mensagens enviadas pelo WhatsApp no salão
  */

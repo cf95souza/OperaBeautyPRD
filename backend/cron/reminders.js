@@ -73,10 +73,15 @@ export const initCronJobs = () => {
     
     try {
       const appts2h = await pool.query(`
-        SELECT a.id, a.tenant_id, a.client_id, a.start_time, c.name as client_name, s.name as service_name
+        SELECT a.id, a.tenant_id, a.client_id, a.start_time, 
+               c.name as client_name, c.phone as client_phone, 
+               s.name as service_name, t.name as tenant_name,
+               st.name as staff_name
         FROM public.cap_appointments a
         JOIN public.cap_clients c ON a.client_id = c.id
         JOIN public.cap_services s ON a.service_id = s.id
+        JOIN public.cap_tenants t ON a.tenant_id = t.id
+        LEFT JOIN public.cap_staff st ON a.staff_id = st.id
         WHERE (a.start_time AT TIME ZONE 'America/Sao_Paulo')::date = CURRENT_DATE
         AND a.status IN ('scheduled', 'confirmed')
         AND EXTRACT(HOUR FROM (a.start_time AT TIME ZONE 'America/Sao_Paulo')) = EXTRACT(HOUR FROM (CURRENT_TIME AT TIME ZONE 'America/Sao_Paulo')) + 2
@@ -91,6 +96,32 @@ export const initCronJobs = () => {
           `Estamos te esperando às ${time} para seu ${appt.service_name}.`,
           '/agenda'
         );
+
+        // Fallback WhatsApp
+        try {
+          if (appt.client_phone) {
+            const waRes = await pool.query(
+              "SELECT id FROM public.cap_whatsapp_instances WHERE tenant_id = $1 AND status = 'CONNECTED'",
+              [appt.tenant_id]
+            );
+            if (waRes.rows.length > 0) {
+              const { whatsappService } = await import('../services/whatsappService.js');
+              await whatsappService.sendReminder({
+                tenantId: appt.tenant_id,
+                appointmentId: appt.id,
+                recipientPhone: appt.client_phone,
+                clientName: (appt.client_name || 'Cliente').split(' ')[0],
+                salonName: appt.tenant_name,
+                serviceName: appt.service_name,
+                professionalName: appt.staff_name || 'Profissional',
+                scheduledTimeFormatted: `Hoje às ${time}`,
+                messageType: 'REMINDER_2H'
+              });
+            }
+          }
+        } catch (waCronErr) {
+          console.warn(`[CRON] Falha não-fatal no envio de WhatsApp do agendamento ${appt.id}:`, waCronErr.message);
+        }
       }
     } catch (err) {
       console.error('❌ [CRON] Erro nos lembretes de 2h:', err);

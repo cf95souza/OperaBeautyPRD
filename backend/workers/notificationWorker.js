@@ -87,17 +87,7 @@ export const notificationWorker = new Worker('notifications', async (job) => {
         const waInstanceRes = await pool.query(
           `SELECT i.status 
            FROM public.cap_whatsapp_instances i
-           JOIN public.cap_tenants t ON i.tenant_id = t.id
-           LEFT JOIN public.cap_plans p ON t.plan_id = p.id
-           LEFT JOIN public.cap_feature_flags f ON f.name = 'whatsapp_gateway'
-           LEFT JOIN public.cap_tenant_feature_flags tf ON tf.feature_flag_id = f.id AND tf.tenant_id = t.id
-           WHERE i.tenant_id = $1 
-             AND i.status = 'CONNECTED'
-             AND (
-               f.is_active_global = true 
-               OR tf.is_enabled = true 
-               OR (p.features IS NOT NULL AND p.features @> '["whatsapp_gateway"]'::jsonb)
-             )`,
+           WHERE i.tenant_id = $1 AND i.status = 'CONNECTED'`,
           [tenantId]
         );
 
