@@ -105,41 +105,16 @@ Estamos passando para confirmar o seu horário no *${salonName}*:
 💇 *Serviço:* ${serviceName}
 👤 *Profissional:* ${professionalName}
 
-Por favor, confirme se você comparecerá:
-*1* - ✅ Confirmar Presença
-*2* - 📅 Solicitar Remarcação
+Por favor, confirme se você comparecerá respondendo aqui:
+👉 Digite *1* para *Confirmar Presença* ✅
+👉 Digite *2* para *Solicitar Remarcação* 📅
 
-_Se preferir, clique nos botões abaixo ou responda com o número correspondente._
 _(Caso deseje cancelar avisos futuros, responda SAIR)_`;
 
-        // 5. Botões de Ação Rápida nativos
-        const buttons = [
-          {
-            buttonId: `confirm_appointment:${appointmentId}`,
-            buttonText: { displayText: '✅ Confirmar Presença' },
-            type: 1,
-          },
-          {
-            buttonId: `reschedule_appointment:${appointmentId}`,
-            buttonText: { displayText: '📅 Solicitar Remarcação' },
-            type: 1,
-          },
-        ];
-
-        let sentResult;
-        try {
-          // Tenta envio com botões
-          sentResult = await sock.sendMessage(jid, {
-            text: messageBody,
-            footer: `${salonName} • OperaBeauty`,
-            buttons: buttons,
-            headerType: 1,
-          });
-        } catch (btnErr) {
-          // Se o client do WhatsApp recusar botões legados, fallback para texto limpo estruturado
-          console.warn('[WhatsApp Queue] Fallback para texto plano:', btnErr.message);
-          sentResult = await sock.sendMessage(jid, { text: messageBody });
-        }
+        // 5. Envio em texto estruturado direto (100% de taxa de entrega no WhatsApp)
+        // [ANTI-BLOCK META]: Botões interativos (buttonsMessage) são silenciosamente descartados pela Meta
+        // em conexões Multi-Device Web. O envio em texto puro formatado é entregue de forma imediata e garantida.
+        const sentResult = await sock.sendMessage(jid, { text: messageBody });
 
         // 6. Grava trilha de auditoria na tabela cap_whatsapp_messages
         await pool.query(

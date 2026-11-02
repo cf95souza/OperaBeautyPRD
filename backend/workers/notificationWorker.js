@@ -104,7 +104,7 @@ export const notificationWorker = new Worker('notifications', async (job) => {
             scheduledTimeFormatted: `${formattedDate} às ${formattedTime}`,
             messageType: reminderType === '24h' ? 'REMINDER_24H' : 'REMINDER_2H',
           });
-          logger.info(`Lembrete WhatsApp ${reminderType} enviado com botões interativos para ${appt.client_phone} (Agendamento ${appointmentId})`);
+          logger.info(`Lembrete WhatsApp ${reminderType} enviado com sucesso para ${appt.client_phone} (Agendamento ${appointmentId})`);
         }
       }
     } catch (waErr) {

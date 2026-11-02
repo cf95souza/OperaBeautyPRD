@@ -1574,6 +1574,16 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     - Validação de chamada M2M via rede Docker interna (`http://wa-gateway:4000/health`) e verificação de bloqueio 401 sem token secreto.
     - Build do Vite (`npm run build`) concluído com sucesso limpo em 2.07s.
 
+- **02/11/2026 - Fase 44: Correção do Bloqueio de Botões no WhatsApp / Meta Anti-Spam (D2) [Concluída]:**
+  - **Causa Raiz do Descarte Silencioso de Lembretes Automáticos**:
+    - O teste manual funcionou com sucesso porque enviou texto puro (`sendSimpleMessage`).
+    - Já o lembrete automático (`sendAppointmentReminder`) transmitia botões nativos (`buttonsMessage`). A Meta desativou o suporte a botões para sessões Multi-Device Web não-oficiais (Baileys), aceitando a transmissão no WebSocket sem acusar erro, porém descartando silenciosamente a entrega no aparelho final.
+  - **Correção Aplicada**:
+    - `gateway-whatsapp/src/whatsapp/messageQueue.js`: removida a estrutura de botões descartada pela Meta e unificado o envio para mensagem de texto estruturado puro (`sock.sendMessage(jid, { text: messageBody })`), com chamada para confirmação via digitação ("1 para Confirmar" e "2 para Remarcar").
+    - O parser no gateway (`sessionManager.handleIncomingMessage`) já processa essas respostas textuais ("1", "SIM", "CONFIRMAR", "2", "REMARCAR"), atualizando o agendamento no PostgreSQL e na timeline do CRM perfeitamente.
+  - **Homologação e Testes**:
+    - Suíte Jest `backend/tests/whatsappGatewayD2.test.js` 100% aprovada (14/14 testes).
+
 - **01/11/2026 - Fase 44: Correção Crítica do Pipeline de Lembretes WhatsApp & Homologação em Tempo Real (D2) [Concluída]:**
   - **Causa Raiz da Falha no Envio de Lembretes Automáticos de 2h**:
     1. Trava de feature flag no worker (`notificationWorker.js`): o worker realizava uma consulta SQL estrita exigindo `p.features @> '["whatsapp_gateway"]'::jsonb` e `f.is_active_global = true`. Como salões em produção ou com variações de plano não possuíam essa chave exata no array JSON, a query retornava 0 linhas e o envio via WhatsApp era silenciosamente ignorado.
