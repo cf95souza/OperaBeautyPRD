@@ -1033,13 +1033,23 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
       // Registrar cancelamento na timeline do CRM
       const cancelAuthor = userRole === 'client' ? 'pela cliente' : 'pela administração';
       const reasonText = cancellation_reason ? ` Motivo: ${cancellation_reason}` : '';
+      
+      let staffIdForTimeline = null;
+      if (userRole !== 'client' && userId) {
+        const staffExists = await clientConnection.query(
+          'SELECT id FROM public.cap_staff WHERE id = $1 AND tenant_id = $2',
+          [userId, tenantId]
+        );
+        if (staffExists.rows.length > 0) {
+          staffIdForTimeline = userId;
+        }
+      }
+
       await clientConnection.query(
         `INSERT INTO public.cap_timeline_notes (tenant_id, client_id, staff_id, appointment_id, content, created_at)
          VALUES ($1, $2, $3, $4, $5, NOW())`,
-        [tenantId, currentApp.client_id, userRole !== 'client' ? userId : null, id, `Agendamento cancelado ${cancelAuthor}.${reasonText}`]
+        [tenantId, currentApp.client_id, staffIdForTimeline, id, `Agendamento cancelado ${cancelAuthor}.${reasonText}`]
       );
-
-      await checkWaitlistAndNotify(clientConnection, tenantId, finalStartTime);
     }
 
     await clientConnection.query('COMMIT');
@@ -1047,6 +1057,16 @@ export const updateAppointment = async ({ id, tenantId, userRole, userId, staff_
     // Lembretes Push no Redis: cancelar se agendamento cancelado, ou reagendar se horário remarcado — D1 (P1)
     if (finalStatus === 'cancelled' && currentApp.status !== 'cancelled') {
       cancelAppointmentReminders(id).catch(err => console.error('Falha ao cancelar lembretes push:', err));
+
+      // Checar fila de espera e ofertar vaga ao primeiro da fila (D6)
+      import('./waitlistService.js').then(({ offerNextInWaitlist }) => {
+        offerNextInWaitlist({
+          tenantId,
+          date: finalStartTime,
+          serviceId: finalServiceId,
+          staffId: finalStaffId
+        }).catch(err => console.error('Falha ao acionar lista de espera no cancelamento (update):', err));
+      }).catch(err => console.error('Falha ao importar waitlistService no cancelamento (update):', err));
     } else if (start_time && new Date(start_time).getTime() !== new Date(currentApp.start_time).getTime() && finalStatus !== 'cancelled') {
       cancelAppointmentReminders(id).catch(err => console.error('Falha ao cancelar lembretes push prévios:', err));
       scheduleAppointmentReminders(id).catch(err => console.error('Falha ao reagendar lembretes push:', err));
@@ -1126,10 +1146,22 @@ export const deleteAppointment = async ({ id, tenantId, userId, userRole, cancel
   // Registrar cancelamento na timeline do CRM
   const cancelAuthor = userRole === 'client' ? 'pela cliente' : 'pela administração';
   const reasonText = cancellation_reason ? ` Motivo: ${cancellation_reason}` : '';
+
+  let staffIdForTimeline = null;
+  if (userRole !== 'client' && userId) {
+    const staffExists = await pool.query(
+      'SELECT id FROM public.cap_staff WHERE id = $1 AND tenant_id = $2',
+      [userId, tenantId]
+    );
+    if (staffExists.rows.length > 0) {
+      staffIdForTimeline = userId;
+    }
+  }
+
   await pool.query(
     `INSERT INTO public.cap_timeline_notes (tenant_id, client_id, staff_id, appointment_id, content, created_at)
      VALUES ($1, $2, $3, $4, $5, NOW())`,
-    [tenantId, currentApp.client_id, userRole !== 'client' ? userId : null, id, `Agendamento cancelado ${cancelAuthor}.${reasonText}`]
+    [tenantId, currentApp.client_id, staffIdForTimeline, id, `Agendamento cancelado ${cancelAuthor}.${reasonText}`]
   );
 
   // Devolver sessão do clube se aplicável

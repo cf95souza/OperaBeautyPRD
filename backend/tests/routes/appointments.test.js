@@ -163,6 +163,37 @@ describe('Appointments Routes Tests', () => {
       expect(res.status).toBe(200);
       expect(res.body.checkin_status).toBe('checked_in');
     });
+
+    it('deve permitir manager cancelar agendamento com sucesso', async () => {
+      mockClient.query.mockImplementation(async (sql) => {
+        if (typeof sql === 'string') {
+          if (sql.includes('SELECT id, tenant_id, client_id, staff_id')) {
+            return { rows: [{ id: '123e4567-e89b-12d3-a456-426614174002', client_id: 'client-id', staff_id: 'staff-id', service_id: 'service-id', start_time: new Date(), end_time: new Date(), status: 'scheduled' }] };
+          }
+          if (sql.includes('UPDATE public.cap_appointments')) {
+            return { rows: [{ id: '123e4567-e89b-12d3-a456-426614174002', status: 'cancelled' }] };
+          }
+          if (sql.includes('public.cap_staff WHERE id = $1 AND tenant_id = $2')) {
+            return { rows: [{ id: 'staff-id' }] };
+          }
+          if (sql.includes('INSERT INTO public.cap_timeline_notes')) {
+            return { rows: [] };
+          }
+        }
+        return { rows: [] };
+      });
+
+      const res = await request(app)
+        .put('/api/appointments/123e4567-e89b-12d3-a456-426614174002')
+        .set('Authorization', `Bearer ${validTokenStaff}`)
+        .send({
+          status: 'cancelled',
+          cancellation_reason: 'Cliente solicitou cancelamento via WhatsApp'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('cancelled');
+    });
   });
 
   describe('DELETE /api/appointments/:id', () => {

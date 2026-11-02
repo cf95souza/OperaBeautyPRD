@@ -2724,6 +2724,13 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Identificado que mensagens com botões interativos (`buttonsMessage`) eram silenciosamente descartadas pela Meta no WhatsApp Web Multi-Device. Padronização para mensagens em texto puro formatado de alta legibilidade com respostas numéricas ("1" para confirmar, "2" para remarcar).
     * Otimizada a rotina de cron de segurança (`backend/cron/reminders.js`) para executar a cada 15 minutos checando janela contínua (`start_time BETWEEN NOW() + 1h45m AND NOW() + 2h15m`), tornando-a imune a discrepâncias de fuso horário.
 
+- **02/11/2026 - Correção de Cancelamento de Agendamento pelo Gestor na Agenda (HTTP 500) - G29 [Concluída]:**
+  - **1. Eliminação do ReferenceError `checkWaitlistAndNotify`**:
+    * A função `updateAppointment` em `backend/services/appointmentService.js` invocava uma rotina fantasma não declarada (`checkWaitlistAndNotify`) dentro da transação SQL de cancelamento.
+    * Corrigido para disparar a notificação da lista de espera assincronamente pós-commit através de `offerNextInWaitlist` (`waitlistService.js`), idêntico ao fluxo de `deleteAppointment`.
+  - **2. Validação Defensiva de Foreign Key na Timeline**:
+    * Garantido que `staff_id` em `cap_timeline_notes` só recebe o ID do usuário se este existir na tabela `cap_staff` do salão, prevenindo quebras caso a ação seja executada por perfis administrativos globais.
+
 
 
 

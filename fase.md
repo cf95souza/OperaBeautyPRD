@@ -1470,3 +1470,10 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **2. Janela Contínua no Fallback do Cron (`reminders.js`)**:
     - `backend/cron/reminders.js`: Cron ajustado para rodar a cada 15 minutos (`*/15 * * * *`) com janela entre 1h45m e 2h15m via `NOW() + INTERVAL`, eliminando falhas de timezone e fração de hora.
     - Idempotência preservada via chave única no PostgreSQL.
+
+- [x] **G29 (Fix/Backend) – Cancelamento de Agendamento pelo Gestor/Salão (HTTP 500)**:
+  - **1. Resolução de ReferenceError em `updateAppointment`**:
+    - Removida chamada à função inexistente `checkWaitlistAndNotify` dentro da transação de cancelamento.
+    - Integrado o disparo assíncrono pós-commit de `offerNextInWaitlist` de `waitlistService.js` (padrão arquitetural D6).
+  - **2. Blindagem de Foreign Key em `cap_timeline_notes`**:
+    - Validação de existência do `userId` em `cap_staff` antes de vincular `staff_id` na anotação de cancelamento da timeline, prevenindo quebras em cancelamentos feitos por gestores ou administradores.
