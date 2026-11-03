@@ -314,6 +314,10 @@ router.post('/send-appointment-reminder/:id', requireRole(['manager', 'admin', '
     const date = new Date(appt.start_time).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
     const time = new Date(appt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
 
+    const todayStr = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const isToday = todayStr === date;
+    const messageType = isToday ? 'REMINDER_2H' : 'REMINDER_24H';
+
     await whatsappService.sendReminder({
       tenantId,
       appointmentId: appt.id,
@@ -323,7 +327,7 @@ router.post('/send-appointment-reminder/:id', requireRole(['manager', 'admin', '
       serviceName: appt.service_name,
       professionalName: appt.staff_name || 'Profissional',
       scheduledTimeFormatted: `${date} às ${time}`,
-      messageType: 'REMINDER_2H'
+      messageType
     });
 
     return res.json({

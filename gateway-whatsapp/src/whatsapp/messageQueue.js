@@ -107,22 +107,25 @@ class WhatsAppMessageQueue {
         }
 
         // 4. Monta o corpo amigável e legível
-        const introText = messageType === 'REMINDER_2H' ? '⏰ *Lembrete: seu agendamento é daqui a pouco!*' : '🌸 *Lembrete do seu agendamento de amanhã!*';
+        let introText = '🌸 *Lembrete do seu agendamento!*';
+        if (messageType === 'REMINDER_2H') {
+          introText = '⏰ *Lembrete do seu agendamento hoje!*';
+        } else if (messageType === 'REMINDER_24H') {
+          introText = '🌸 *Lembrete do seu agendamento de amanhã!*';
+        }
 
         const messageBody = 
 `${introText}
 Olá, *${clientName}*! Tudo bem?
 
-Estamos passando para confirmar o seu horário no *${salonName}*:
+Estamos passando para lembrar do seu horário no *${salonName}*:
 📅 *Horário:* ${scheduledTimeFormatted}
 💇 *Serviço:* ${serviceName}
 👤 *Profissional:* ${professionalName}
 
-Por favor, confirme se você comparecerá respondendo aqui:
-👉 Digite *1* para *Confirmar Presença* ✅
-👉 Digite *2* para *Solicitar Remarcação* 📅
+Em caso de dúvidas, cancelamento ou remarcação, por favor nos envie uma mensagem por aqui para que possamos te ajudar.
 
-_(Caso deseje cancelar avisos futuros, responda SAIR)_`;
+Estamos te esperando! ✨`;
 
         // 5. Envio em texto estruturado direto (100% de taxa de entrega no WhatsApp)
         const sentResult = await sock.sendMessage(targetJid, { text: messageBody });

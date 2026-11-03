@@ -2756,6 +2756,11 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * *Remediação*: Atualizadas todas as mutações no `sessionManager.js` e `server.js` do gateway para utilizar `INSERT ... ON CONFLICT (tenant_id) DO UPDATE`.
     * *Fallback Inteligente*: Caso a consulta em `cap_whatsapp_instances` retorne vazio na API (`whatsappRoutes.js`), no cron (`reminders.js`) ou no worker (`notificationWorker.js`), é feita uma checagem em tempo real no gateway (`whatsappService.getInstanceStatus`) e persistido o status `CONNECTED` no banco imediatamente.
     * *Permissão da Agenda*: Liberado o endpoint `POST /api/whatsapp/send-appointment-reminder/:id` para profissionais e membros da equipe (`staff`, `professional`), além dos gestores.
+  - **6. Humanização de Mensagens e Isolamento de Calendário Hoje vs Amanhã**:
+    * *Diagnóstico do título 'de amanhã'*: A query de 24 horas no cron (`backend/cron/reminders.js`) avaliava apenas `start_time > NOW() + 2h15m AND <= NOW() + 26h`. Agendamentos criados com 2h30m de antecedência para o mesmo dia eram capturados e recebiam a saudação de amanhã.
+    * *Filtro de Data*: Adicionado filtro `a.start_time::date > (NOW() AT TIME ZONE 'America/Sao_Paulo')::date` na query de 24h, garantindo que agendamentos de hoje sejam tratados exclusivamente pelo fluxo de hoje (`REMINDER_2H`).
+    * *Modelo Humanizado*: Removidos os comandos rígidos de robô ("Digite 1 ou 2", "responda SAIR"). Substituído por mensagem amigável convidando o cliente a responder diretamente para o salão em caso de dúvidas, cancelamento ou remarcação.
+    * *Título Adaptativo*: O cabeçalho agora ajusta automaticamente para `⏰ Lembrete do seu agendamento hoje!` ou `🌸 Lembrete do seu agendamento de amanhã!`.
 
 
 

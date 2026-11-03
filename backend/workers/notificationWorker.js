@@ -8,10 +8,10 @@ const logger = pino();
 
 export const notificationWorker = new Worker('notifications', async (job) => {
   const { action, payload } = job.data;
-  
+
   if (action === 'sendPush') {
     const { endpoint, keys, notificationPayload } = payload;
-    
+
     const pushSubscription = {
       endpoint,
       keys: {
@@ -19,7 +19,7 @@ export const notificationWorker = new Worker('notifications', async (job) => {
         auth: keys.auth
       }
     };
-    
+
     try {
       await webpush.sendNotification(pushSubscription, notificationPayload);
       logger.info(`Push notification enviada para ${endpoint}`);
@@ -31,7 +31,7 @@ export const notificationWorker = new Worker('notifications', async (job) => {
         // Job finalizado com sucesso (não precisa tentar de novo, o cliente não quer mais notificação)
         return;
       }
-      
+
       logger.error(`Falha ao enviar push notification para ${endpoint}: ${err.message}`);
       // Propaga o erro para o BullMQ acionar o mecanismo de retentativa (retry/backoff)
       throw err;
@@ -40,7 +40,7 @@ export const notificationWorker = new Worker('notifications', async (job) => {
 
   if (action === 'sendAppointmentReminder') {
     const { appointmentId, reminderType, tenantId, clientId } = job.data;
-    
+
     // 1. Validar se o agendamento ainda está ativo (respeitar cancelamento ou conclusão prévia)
     const apptRes = await pool.query(
       `SELECT a.id, a.start_time, a.status, s.name as service_name, t.name as tenant_name, t.slug as tenant_slug, 
@@ -77,7 +77,7 @@ export const notificationWorker = new Worker('notifications', async (job) => {
     }
 
     const actionUrl = `/${appt.tenant_slug}/historico`;
-    
+
     // 1. Disparo de Web Push (isolado para não bloquear o WhatsApp)
     try {
       const { notifyClient } = await import('../services/notificationService.js');
@@ -170,7 +170,7 @@ export const notificationWorker = new Worker('notifications', async (job) => {
       logger.error(`Erro ao processar expiração de sinal para agendamento ${appointmentId}: ${expErr.message}`);
     }
   }
-}, { 
+}, {
   connection: redisClient,
   concurrency: 5 // Processar até 5 pushes simultaneamente
 });

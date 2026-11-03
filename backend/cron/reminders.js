@@ -139,8 +139,8 @@ export const processPendingReminders = async (filterTenantId = null) => {
       JOIN public.cap_services s ON a.service_id = s.id
       JOIN public.cap_tenants t ON a.tenant_id = t.id
       LEFT JOIN public.cap_staff st ON a.staff_id = st.id
-      WHERE a.start_time > NOW() + INTERVAL '2 hours 15 minutes'
-        AND a.start_time <= NOW() + INTERVAL '26 hours'
+      WHERE a.start_time::date > (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+        AND a.start_time <= NOW() + INTERVAL '28 hours'
         AND a.status IN ('scheduled', 'confirmed')
         AND NOT EXISTS (
           SELECT 1 FROM public.cap_whatsapp_messages m

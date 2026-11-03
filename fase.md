@@ -1500,3 +1500,8 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Convertidas todas as queries de instância no gateway para UPSERT automático com tratamento de concorrência.
     - Adicionado fallback em tempo real na API (`whatsappRoutes.js`), no cron (`reminders.js`) e nos workers (`notificationWorker.js`): se o banco ainda não possuir o registro, consulta o gateway ao vivo via M2M e persiste o status `CONNECTED` imediatamente.
     - Ampliado o controle de acesso em `POST /api/whatsapp/send-appointment-reminder/:id` para permitir que profissionais e equipe (`staff`, `professional`) também disparem lembretes diretamente pela agenda.
+  - **6. Humanização de Modelo de Mensagem e Isolamento Calendário 24h vs Hoje (`messageQueue.js` & `reminders.js`)**:
+    - Ajustado o cron de 24h (`reminders.js`) com filtro estrito `a.start_time::date > (NOW() AT TIME ZONE 'America/Sao_Paulo')::date`, impedindo que agendamentos do próprio dia recebam mensagem de "amanhã".
+    - Removidos comandos mecânicos de robô ("Digite 1 ou 2", "responda SAIR") do corpo da mensagem.
+    - Template humanizado com instruções diretas: "Em caso de dúvidas, cancelamento ou remarcação, por favor nos envie uma mensagem por aqui para que possamos te ajudar. Estamos te esperando! ✨".
+    - Título adaptativo dinâmico: "⏰ *Lembrete do seu agendamento hoje!*" para agendamentos do dia, e "🌸 *Lembrete do seu agendamento de amanhã!*" para o dia seguinte.
