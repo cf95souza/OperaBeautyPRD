@@ -1477,3 +1477,20 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Integrado o disparo assíncrono pós-commit de `offerNextInWaitlist` de `waitlistService.js` (padrão arquitetural D6).
   - **2. Blindagem de Foreign Key em `cap_timeline_notes`**:
     - Validação de existência do `userId` em `cap_staff` antes de vincular `staff_id` na anotação de cancelamento da timeline, prevenindo quebras em cancelamentos feitos por gestores ou administradores.
+
+- [x] **G30 (Fix/Resiliência/UX) – Motor Contínuo de Lembretes WhatsApp, Normalização JID 9º Dígito e Teste Real Sob Demanda**:
+  - **1. Varredura Contínua e Inteligente no Cron de Lembretes (`reminders.js`)**:
+    - Substituição da janela estreita de 30 minutos por varredura contínua de agendamentos pendentes com `start_time > NOW() AND start_time <= NOW() + INTERVAL '2 hours 15 minutes'`.
+    - Verificação de idempotência via `NOT EXISTS` em `cap_whatsapp_messages` para `REMINDER_2H` (status `SENT`, `DELIVERED`, `CONFIRMED`). Qualquer agendamento dentro da janela que ainda não recebeu lembrete é disparado.
+    - Adicionado suporte contínuo a lembretes de 24 horas (`REMINDER_24H`) entre 2h15m e 26h.
+    - Frequência do cron acelerada de 15 para 5 minutos (`*/5 * * * *`).
+  - **2. Resolução de Descarte Silencioso pelo 9º Dígito e Deadlock de Fila (`messageQueue.js`)**:
+    - Adicionada consulta dinâmica ao diretório do WhatsApp via `sock.onWhatsApp(candidateJid)` para identificar a presença e o JID canônico exato registrado pela Meta (8 ou 9 dígitos no Brasil), eliminando descartes silenciosos de mensagens.
+    - Blindagem contra concorrência e deadlocks em `this.tenantLocks` via `Promise.race` com timeout de 8 segundos.
+    - Tratamento de falhas e persistência do status `FAILED` com mensagem de erro em `cap_whatsapp_messages`.
+  - **3. Isolamento de Falhas no Worker (`notificationWorker.js`)**:
+    - Isolamento do disparo de Web Push em `try/catch` individual para que erros de VAPID/push não abortem o envio do lembrete via WhatsApp.
+  - **4. Eliminação de Número Pessoal e Teste Real Sob Demanda (Backend & Frontend)**:
+    - Removido número de teste pessoal hardcoded do estado inicial em `ConfiguracoesOperacionais.jsx`.
+    - Implementado endpoint `POST /api/whatsapp/trigger-cron-reminders` e botão "Executar Verificação Agora" com relatório de auditoria em tempo real na tela de configurações.
+    - Implementado endpoint `POST /api/whatsapp/send-appointment-reminder/:id` e botão "Enviar Lembrete WhatsApp Agora (Disparo Imediato)" no modal de detalhes do agendamento na agenda (`AgendaProfissional.jsx`), permitindo testar e validar o lembrete oficial em agendamentos reais sem precisar aguardar 2 horas.

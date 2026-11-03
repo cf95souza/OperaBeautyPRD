@@ -138,8 +138,10 @@ const ConfiguracoesOperacionais = () => {
   const [waInputPhone, setWaInputPhone] = useState('');
   const [waConnectTab, setWaConnectTab] = useState('qr');
   const [qrDataUrl, setQrDataUrl] = useState('');
-  const [waTestPhone, setWaTestPhone] = useState('11949156525');
+  const [waTestPhone, setWaTestPhone] = useState('');
   const [waSendingTest, setWaSendingTest] = useState(false);
+  const [waRunningCron, setWaRunningCron] = useState(false);
+  const [waCronReport, setWaCronReport] = useState(null);
 
   // Política de Cancelamento e Faltas (Fase 44 - D8 P1)
   const [minCancellationHours, setMinCancellationHours] = useState(2);
@@ -368,6 +370,21 @@ const ConfiguracoesOperacionais = () => {
       showError(err.message || 'Erro ao enviar mensagem de teste via WhatsApp.');
     } finally {
       setWaSendingTest(false);
+    }
+  };
+
+  const handleTriggerCronReminders = async () => {
+    setWaRunningCron(true);
+    setWaCronReport(null);
+    try {
+      const res = await api.whatsapp.triggerCronReminders();
+      setWaCronReport(res?.report);
+      const totalSent = (res?.report?.reminders2h?.length || 0) + (res?.report?.reminders24h?.length || 0);
+      showSuccess(`Varredura concluída! ${totalSent} lembrete(s) processado(s).`);
+    } catch (err) {
+      showError(err.message || 'Falha ao executar varredura de lembretes.');
+    } finally {
+      setWaRunningCron(false);
     }
   };
 
@@ -833,7 +850,7 @@ const ConfiguracoesOperacionais = () => {
                       type="tel"
                       value={waTestPhone}
                       onChange={(e) => setWaTestPhone(e.target.value)}
-                      placeholder="DDD + Telefone (ex: 11949156525)"
+                      placeholder="DDD + Telefone (ex: 11999998888)"
                       className="flex-1 px-3.5 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-mono text-ink placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-emerald-600"
                     />
                     <button
@@ -858,6 +875,95 @@ const ConfiguracoesOperacionais = () => {
                   <p className="text-[11px] text-emerald-800 mt-1.5">
                     Dispara um WhatsApp de verificação em tempo real diretamente da linha do salão para validar a entrega.
                   </p>
+                </div>
+
+                {/* ÁREA DE VERIFICAÇÃO AUTOMÁTICA DOS AGENDAMENTOS (SIMULAÇÃO DE CRON) */}
+                <div className="mt-4 pt-3.5 border-t border-emerald-200/70 bg-emerald-100/50 -mx-5 sm:-mx-7 -mb-5 sm:-mb-7 p-4 sm:p-5 rounded-b-2xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-emerald-700" />
+                        <span>Automação Contínua de Lembretes (2h e 24h)</span>
+                      </p>
+                      <p className="text-[11px] text-emerald-800 mt-0.5 max-w-xl">
+                        A rotina roda automaticamente a cada 5 minutos em segundo plano no servidor, checando agendamentos de hoje (2h antes) e de amanhã (24h antes).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={waRunningCron}
+                      onClick={handleTriggerCronReminders}
+                      className="px-4 py-2 bg-stone-900 hover:bg-black disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      {waRunningCron ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Verificando Agenda...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Executar Verificação Agora</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Relatório Detalhado da Execução Sob Demanda */}
+                  {waCronReport && (
+                    <div className="mt-3 p-3 bg-white rounded-xl border border-emerald-200 text-xs text-ink space-y-2">
+                      <div className="flex items-center justify-between font-semibold border-b border-line pb-1.5">
+                        <span className="text-emerald-800">Resultado da Varredura</span>
+                        <span className="text-[11px] text-ink-soft">
+                          {new Date(waCronReport.executedAt).toLocaleTimeString('pt-BR')}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div className="p-2 bg-stone-50 rounded-lg">
+                          <span className="text-ink-soft block">Lembretes 2h disparados:</span>
+                          <strong className="text-emerald-700 text-sm">{waCronReport.reminders2h?.length || 0}</strong>
+                        </div>
+                        <div className="p-2 bg-stone-50 rounded-lg">
+                          <span className="text-ink-soft block">Lembretes 24h disparados:</span>
+                          <strong className="text-emerald-700 text-sm">{waCronReport.reminders24h?.length || 0}</strong>
+                        </div>
+                      </div>
+
+                      {((waCronReport.reminders2h?.length || 0) + (waCronReport.reminders24h?.length || 0) === 0) && (
+                        <p className="text-[11px] text-stone-500 italic">
+                          Nenhum agendamento pendente de aviso encontrado para as próximas 2h ou 24h neste momento (ou todos já foram notificados anteriormente).
+                        </p>
+                      )}
+
+                      {waCronReport.reminders2h?.length > 0 && (
+                        <div>
+                          <span className="font-semibold text-emerald-900 text-[11px] block mb-1">Enviados (2 Horas Antes):</span>
+                          <ul className="space-y-1">
+                            {waCronReport.reminders2h.map((r, idx) => (
+                              <li key={idx} className="text-[11px] bg-emerald-50 text-emerald-900 px-2 py-1 rounded flex items-center justify-between">
+                                <span>{r.client} ({r.phone})</span>
+                                <span className="font-bold">{r.time} · {r.status}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {waCronReport.reminders24h?.length > 0 && (
+                        <div>
+                          <span className="font-semibold text-emerald-900 text-[11px] block mb-1">Enviados (24 Horas Antes):</span>
+                          <ul className="space-y-1">
+                            {waCronReport.reminders24h.map((r, idx) => (
+                              <li key={idx} className="text-[11px] bg-blue-50 text-blue-900 px-2 py-1 rounded flex items-center justify-between">
+                                <span>{r.client} ({r.phone})</span>
+                                <span className="font-bold">{r.time} · {r.status}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : waStatus === 'SCAN_QR' ? (

@@ -77,9 +77,15 @@ export const notificationWorker = new Worker('notifications', async (job) => {
     }
 
     const actionUrl = `/${appt.tenant_slug}/historico`;
-    const { notifyClient } = await import('../services/notificationService.js');
-    await notifyClient(tenantId, clientId, title, body, actionUrl);
-    logger.info(`Lembrete Web Push ${reminderType} disparado com sucesso para cliente ${clientId} (Agendamento ${appointmentId})`);
+    
+    // 1. Disparo de Web Push (isolado para não bloquear o WhatsApp)
+    try {
+      const { notifyClient } = await import('../services/notificationService.js');
+      await notifyClient(tenantId, clientId, title, body, actionUrl);
+      logger.info(`Lembrete Web Push ${reminderType} disparado com sucesso para cliente ${clientId} (Agendamento ${appointmentId})`);
+    } catch (pushErr) {
+      logger.warn(`Falha não fatal no Web Push para cliente ${clientId}: ${pushErr.message}`);
+    }
 
     // 2. Disparo de WhatsApp se o salão possuir instância conectada e cliente tiver telefone
     try {

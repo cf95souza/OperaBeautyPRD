@@ -217,4 +217,92 @@ router.get('/messages', requireRole(['manager', 'admin', 'salon_admin', 'superad
   }
 });
 
+/**
+ * POST /api/whatsapp/trigger-cron-reminders
+ * Executa sob demanda a verificação e disparo de lembretes para o salão logado
+ */
+router.post('/trigger-cron-reminders', requireRole(['manager', 'admin', 'salon_admin', 'superadmin']), async (req, res) => {
+  const tenantId = req.user.tenant_id;
+
+  try {
+    const { processPendingReminders } = await import('../cron/reminders.js');
+    const report = await processPendingReminders(tenantId);
+    return res.json({
+      success: true,
+      message: 'Varredura de lembretes executada com sucesso!',
+      report
+    });
+  } catch (error) {
+    console.error('Erro ao disparar varredura manual de lembretes:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/whatsapp/send-appointment-reminder/:id
+ * Dispara imediatamente o lembrete oficial de WhatsApp de um agendamento específico
+ */
+router.post('/send-appointment-reminder/:id', requireRole(['manager', 'admin', 'salon_admin', 'superadmin']), async (req, res) => {
+  const tenantId = req.user.tenant_id;
+  const { id } = req.params;
+
+  try {
+    const apptRes = await pool.query(
+      `SELECT a.id, a.tenant_id, a.client_id, a.start_time, a.status,
+              c.name as client_name, c.phone as client_phone,
+              s.name as service_name, t.name as tenant_name,
+              st.name as staff_name
+       FROM public.cap_appointments a
+       JOIN public.cap_clients c ON a.client_id = c.id
+       JOIN public.cap_services s ON a.service_id = s.id
+       JOIN public.cap_tenants t ON a.tenant_id = t.id
+       LEFT JOIN public.cap_staff st ON a.staff_id = st.id
+       WHERE a.id = $1 AND a.tenant_id = $2`,
+      [id, tenantId]
+    );
+
+    if (apptRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Agendamento não encontrado para este salão.' });
+    }
+
+    const appt = apptRes.rows[0];
+
+    if (!appt.client_phone) {
+      return res.status(400).json({ error: 'Este cliente não possui telefone/WhatsApp cadastrado.' });
+    }
+
+    const waRes = await pool.query(
+      "SELECT id FROM public.cap_whatsapp_instances WHERE tenant_id = $1 AND status = 'CONNECTED'",
+      [tenantId]
+    );
+
+    if (waRes.rows.length === 0) {
+      return res.status(400).json({ error: 'O WhatsApp do salão não está conectado. Conecte sua linha nas configurações.' });
+    }
+
+    const date = new Date(appt.start_time).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+    const time = new Date(appt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+
+    await whatsappService.sendReminder({
+      tenantId,
+      appointmentId: appt.id,
+      recipientPhone: appt.client_phone,
+      clientName: (appt.client_name || 'Cliente').split(' ')[0],
+      salonName: appt.tenant_name,
+      serviceName: appt.service_name,
+      professionalName: appt.staff_name || 'Profissional',
+      scheduledTimeFormatted: `${date} às ${time}`,
+      messageType: 'REMINDER_2H'
+    });
+
+    return res.json({
+      success: true,
+      message: `Lembrete de agendamento enviado com sucesso para ${appt.client_name} (${appt.client_phone})!`
+    });
+  } catch (error) {
+    console.error('Erro ao disparar lembrete de agendamento sob demanda:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

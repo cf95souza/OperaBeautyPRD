@@ -70,25 +70,38 @@ class WhatsAppMessageQueue {
       return { success: true, messageId: existing.rows[0].id, alreadySent: true };
     }
 
-    // 2. Garante que mensagens para o mesmo salão não sejam disparadas em rajada simultânea
+    // 2. Garante que mensagens para o mesmo salão não travem por deadlock
     const previousLock = this.tenantLocks.get(tenantId) || Promise.resolve();
 
-    const currentExecution = previousLock
-      .catch(() => {})
-      .then(async () => {
+    const currentExecution = Promise.race([
+      previousLock.catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, 8000))
+    ]).then(async () => {
+      try {
         // Aplica o jitter humanizado anti-ban
-        await this.sleepWithJitter(2500, 5000);
+        await this.sleepWithJitter(1500, 3500);
 
         const sock = sessionManager.getSocket(tenantId);
         if (!sock) {
           throw new Error(`Salão ${tenantId} não possui sessão de WhatsApp conectada no momento`);
         }
 
+        // Normalização do JID (consulta WhatsApp se número existe com 8 ou 9 dígitos no Brasil)
+        let targetJid = jid;
+        try {
+          const [waCheck] = await sock.onWhatsApp(jid);
+          if (waCheck?.exists && waCheck?.jid) {
+            targetJid = waCheck.jid;
+          }
+        } catch (onWaErr) {
+          console.warn(`[WhatsApp Queue] Erro ao consultar onWhatsApp para ${jid}:`, onWaErr.message);
+        }
+
         // 3. Simula digitação humana (presence: composing)
         try {
-          await sock.sendPresenceUpdate('composing', jid);
-          await new Promise((r) => setTimeout(r, 1500));
-          await sock.sendPresenceUpdate('paused', jid);
+          await sock.sendPresenceUpdate('composing', targetJid);
+          await new Promise((r) => setTimeout(r, 1000));
+          await sock.sendPresenceUpdate('paused', targetJid);
         } catch (presenceErr) {
           // não fatal se a atualização de presença falhar
         }
@@ -112,9 +125,7 @@ Por favor, confirme se você comparecerá respondendo aqui:
 _(Caso deseje cancelar avisos futuros, responda SAIR)_`;
 
         // 5. Envio em texto estruturado direto (100% de taxa de entrega no WhatsApp)
-        // [ANTI-BLOCK META]: Botões interativos (buttonsMessage) são silenciosamente descartados pela Meta
-        // em conexões Multi-Device Web. O envio em texto puro formatado é entregue de forma imediata e garantida.
-        const sentResult = await sock.sendMessage(jid, { text: messageBody });
+        const sentResult = await sock.sendMessage(targetJid, { text: messageBody });
 
         // 6. Grava trilha de auditoria na tabela cap_whatsapp_messages
         await pool.query(
@@ -127,7 +138,19 @@ _(Caso deseje cancelar avisos futuros, responda SAIR)_`;
         );
 
         return { success: true, messageId: sentResult?.key?.id };
-      });
+      } catch (execErr) {
+        console.error(`[WhatsApp Queue] Falha no disparo do lembrete para ${recipientPhone}:`, execErr.message);
+        await pool.query(
+          `INSERT INTO public.cap_whatsapp_messages 
+             (tenant_id, appointment_id, recipient_phone, message_type, content, status, error_message, idempotency_key, created_at)
+           VALUES ($1, $2, $3, $4, $5, 'FAILED', $6, $7, NOW())
+           ON CONFLICT (tenant_id, idempotency_key)
+           DO UPDATE SET status = 'FAILED', error_message = EXCLUDED.error_message`,
+          [tenantId, appointmentId, recipientPhone, messageType, 'Falha no envio do lembrete', execErr.message, idempotencyKey]
+        ).catch(() => {});
+        throw execErr;
+      }
+    });
 
     this.tenantLocks.set(tenantId, currentExecution);
     return currentExecution;
@@ -143,8 +166,16 @@ _(Caso deseje cancelar avisos futuros, responda SAIR)_`;
       throw new Error(`Salão ${tenantId} não possui WhatsApp conectado`);
     }
 
-    await this.sleepWithJitter(1500, 3000);
-    return await sock.sendMessage(jid, { text });
+    let targetJid = jid;
+    try {
+      const [waCheck] = await sock.onWhatsApp(jid);
+      if (waCheck?.exists && waCheck?.jid) {
+        targetJid = waCheck.jid;
+      }
+    } catch (onWaErr) {}
+
+    await this.sleepWithJitter(1000, 2500);
+    return await sock.sendMessage(targetJid, { text });
   }
 }
 

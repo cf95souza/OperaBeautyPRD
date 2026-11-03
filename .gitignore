@@ -34,6 +34,11 @@ backend/src/
 # Agentes e Skills
 skills/
 .agents/
+system-quality-gate/
+code-maturity-assessor/
+dashboard-layout/
+responsive-design/
+ui-design-system/
 
 # Logs
 *.log

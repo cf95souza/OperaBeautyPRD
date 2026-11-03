@@ -1084,6 +1084,16 @@ export const api = {
         body: JSON.stringify({ recipientPhone }),
       });
     },
+    async triggerCronReminders() {
+      return request('/whatsapp/trigger-cron-reminders', {
+        method: 'POST',
+      });
+    },
+    async sendAppointmentReminder(appointmentId) {
+      return request(`/whatsapp/send-appointment-reminder/${appointmentId}`, {
+        method: 'POST',
+      });
+    },
     async getMessages(limit = 50) {
       return request(`/whatsapp/messages?limit=${limit}`);
     }

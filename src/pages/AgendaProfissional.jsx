@@ -35,7 +35,8 @@ import {
   MoreVertical,
   CheckCircle2,
   UserX,
-  RotateCcw
+  RotateCcw,
+  Send
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 import NewAppointmentModal from '../components/NewAppointmentModal';
@@ -203,6 +204,21 @@ const AgendaProfissional = () => {
       alert(err.message || 'Não foi possível reverter a falta.');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // Enviar lembrete WhatsApp sob demanda (Teste e Homologação de Linha)
+  const [sendingReminderId, setSendingReminderId] = useState(null);
+
+  const handleSendWhatsAppReminder = async (apptId) => {
+    setSendingReminderId(apptId);
+    try {
+      const res = await api.whatsapp.sendAppointmentReminder(apptId);
+      alert(res?.message || 'Lembrete de WhatsApp enviado com sucesso!');
+    } catch (err) {
+      alert(err.message || 'Falha ao enviar lembrete via WhatsApp.');
+    } finally {
+      setSendingReminderId(null);
     }
   };
 
@@ -953,6 +969,24 @@ const AgendaProfissional = () => {
                 >
                   <UserX size={16} className="text-amber-700" />
                   <span>Marcar Falta (Não Compareceu)</span>
+                </button>
+              )}
+
+              {/* Botão Enviar Lembrete WhatsApp Agora (Disparo Imediato / Teste Real) */}
+              {selectedAppointment.status !== 'cancelled' && selectedAppointment.status !== 'completed' && (
+                <button
+                  type="button"
+                  disabled={sendingReminderId === selectedAppointment.id || actionLoading}
+                  onClick={() => handleSendWhatsAppReminder(selectedAppointment.id)}
+                  className="w-full h-11 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-medium text-xs rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                  title="Dispara imediatamente o modelo oficial de lembrete com as opções de confirmação para o WhatsApp do cliente"
+                >
+                  <Send size={15} className="text-emerald-700" />
+                  <span>
+                    {sendingReminderId === selectedAppointment.id
+                      ? 'Enviando Lembrete...'
+                      : 'Enviar Lembrete WhatsApp Agora (Disparo Imediato)'}
+                  </span>
                 </button>
               )}
 

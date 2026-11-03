@@ -2731,6 +2731,26 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
   - **2. Validação Defensiva de Foreign Key na Timeline**:
     * Garantido que `staff_id` em `cap_timeline_notes` só recebe o ID do usuário se este existir na tabela `cap_staff` do salão, prevenindo quebras caso a ação seja executada por perfis administrativos globais.
 
+- **03/11/2026 - Motor Contínuo de Lembretes WhatsApp, Normalização JID 9º Dígito e Teste Real Sob Demanda - G30 [Concluída]:**
+  - **1. Diagnóstico do Problema de Lembretes Automáticos de 2 Horas**:
+    * *Janela Rígida*: O cron anterior consultava `BETWEEN NOW() + 1h45m AND NOW() + 2h15m`. Qualquer agendamento criado com menos de 1h45m de antecedência ou se o cron demorasse mais de 30 minutos para avaliar caía em um "buraco negro" e nunca era enviado.
+    * *Incompatibilidade de JID com 9º Dígito no Brasil*: No WhatsApp Baileys, ao prefixar compulsoriamente `55 + DDD + 9...`, contas antigas registradas no Meta com 8 dígitos faziam o Baileys aceitar o envio local, mas os roteadores da Meta descartavam a mensagem silenciosamente.
+    * *Deadlock de Lock por Tenant*: Encadeamento de promessas `this.tenantLocks.get(tenantId).then(...)` podia travar a fila indefinidamente caso ocorresse lentidão no Baileys ao sincronizar presença ou socket.
+    * *Web Push Bloqueando WhatsApp*: No worker do BullMQ, `notifyClient` síncrono antes do WhatsApp provocava rejeição de todo o job se houvesse erro de assinatura VAPID/push expirada.
+  - **2. Refatoração do Motor Contínuo (`backend/cron/reminders.js` & `notificationWorker.js`)**:
+    * Criada a rotina `processPendingReminders(tenantId)` com varredura cumulativa: qualquer agendamento com `start_time > NOW() AND start_time <= NOW() + INTERVAL '2 hours 15 minutes'` que não possua lembrete `REMINDER_2H` registrado com sucesso (`NOT EXISTS`) é enviado imediatamente.
+    * Adicionado suporte contínuo para lembretes de 24 horas (`REMINDER_24H`) entre 2h15m e 26h.
+    * Frequência do cron reduzida de 15 para 5 minutos (`*/5 * * * *`).
+    * Isolamento do Web Push em `try/catch` individual no worker de notificações.
+  - **3. Resiliência do Gateway e Normalização Dinâmica (`messageQueue.js`)**:
+    * Uso de `sock.onWhatsApp(candidateJid)` para buscar no diretório oficial da Meta o formato canônico real (8 ou 9 dígitos) antes do envio.
+    * Implementação de `Promise.race` com timeout de 8 segundos em `tenantLocks` prevenindo deadlocks permanentes.
+    * Persistência de status `FAILED` com mensagem de erro em `cap_whatsapp_messages` para rastreamento e auditoria.
+  - **4. Ferramental de Teste Sob Demanda e Limpeza de Dados Pessoais**:
+    * Removido o número pessoal fixo de teste em `ConfiguracoesOperacionais.jsx`.
+    * Adicionado endpoint `POST /api/whatsapp/trigger-cron-reminders` e botão "Executar Verificação Agora" nas configurações operacionais com cartão de status em tempo real.
+    * Adicionado endpoint `POST /api/whatsapp/send-appointment-reminder/:id` e botão "Enviar Lembrete WhatsApp Agora (Disparo Imediato)" no modal de agendamento na agenda (`AgendaProfissional.jsx`), possibilitando testar e validar o lembrete oficial em clientes reais sem espera de 2 horas.
+
 
 
 
