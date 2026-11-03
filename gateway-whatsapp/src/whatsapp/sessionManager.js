@@ -95,10 +95,11 @@ class WhatsAppSessionManager {
         sessionData.qr = qr;
         sessionData.status = 'SCAN_QR';
         await pool.query(
-          `UPDATE public.cap_whatsapp_instances 
-           SET status = 'SCAN_QR', qr_code = $1, pairing_code = NULL, updated_at = NOW() 
-           WHERE tenant_id = $2`,
-          [qr, tenantId]
+          `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, qr_code, pairing_code, updated_at)
+           VALUES ($1, 'SCAN_QR', $2, NULL, NOW())
+           ON CONFLICT (tenant_id) DO UPDATE 
+           SET status = 'SCAN_QR', qr_code = EXCLUDED.qr_code, pairing_code = NULL, updated_at = NOW()`,
+          [tenantId, qr]
         );
       }
 
@@ -110,10 +111,11 @@ class WhatsAppSessionManager {
         this.reconnectAttempts.delete(tenantId);
 
         await pool.query(
-          `UPDATE public.cap_whatsapp_instances 
-           SET status = 'CONNECTED', phone_number = $1, qr_code = NULL, pairing_code = NULL, connected_at = NOW(), last_activity_at = NOW(), updated_at = NOW() 
-           WHERE tenant_id = $2`,
-          [phone, tenantId]
+          `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, phone_number, qr_code, pairing_code, connected_at, last_activity_at, updated_at)
+           VALUES ($1, 'CONNECTED', $2, NULL, NULL, NOW(), NOW(), NOW())
+           ON CONFLICT (tenant_id) DO UPDATE 
+           SET status = 'CONNECTED', phone_number = EXCLUDED.phone_number, qr_code = NULL, pairing_code = NULL, connected_at = NOW(), last_activity_at = NOW(), updated_at = NOW()`,
+          [tenantId, phone]
         );
 
         console.log(`[WhatsApp Gateway] Salão ${tenantId} conectado com sucesso no número ${phone}`);
@@ -131,9 +133,10 @@ class WhatsAppSessionManager {
           this.sessions.delete(tenantId);
 
           await pool.query(
-            `UPDATE public.cap_whatsapp_instances 
-             SET status = 'DISCONNECTED', qr_code = NULL, pairing_code = NULL, updated_at = NOW() 
-             WHERE tenant_id = $1`,
+            `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, qr_code, pairing_code, updated_at)
+             VALUES ($1, 'DISCONNECTED', NULL, NULL, NOW())
+             ON CONFLICT (tenant_id) DO UPDATE 
+             SET status = 'DISCONNECTED', qr_code = NULL, pairing_code = NULL, updated_at = NOW()`,
             [tenantId]
           );
 
@@ -156,7 +159,10 @@ class WhatsAppSessionManager {
           } else {
             sessionData.status = 'DISCONNECTED';
             await pool.query(
-              `UPDATE public.cap_whatsapp_instances SET status = 'DISCONNECTED', updated_at = NOW() WHERE tenant_id = $1`,
+              `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, updated_at)
+               VALUES ($1, 'DISCONNECTED', NOW())
+               ON CONFLICT (tenant_id) DO UPDATE 
+               SET status = 'DISCONNECTED', updated_at = NOW()`,
               [tenantId]
             );
           }
@@ -190,10 +196,11 @@ class WhatsAppSessionManager {
         sessionData.status = 'PAIRING_CODE';
 
         await pool.query(
-          `UPDATE public.cap_whatsapp_instances 
-           SET status = 'PAIRING_CODE', pairing_code = $1, phone_number = $2, qr_code = NULL, updated_at = NOW() 
-           WHERE tenant_id = $3`,
-          [code, cleanPhone, tenantId]
+          `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, pairing_code, phone_number, qr_code, updated_at)
+           VALUES ($1, 'PAIRING_CODE', $2, $3, NULL, NOW())
+           ON CONFLICT (tenant_id) DO UPDATE 
+           SET status = 'PAIRING_CODE', pairing_code = EXCLUDED.pairing_code, phone_number = EXCLUDED.phone_number, qr_code = NULL, updated_at = NOW()`,
+          [tenantId, code, cleanPhone]
         );
 
         return {
@@ -395,9 +402,10 @@ class WhatsAppSessionManager {
     }
     this.sessions.delete(tenantId);
     await pool.query(
-      `UPDATE public.cap_whatsapp_instances 
-       SET status = 'DISCONNECTED', qr_code = NULL, pairing_code = NULL, updated_at = NOW() 
-       WHERE tenant_id = $1`,
+      `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, qr_code, pairing_code, updated_at)
+       VALUES ($1, 'DISCONNECTED', NULL, NULL, NOW())
+       ON CONFLICT (tenant_id) DO UPDATE 
+       SET status = 'DISCONNECTED', qr_code = NULL, pairing_code = NULL, updated_at = NOW()`,
       [tenantId]
     );
     await pool.query(

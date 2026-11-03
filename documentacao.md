@@ -2751,6 +2751,11 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Adicionado endpoint `POST /api/whatsapp/trigger-cron-reminders` e botão "Executar Verificação Agora" nas configurações operacionais com cartão de status em tempo real.
     * Adicionado endpoint `POST /api/whatsapp/send-appointment-reminder/:id` e botão "Enviar Lembrete WhatsApp Agora (Disparo Imediato)" no modal de agendamento na agenda (`AgendaProfissional.jsx`), possibilitando testar e validar o lembrete oficial em clientes reais sem espera de 2 horas.
     * Hotfix: Incluído o import do ícone `RotateCcw` de `lucide-react` em `ConfiguracoesOperacionais.jsx`, solucionando `ReferenceError: RotateCcw is not defined` no carregamento da tela de configurações operacionais em produção.
+  - **5. Persistência de Conexão WhatsApp no Banco (UPSERT & Fallback M2M)**:
+    * *Causa do falso positivo de desconexão*: O `sessionManager.js` realizava `UPDATE cap_whatsapp_instances`, sem inserir o registro inicial via `INSERT ... ON CONFLICT (tenant_id) DO UPDATE`. A sessão ativa residia em memória no container do gateway (por isso o card na interface exibia "Conectado"), mas no banco a consulta SQL `WHERE status = 'CONNECTED'` retornava 0 linhas.
+    * *Remediação*: Atualizadas todas as mutações no `sessionManager.js` e `server.js` do gateway para utilizar `INSERT ... ON CONFLICT (tenant_id) DO UPDATE`.
+    * *Fallback Inteligente*: Caso a consulta em `cap_whatsapp_instances` retorne vazio na API (`whatsappRoutes.js`), no cron (`reminders.js`) ou no worker (`notificationWorker.js`), é feita uma checagem em tempo real no gateway (`whatsappService.getInstanceStatus`) e persistido o status `CONNECTED` no banco imediatamente.
+    * *Permissão da Agenda*: Liberado o endpoint `POST /api/whatsapp/send-appointment-reminder/:id` para profissionais e membros da equipe (`staff`, `professional`), além dos gestores.
 
 
 

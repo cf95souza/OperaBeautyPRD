@@ -84,6 +84,16 @@ app.get('/internal/instances/:tenantId/status', async (req, res) => {
     const liveSession = sessionManager.sessions.get(tenantId);
     if (liveSession?.status === 'CONNECTED' && liveSession.sock?.user) {
       const phone = liveSession.sock.user.id.split(':')[0].split('@')[0];
+      // Sincroniza garantindo persistência no PostgreSQL
+      await pool.query(
+        `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, phone_number, connected_at, last_activity_at, updated_at)
+         VALUES ($1, 'CONNECTED', $2, NOW(), NOW(), NOW())
+         ON CONFLICT (tenant_id) DO UPDATE 
+         SET status = 'CONNECTED', phone_number = EXCLUDED.phone_number,
+             connected_at = COALESCE(cap_whatsapp_instances.connected_at, NOW()), last_activity_at = NOW(), updated_at = NOW()`,
+        [tenantId, phone]
+      ).catch((syncErr) => console.warn('[Gateway Server] Falha ao sincronizar status CONNECTED no DB:', syncErr.message));
+
       return res.json({
         status: 'CONNECTED',
         phone_number: phone,

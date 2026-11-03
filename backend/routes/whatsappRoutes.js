@@ -139,11 +139,22 @@ router.post('/connect', requireRole(['manager', 'admin', 'salon_admin', 'superad
  * GET /api/whatsapp/status
  * Retorna status da conexão WhatsApp do salão
  */
-router.get('/status', requireRole(['manager', 'admin', 'salon_admin', 'superadmin']), async (req, res) => {
+router.get('/status', requireRole(['manager', 'admin', 'salon_admin', 'superadmin', 'staff', 'professional']), async (req, res) => {
   const tenantId = req.user.tenant_id;
 
   try {
     const status = await whatsappService.getInstanceStatus(tenantId);
+    if (status && status.status === 'CONNECTED') {
+      const phone = status.phone_number || status.phoneNumber;
+      await pool.query(
+        `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, phone_number, connected_at, last_activity_at, updated_at)
+         VALUES ($1, 'CONNECTED', $2, NOW(), NOW(), NOW())
+         ON CONFLICT (tenant_id) DO UPDATE 
+         SET status = 'CONNECTED', phone_number = COALESCE(EXCLUDED.phone_number, cap_whatsapp_instances.phone_number),
+             connected_at = COALESCE(cap_whatsapp_instances.connected_at, NOW()), last_activity_at = NOW(), updated_at = NOW()`,
+        [tenantId, phone]
+      ).catch(() => {});
+    }
     return res.json(status);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -242,7 +253,7 @@ router.post('/trigger-cron-reminders', requireRole(['manager', 'admin', 'salon_a
  * POST /api/whatsapp/send-appointment-reminder/:id
  * Dispara imediatamente o lembrete oficial de WhatsApp de um agendamento específico
  */
-router.post('/send-appointment-reminder/:id', requireRole(['manager', 'admin', 'salon_admin', 'superadmin']), async (req, res) => {
+router.post('/send-appointment-reminder/:id', requireRole(['manager', 'admin', 'salon_admin', 'superadmin', 'staff', 'professional']), async (req, res) => {
   const tenantId = req.user.tenant_id;
   const { id } = req.params;
 
@@ -271,12 +282,32 @@ router.post('/send-appointment-reminder/:id', requireRole(['manager', 'admin', '
       return res.status(400).json({ error: 'Este cliente não possui telefone/WhatsApp cadastrado.' });
     }
 
+    let isConnected = false;
     const waRes = await pool.query(
       "SELECT id FROM public.cap_whatsapp_instances WHERE tenant_id = $1 AND status = 'CONNECTED'",
       [tenantId]
     );
 
-    if (waRes.rows.length === 0) {
+    if (waRes.rows.length > 0) {
+      isConnected = true;
+    } else {
+      // Fallback em tempo real: consulta o gateway nativo
+      const liveStatus = await whatsappService.getInstanceStatus(tenantId);
+      if (liveStatus && liveStatus.status === 'CONNECTED') {
+        isConnected = true;
+        const phone = liveStatus.phone_number || liveStatus.phoneNumber;
+        await pool.query(
+          `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, phone_number, connected_at, last_activity_at, updated_at)
+           VALUES ($1, 'CONNECTED', $2, NOW(), NOW(), NOW())
+           ON CONFLICT (tenant_id) DO UPDATE 
+           SET status = 'CONNECTED', phone_number = COALESCE(EXCLUDED.phone_number, cap_whatsapp_instances.phone_number),
+               connected_at = COALESCE(cap_whatsapp_instances.connected_at, NOW()), last_activity_at = NOW(), updated_at = NOW()`,
+          [tenantId, phone]
+        ).catch(() => {});
+      }
+    }
+
+    if (!isConnected) {
       return res.status(400).json({ error: 'O WhatsApp do salão não está conectado. Conecte sua linha nas configurações.' });
     }
 

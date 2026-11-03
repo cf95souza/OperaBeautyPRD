@@ -64,11 +64,32 @@ export const processPendingReminders = async (filterTenantId = null) => {
       // Dispara WhatsApp
       try {
         if (appt.client_phone) {
+          let isConnected = false;
           const waRes = await pool.query(
             "SELECT id FROM public.cap_whatsapp_instances WHERE tenant_id = $1 AND status = 'CONNECTED'",
             [appt.tenant_id]
           );
+
           if (waRes.rows.length > 0) {
+            isConnected = true;
+          } else {
+            const { whatsappService } = await import('../services/whatsappService.js');
+            const liveStatus = await whatsappService.getInstanceStatus(appt.tenant_id);
+            if (liveStatus && liveStatus.status === 'CONNECTED') {
+              isConnected = true;
+              const phone = liveStatus.phone_number || liveStatus.phoneNumber;
+              await pool.query(
+                `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, phone_number, connected_at, last_activity_at, updated_at)
+                 VALUES ($1, 'CONNECTED', $2, NOW(), NOW(), NOW())
+                 ON CONFLICT (tenant_id) DO UPDATE 
+                 SET status = 'CONNECTED', phone_number = COALESCE(EXCLUDED.phone_number, cap_whatsapp_instances.phone_number),
+                     connected_at = COALESCE(cap_whatsapp_instances.connected_at, NOW()), last_activity_at = NOW(), updated_at = NOW()`,
+                [appt.tenant_id, phone]
+              ).catch(() => {});
+            }
+          }
+
+          if (isConnected) {
             const { whatsappService } = await import('../services/whatsappService.js');
             await whatsappService.sendReminder({
               tenantId: appt.tenant_id,
@@ -156,11 +177,32 @@ export const processPendingReminders = async (filterTenantId = null) => {
       // Dispara WhatsApp
       try {
         if (appt.client_phone) {
+          let isConnected = false;
           const waRes = await pool.query(
             "SELECT id FROM public.cap_whatsapp_instances WHERE tenant_id = $1 AND status = 'CONNECTED'",
             [appt.tenant_id]
           );
+
           if (waRes.rows.length > 0) {
+            isConnected = true;
+          } else {
+            const { whatsappService } = await import('../services/whatsappService.js');
+            const liveStatus = await whatsappService.getInstanceStatus(appt.tenant_id);
+            if (liveStatus && liveStatus.status === 'CONNECTED') {
+              isConnected = true;
+              const phone = liveStatus.phone_number || liveStatus.phoneNumber;
+              await pool.query(
+                `INSERT INTO public.cap_whatsapp_instances (tenant_id, status, phone_number, connected_at, last_activity_at, updated_at)
+                 VALUES ($1, 'CONNECTED', $2, NOW(), NOW(), NOW())
+                 ON CONFLICT (tenant_id) DO UPDATE 
+                 SET status = 'CONNECTED', phone_number = COALESCE(EXCLUDED.phone_number, cap_whatsapp_instances.phone_number),
+                     connected_at = COALESCE(cap_whatsapp_instances.connected_at, NOW()), last_activity_at = NOW(), updated_at = NOW()`,
+                [appt.tenant_id, phone]
+              ).catch(() => {});
+            }
+          }
+
+          if (isConnected) {
             const { whatsappService } = await import('../services/whatsappService.js');
             await whatsappService.sendReminder({
               tenantId: appt.tenant_id,
