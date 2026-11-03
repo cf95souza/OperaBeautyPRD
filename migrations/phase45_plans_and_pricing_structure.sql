@@ -136,5 +136,24 @@ ON CONFLICT (id) DO UPDATE SET
     extra_professional_price = EXCLUDED.extra_professional_price,
     is_active = EXCLUDED.is_active;
 
+-- Proteção de Preço e Selo Fundador para Salões Existentes (E1 / P1)
+UPDATE public.cap_tenants
+SET is_founder = TRUE,
+    frozen_price = 99.90,
+    price_frozen_until = NOW() + INTERVAL '12 months',
+    founder_badge_label = 'Fundador'
+WHERE is_founder = FALSE;
+
+-- Princípio C5 (Privilégio Mínimo)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'opera_app') THEN
+        GRANT SELECT, UPDATE ON public.cap_plans TO opera_app;
+        GRANT SELECT, UPDATE ON public.cap_tenants TO opera_app;
+    END IF;
+END $$;
+-- GRANT SELECT, UPDATE ON public.cap_plans TO opera_app;
+-- GRANT SELECT, UPDATE ON public.cap_tenants TO opera_app;
+
 -- >>> DOWN >>>
 -- No rollback needed for additive columns in production

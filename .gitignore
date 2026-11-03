@@ -2,6 +2,7 @@
 node_modules/
 
 # Arquivos de Build e Pacotes Compactados
+dist/
 dist-ssr/
 *.zip
 *.tar.gz
@@ -22,6 +23,7 @@ REPO_URL.txt
 *.md
 !README.md
 !AUDITORIA_PRODUCAO.md
+!quality/**
 arquivados/
 security-auditor/
 stitch_telas/

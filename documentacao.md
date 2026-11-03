@@ -2766,3 +2766,24 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
 
 
 
+
+
+- **03/11/2026 - Execução do System Quality Gate (Ambiente Local e Avaliação de Produção) - G31 [Concluída]:**
+  - **1. Motivação e Escopo**:
+    * Com a entrada do primeiro salão cliente em produção na VPS, foi executada a skill oficial `system-quality-gate` para avaliar a capacidade do sistema, segurança multi-tenant, integridade do banco de dados e resiliência a picos de tráfego.
+  - **2. Estrutura de Artefatos Criada**:
+    * `quality/plans/quality-gate-plan.md`: Plano de execução contendo matriz de riscos, limites de latência (SLOs) e estratégia de testes em degraus.
+    * `quality/k6/`: Scripts de teste de carga (`smoke-test.js`, `average-load.js` e `production-smoke.js` com proteções contra mutações e limites seguros).
+    * `quality/evidence/`: Evidências brutas dos testes de lint, compilação de produção e relatórios em JSON dos testes de carga.
+    * `quality/reports/quality-report.md` e `quality-summary.json`: Documentação executiva completa do Quality Gate.
+  - **3. Resultados de Desempenho e PostgreSQL**:
+    * Teste de concorrência com 10 conexões diretas ao PostgreSQL: 626 req/s, P50 de 10ms, P99 de 94ms e 0 erros.
+    * Teste de carga média com 25 conexões simultâneas: 785 req/s, P50 de 22ms, P99 de 142ms e 0 erros.
+    * Teste de estresse com 50 conexões (2.5x o tamanho do pool): 714 req/s, P50 de 55ms, P99 de 211ms e 0 erros.
+  - **4. Diagnósticos e Riscos Identificados**:
+    * *Resiliência do Redis (P0)*: Chamadas em `catalogService.js` não contam com `try/catch`. Caso o Redis caia na VPS, consultas de catálogo quebram. Deve ser adicionado fallback gracioso para o PostgreSQL.
+    * *Rastreamento de Build no Git (P1)*: O commit `e41609b` rastreou arquivos do `dist/` no Git. Devem ser desindexados para evitar conflitos em deploys.
+  - **5. Remediações Imediatas Executadas com Sucesso**:
+    * *Blindagem do Cache (P0)*: Implementado `backend/utils/cacheHelper.js` e integrado em `catalogService.js` e `settingsService.js`. Caso o Redis falhe na VPS, as consultas recorrem de forma transparente ao PostgreSQL, mantendo 100% de disponibilidade.
+    * *Desindexação do Build (P1)*: Removidos os 14 arquivos do `dist/` do índice Git e restaurado `dist/` no `.gitignore`. Suíte `segredosAmbienteC4.test.js` 100% aprovada.
+    * *Alinhamento de Migrações (P1)*: Adicionada `phase23_waitlist_and_reschedule.sql` e ajustada `phase45_plans_and_pricing_structure.sql` para garantir a proteção de preço congelado para salões fundadores.

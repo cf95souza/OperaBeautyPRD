@@ -1,13 +1,17 @@
 import pool from '../config/db.js';
-import redisClient from '../config/redis.js';
+import { safeCacheGet, safeCacheSet, safeCacheDel } from '../utils/cacheHelper.js';
 import { logAudit } from './auditService.js';
 
 export const listServices = async (tenantId) => {
   const cacheKey = `tenant:${tenantId}:services`;
-  const cachedData = await redisClient.get(cacheKey);
+  const cachedData = await safeCacheGet(cacheKey);
   
   if (cachedData) {
-    return JSON.parse(cachedData);
+    try {
+      return JSON.parse(cachedData);
+    } catch {
+      // Ignora erro de parse e busca do banco
+    }
   }
 
   const result = await pool.query(
@@ -64,7 +68,7 @@ export const listServices = async (tenantId) => {
   });
   
   // TTL de 5 minutos (300 segundos) para dados do catálogo
-  await redisClient.setex(cacheKey, 300, JSON.stringify(mappedRows));
+  await safeCacheSet(cacheKey, 300, mappedRows);
   
   return mappedRows;
 };
@@ -159,7 +163,7 @@ export const createService = async (
 
     await client.query('COMMIT');
     
-    await redisClient.del(`tenant:${tenantId}:services`);
+    await safeCacheDel(`tenant:${tenantId}:services`);
     
     return { newService, inputs, variations: savedVariations, extras: savedExtras };
   } catch (error) {
@@ -284,7 +288,7 @@ export const updateService = async (
 
     await client.query('COMMIT');
 
-    await redisClient.del(`tenant:${tenantId}:services`);
+    await safeCacheDel(`tenant:${tenantId}:services`);
 
     return { oldService, updatedService, inputs, variations, extras };
   } catch (error) {
@@ -307,7 +311,7 @@ export const deleteService = async (id, tenantId) => {
     throw error;
   }
 
-  await redisClient.del(`tenant:${tenantId}:services`);
+  await safeCacheDel(`tenant:${tenantId}:services`);
 
   return result.rows[0];
 };
@@ -472,7 +476,7 @@ export const importServices = async (tenantId, servicesList, options = {}, userI
     await client.query('COMMIT');
 
     // Invalida cache Redis
-    await redisClient.del(`tenant:${tenantId}:services`);
+    await safeCacheDel(`tenant:${tenantId}:services`);
 
     if (userId) {
       logAudit(tenantId, userId, 'IMPORT_SERVICES', {

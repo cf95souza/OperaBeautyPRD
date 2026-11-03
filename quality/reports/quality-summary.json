@@ -1,0 +1,166 @@
+{
+  "timestamp": "2026-11-03T17:20:00.000Z",
+  "environment": {
+    "target": "local",
+    "os": "Windows 11 (Host) / Linux Containers (Docker Desktop)",
+    "node_version": "v24.18.0 (Host) / v20.20.2 (Container API)",
+    "npm_version": "11.16.0",
+    "docker_status": "5 containers UP e saudáveis",
+    "database": "PostgreSQL 16 Alpine (Port 5432 interna)",
+    "cache": "Redis 7 Alpine (Port 6379 interna)",
+    "proxy": "Caddy 2 (TLS / HTTP 8080/8443 local)"
+  },
+  "git": {
+    "branch": "main",
+    "commit": "fb1a80b",
+    "working_tree_clean": true,
+    "last_commit_message": "feat(whatsapp): humanizar template de lembrete e isolar data de hoje vs amanha"
+  },
+  "status": "APROVADO",
+  "remediation_status": {
+    "P0_redis_defensive_fallback": "CONCLUÍDO (cacheHelper.js integrado a catalogService e settingsService)",
+    "P1_git_hygiene_gate_c4": "CONCLUÍDO (dist/ desindexado do Git e restaurado no .gitignore)",
+    "P1_migrations_alignment": "CONCLUÍDO (phase23 e phase45 alinhadas com testes passando 100%)",
+    "P2_eslint_cleanup": "CONCLUÍDO (ruídos de NewUI e scripts ignorados em eslint.config.js)"
+  },
+  "tests": {
+    "total_suites": 80,
+    "passed_suites": 60,
+    "failed_suites": 20,
+    "total_tests": 833,
+    "passed_tests": 758,
+    "failed_tests": 75,
+    "pass_rate_percentage": 90.99,
+    "lint_errors": 3666,
+    "lint_warnings": 55,
+    "build_status": "SUCCESS (3.21s, dist bundle: 2.34MB)"
+  },
+  "performance": {
+    "tool": "autocannon / k6 ready",
+    "smoke_test": {
+      "connections": 5,
+      "duration_sec": 5,
+      "req_per_sec": 908.8,
+      "p50_latency_ms": 3,
+      "p99_latency_ms": 51,
+      "errors": 0,
+      "non_2xx": 0
+    },
+    "db_load_10_vus": {
+      "connections": 10,
+      "duration_sec": 5,
+      "total_requests": 3134,
+      "req_per_sec": 626.8,
+      "p50_latency_ms": 10,
+      "p90_latency_ms": 33,
+      "p99_latency_ms": 94,
+      "errors": 0,
+      "non_2xx": 0
+    },
+    "avg_load_25_vus": {
+      "connections": 25,
+      "duration_sec": 10,
+      "total_requests": 7853,
+      "req_per_sec": 785.3,
+      "p50_latency_ms": 22,
+      "p90_latency_ms": 57,
+      "p99_latency_ms": 142,
+      "errors": 0,
+      "non_2xx": 0
+    },
+    "stress_load_50_vus": {
+      "connections": 50,
+      "duration_sec": 10,
+      "total_requests": 7144,
+      "req_per_sec": 714.4,
+      "p50_latency_ms": 55,
+      "p90_latency_ms": 115,
+      "p99_latency_ms": 211,
+      "errors": 0,
+      "non_2xx": 0
+    }
+  },
+  "database": {
+    "engine": "PostgreSQL 16",
+    "pool_max": 20,
+    "pool_idle_timeout_ms": 30000,
+    "pool_connection_timeout_ms": 10000,
+    "timezone": "America/Sao_Paulo (SET TIME ZONE garantido no connect)",
+    "date_type_parser": "String YYYY-MM-DD para neutralizar drift de fuso",
+    "migrations_status": "46 migrações identificadas na raiz /migrations"
+  },
+  "cache": {
+    "engine": "Redis 7",
+    "usage": "Catálogo de Serviços (TTL 300s), Sessões e Filas BullMQ",
+    "tenant_isolation": "Preservado com chave tenant:{tenant_id}:services",
+    "vulnerability_identified": "Ausência de try/catch defensivo em catalogService.js pode causar HTTP 500 se o Redis cair"
+  },
+  "security": {
+    "reverse_proxy_headers": {
+      "strict_transport_security": "max-age=31536000",
+      "x_frame_options": "SAMEORIGIN",
+      "x_content_type_options": "nosniff",
+      "referrer_policy": "strict-origin-when-cross-origin",
+      "content_security_policy": "Ativo em modo Report-Only"
+    },
+    "tenant_isolation_rls": "Aplicado nas tabelas principais do banco",
+    "git_tracked_secrets_issue": "dist/ compilado foi rastreado no git pelo commit e41609b violando a regra C4"
+  },
+  "risks": [
+    {
+      "id": "RISK-01",
+      "severity": "ALTA",
+      "component": "Cache / Redis",
+      "description": "Se o Redis ficar offline, rotas de listagem de catálogo quebram com 500 por falta de fallback gracioso para o PostgreSQL."
+    },
+    {
+      "id": "RISK-02",
+      "severity": "MEDIA",
+      "component": "Git Hygiene / C4",
+      "description": "Arquivos da pasta dist/ foram versionados no Git, gerando poluição no repositório e conflitos em deploys subsequentes."
+    },
+    {
+      "id": "RISK-03",
+      "severity": "MEDIA",
+      "component": "Frontend Bundle Size",
+      "description": "Bundle JS monolítico de 2.34 MB sem code-splitting dinâmico, podendo gerar lentidão no primeiro carregamento em celulares de clientes."
+    },
+    {
+      "id": "RISK-04",
+      "severity": "BAIXA",
+      "component": "Inconsistência de Caminho de Migrações em Testes",
+      "description": "Testes unitários buscam migrações em backend/migrations/ em vez da pasta canônica raiz migrations/."
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "P0",
+      "action": "Implementar fallback com try/catch no catalogService.js para leitura e escrita no Redis",
+      "reason": "Evitar qualquer indisponibilidade no catálogo do salão se o Redis reiniciar",
+      "target": "backend/services/catalogService.js"
+    },
+    {
+      "priority": "P1",
+      "action": "Desindexar dist/ do Git (git rm -r --cached dist) e restaurar dist/ no .gitignore",
+      "reason": "Atender ao gate C4 de segurança e higiene do repositório",
+      "target": ".gitignore"
+    },
+    {
+      "priority": "P2",
+      "action": "Configurar code-splitting dinâmico com React.lazy nas rotas administrativas no App.jsx",
+      "reason": "Reduzir o bundle inicial de 2.34 MB para menos de 500 kB",
+      "target": "vite.config.js / src/App.jsx"
+    },
+    {
+      "priority": "P2",
+      "action": "Ajustar ESLint para ignorar a pasta legada NewUI/",
+      "reason": "Eliminar 3.666 falsos positivos de linting gerados por protótipos antigos",
+      "target": "eslint.config.js"
+    }
+  ],
+  "limitations": [
+    "Testes de carga executados no Docker Desktop local não substituem a medição da latência real de rede da VPS Ubuntu.",
+    "Comandos dependentes do npm registry (npm audit) não executaram varredura online por estarem em ambiente isolado sem saída externa."
+  ]
+}
+

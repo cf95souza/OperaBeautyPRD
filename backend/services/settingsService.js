@@ -1,12 +1,16 @@
 import pool from '../config/db.js';
-import redisClient from '../config/redis.js';
+import { safeCacheGet, safeCacheSet, safeCacheDel } from '../utils/cacheHelper.js';
 
 export const getBusinessHours = async (tenantId) => {
   const cacheKey = `tenant:${tenantId}:business_hours`;
-  const cachedData = await redisClient.get(cacheKey);
+  const cachedData = await safeCacheGet(cacheKey);
 
   if (cachedData) {
-    return JSON.parse(cachedData);
+    try {
+      return JSON.parse(cachedData);
+    } catch {
+      // Ignora erro de JSON e busca do banco
+    }
   }
 
   const result = await pool.query(
@@ -15,7 +19,7 @@ export const getBusinessHours = async (tenantId) => {
   );
   
   // TTL de 30 minutos (1800 segundos) para dados do horário comercial
-  await redisClient.setex(cacheKey, 1800, JSON.stringify(result.rows));
+  await safeCacheSet(cacheKey, 1800, result.rows);
   
   return result.rows;
 };
@@ -42,8 +46,8 @@ export const updateBusinessHours = async (tenantId, hours) => {
 
     await client.query('COMMIT');
     
-    // Invalidar cache
-    await redisClient.del(`tenant:${tenantId}:business_hours`);
+    // Invalidar cache de forma segura
+    await safeCacheDel(`tenant:${tenantId}:business_hours`);
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

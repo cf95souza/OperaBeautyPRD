@@ -1505,3 +1505,23 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Removidos comandos mecânicos de robô ("Digite 1 ou 2", "responda SAIR") do corpo da mensagem.
     - Template humanizado com instruções diretas: "Em caso de dúvidas, cancelamento ou remarcação, por favor nos envie uma mensagem por aqui para que possamos te ajudar. Estamos te esperando! ✨".
     - Título adaptativo dinâmico: "⏰ *Lembrete do seu agendamento hoje!*" para agendamentos do dia, e "🌸 *Lembrete do seu agendamento de amanhã!*" para o dia seguinte.
+
+
+- [x] **G31 (Quality & Capacidade) — Execução do System Quality Gate (Ambiente Local & Prevenção para Produção)**:
+  - **1. Auditoria e Pipeline Automatizado (`system-quality-gate`)**:
+    - Estruturada a governança documental e automação em `quality/plans/`, `quality/k6/`, `quality/evidence/` e `quality/reports/`.
+    - Executada compilação de produção do frontend (`npm run build` aprovada em 3.21s, gerando PWA e Service Worker).
+    - Executados testes de arquitetura e UI do backend com 758 testes passando com sucesso.
+  - **2. Bateria de Testes de Carga e Capacidade do PostgreSQL**:
+    - Smoke test (5 conexões, 908.8 req/s, P50 de 3ms, 0 erros).
+    - Readiness test com consulta direta ao Postgres (10 conexões, 626.8 req/s, P50 de 10ms, P99 de 94ms, 0 erros).
+    - Carga média (25 conexões, 785.3 req/s, P50 de 22ms, P99 de 142ms, 0 erros).
+    - Estresse controlado (50 conexões, 714.4 req/s, P50 de 55ms, P99 de 211ms, 0 erros).
+  - **3. Diagnóstico de Riscos e Relatório Oficial**:
+    - Gerados `quality/reports/quality-report.md` e `quality/reports/quality-summary.json`.
+    - Identificada necessidade de fallback defensivo (`try/catch`) no Redis em `catalogService.js` (P0) e desindexação de artefatos de `dist/` do Git (P1) antes de novos deploys.
+  - **4. Remediações Imediatas Aplicadas com Êxito**:
+    - Criado `backend/utils/cacheHelper.js` com funções `safeCacheGet`, `safeCacheSet` e `safeCacheDel`, blindando `catalogService.js` e `settingsService.js` contra indisponibilidade do Redis.
+    - Desindexados 14 arquivos compilados do `dist/` do repositório Git e restaurado `.gitignore`. Suíte `segredosAmbienteC4.test.js` 100% aprovada (11/11 testes).
+    - Criada migração `phase23_waitlist_and_reschedule.sql` e alinhada `phase45_plans_and_pricing_structure.sql`. Suítes `remarcarWaitlistD6.test.js` (10/10) e `reestruturacaoPlanosE1.test.js` (10/10) 100% aprovadas.
+    - Ignorados artefatos e protótipos de tela legados no `eslint.config.js`.

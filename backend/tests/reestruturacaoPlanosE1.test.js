@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 describe('Fase 45: E1 (P1) — Reestruturação de Planos e Preços', () => {
-  const migrationPath = path.resolve(__dirname, '../migrations/phase35_restructure_plans_e1.sql');
+  const migrationPath = path.resolve(__dirname, '../../migrations/phase45_plans_and_pricing_structure.sql');
   const planServicePath = path.resolve(__dirname, '../services/planService.js');
   const tenantServicePath = path.resolve(__dirname, '../services/tenantService.js');
   const saasBillingServicePath = path.resolve(__dirname, '../services/saasBillingService.js');
@@ -21,7 +21,8 @@ describe('Fase 45: E1 (P1) — Reestruturação de Planos e Preços', () => {
       const sql = fs.readFileSync(migrationPath, 'utf8');
 
       // cap_plans
-      expect(sql).toContain('slug VARCHAR(50) UNIQUE');
+      expect(sql).toContain('slug VARCHAR(50)');
+      expect(sql).toContain('UNIQUE (slug)');
       expect(sql).toContain('max_whatsapp_messages INT DEFAULT 0');
       expect(sql).toContain('is_featured BOOLEAN DEFAULT FALSE');
       expect(sql).toContain('badge_label VARCHAR(50)');
