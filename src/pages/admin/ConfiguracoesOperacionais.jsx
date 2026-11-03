@@ -31,7 +31,8 @@ import {
   CreditCard,
   ShieldCheck,
   Send,
-  Loader2
+  Loader2,
+  RotateCcw
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { formatCurrency } from '../../utils/formatters';

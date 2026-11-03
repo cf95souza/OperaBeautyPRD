@@ -1494,3 +1494,4 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Removido número de teste pessoal hardcoded do estado inicial em `ConfiguracoesOperacionais.jsx`.
     - Implementado endpoint `POST /api/whatsapp/trigger-cron-reminders` e botão "Executar Verificação Agora" com relatório de auditoria em tempo real na tela de configurações.
     - Implementado endpoint `POST /api/whatsapp/send-appointment-reminder/:id` e botão "Enviar Lembrete WhatsApp Agora (Disparo Imediato)" no modal de detalhes do agendamento na agenda (`AgendaProfissional.jsx`), permitindo testar e validar o lembrete oficial em agendamentos reais sem precisar aguardar 2 horas.
+    - Hotfix Frontend: Adicionado import faltante de `RotateCcw` de `lucide-react` em `ConfiguracoesOperacionais.jsx`, eliminando ReferenceError no botão de verificação e tela branca na produção.

@@ -2750,6 +2750,7 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Removido o número pessoal fixo de teste em `ConfiguracoesOperacionais.jsx`.
     * Adicionado endpoint `POST /api/whatsapp/trigger-cron-reminders` e botão "Executar Verificação Agora" nas configurações operacionais com cartão de status em tempo real.
     * Adicionado endpoint `POST /api/whatsapp/send-appointment-reminder/:id` e botão "Enviar Lembrete WhatsApp Agora (Disparo Imediato)" no modal de agendamento na agenda (`AgendaProfissional.jsx`), possibilitando testar e validar o lembrete oficial em clientes reais sem espera de 2 horas.
+    * Hotfix: Incluído o import do ícone `RotateCcw` de `lucide-react` em `ConfiguracoesOperacionais.jsx`, solucionando `ReferenceError: RotateCcw is not defined` no carregamento da tela de configurações operacionais em produção.
 
 
 
