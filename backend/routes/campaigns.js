@@ -95,7 +95,9 @@ router.post('/run', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     req.log.error(error, 'Erro ao executar varredura de campanhas');
-    return res.status(500).json({ error: 'Erro ao executar varredura de campanhas.' });
+    return res.status(500).json({ 
+      error: error.message || 'Erro ao executar varredura de campanhas.'
+    });
   }
 });
 

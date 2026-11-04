@@ -20,4 +20,12 @@ describe('Campanhas de Marketing — Correção de Query cap_tenants status e is
   it('deve manter is_active = true apenas na tabela cap_marketing_campaigns', () => {
     expect(serviceContent).toMatch(/FROM\s+public\.cap_marketing_campaigns\s+WHERE\s+tenant_id\s*=\s*\$1\s+AND\s+is_active\s*=\s*true/i);
   });
+
+  it('deve utilizar cálculo defensivo de datas no PostgreSQL e capturar falhas de notificação', () => {
+    expect(serviceContent).toContain('CURRENT_DATE - s.maintenance_days');
+    expect(serviceContent).toContain('[Campaign Notify Error - Birthday]');
+    expect(serviceContent).toContain('[Campaign Notify Error - Maintenance]');
+    expect(serviceContent).toContain('[Campaign Notify Error - Reactivation]');
+  });
 });
+

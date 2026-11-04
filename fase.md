@@ -1550,6 +1550,10 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **3. Correção de Erro HTTP 500 na Varredura de Campanhas (`backend/services/campaignService.js`)**:
     - Na função `runCampaignScan`, a busca de salões utilizava `WHERE is_active = true`. Na tabela `cap_tenants`, a coluna de status se chama `status` (valores `'active'`, `'suspended'`), causando erro `column "is_active" does not exist`.
     - Ajustada a query para `WHERE (status = 'active' OR status IS NULL)`.
+    - Refatoradas as consultas SQL de carência e retenção para utilizar casts explícitos no PostgreSQL (`$4::integer`, `CURRENT_DATE - s.maintenance_days`, `$2::integer`), eliminando ambiguidades de operadores em intervalos.
+    - Implementado `try/catch` defensivo nos disparos individuais de `notifyClient` para que falhas transitórias em clientes isolados não interrompam a varredura do salão.
+    - Rota `POST /run` atualizada para retornar a mensagem de erro detalhada em vez de ocultar a causa raiz.
+    - Procedimento de deploy da API na VPS: Uso obrigatório de `docker compose up -d --build api` para que o código novo seja copiado para a imagem Docker do backend.
   - **4. Testes e Compilação**:
     - Criados os testes `tests/campanhasScan.test.js` e `tests/notificationConfirmFix.test.js` (todos 100% aprovados).
     - Executado `npm run build` gerando bundle novo e limpo do Vite em 5.50s.

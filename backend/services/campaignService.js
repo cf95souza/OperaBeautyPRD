@@ -207,7 +207,7 @@ export const isClientInCooldown = async (tenantIdOrDate, campaignTypeOrCooldownD
        AND campaign_type = $2 
        AND client_id = $3 
        AND status = 'sent'
-       AND sent_at >= NOW() - ($4 * INTERVAL '1 day')
+       AND sent_at >= NOW() - ($4::integer * INTERVAL '1 day')
      LIMIT 1`,
     [tenantIdOrDate, campaignTypeOrCooldownDays, clientId, cooldownDays]
   );
@@ -346,14 +346,18 @@ export const runCampaignScan = async (specificTenantId = null) => {
           ]
         );
 
-        // Notificar via Push / WhatsApp
-        await notifyClient(
-          tenantId,
-          client.id,
-          'Feliz Aniversário! 🎂',
-          message,
-          `/${tenant.slug}/agendamento`
-        );
+        // Notificar via Push / WhatsApp com tolerância a falhas de rede
+        try {
+          await notifyClient(
+            tenantId,
+            client.id,
+            'Feliz Aniversário! 🎂',
+            message,
+            `/${tenant.slug}/agendamento`
+          );
+        } catch (notifErr) {
+          console.error('[Campaign Notify Error - Birthday]:', notifErr.message);
+        }
 
         results.birthday_sent++;
       }
@@ -372,7 +376,7 @@ export const runCampaignScan = async (specificTenantId = null) => {
          WHERE a.tenant_id = $1
            AND a.status = 'completed'
            AND s.maintenance_days > 0
-           AND (a.start_time AT TIME ZONE 'America/Sao_Paulo')::date = CURRENT_DATE - (s.maintenance_days * INTERVAL '1 day')
+           AND (a.start_time AT TIME ZONE 'America/Sao_Paulo')::date = CURRENT_DATE - s.maintenance_days
            AND NOT EXISTS (
              SELECT 1 FROM public.cap_appointments fut 
              WHERE fut.tenant_id = a.tenant_id 
@@ -437,13 +441,17 @@ export const runCampaignScan = async (specificTenantId = null) => {
           ]
         );
 
-        await notifyClient(
-          tenantId,
-          item.client_id,
-          'Hora do seu Retoque! ✨',
-          message,
-          `/${tenant.slug}/agendamento`
-        );
+        try {
+          await notifyClient(
+            tenantId,
+            item.client_id,
+            'Hora do seu Retoque! ✨',
+            message,
+            `/${tenant.slug}/agendamento`
+          );
+        } catch (notifErr) {
+          console.error('[Campaign Notify Error - Maintenance]:', notifErr.message);
+        }
 
         results.maintenance_sent++;
       }
@@ -462,7 +470,7 @@ export const runCampaignScan = async (specificTenantId = null) => {
          WHERE c.tenant_id = $1
            AND a.status = 'completed'
          GROUP BY c.id, c.name, c.phone, c.marketing_opt_out
-         HAVING MAX(a.start_time) <= CURRENT_DATE - ($2 * INTERVAL '1 day')
+         HAVING MAX(a.start_time) <= CURRENT_DATE - ($2::integer * INTERVAL '1 day')
            AND NOT EXISTS (
              SELECT 1 FROM public.cap_appointments fut 
              WHERE fut.tenant_id = c.tenant_id 
@@ -526,13 +534,17 @@ export const runCampaignScan = async (specificTenantId = null) => {
           ]
         );
 
-        await notifyClient(
-          tenantId,
-          client.id,
-          'Estamos com saudades de você! 💌',
-          message,
-          `/${tenant.slug}/agendamento`
-        );
+        try {
+          await notifyClient(
+            tenantId,
+            client.id,
+            'Estamos com saudades de você! 💌',
+            message,
+            `/${tenant.slug}/agendamento`
+          );
+        } catch (notifErr) {
+          console.error('[Campaign Notify Error - Reactivation]:', notifErr.message);
+        }
 
         results.reactivation_sent++;
       }

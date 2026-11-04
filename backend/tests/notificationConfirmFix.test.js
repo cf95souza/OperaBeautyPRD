@@ -17,3 +17,4 @@ describe('NotificationProvider — Suporte a confirm({ title, message }) e strin
     expect(content).toContain("title = messageOrOptions.title");
   });
 });
+
