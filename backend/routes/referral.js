@@ -132,7 +132,7 @@ router.put('/admin/settings', authMiddleware, requireRole(['manager', 'superadmi
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     req.log?.error(error, 'Erro ao atualizar configurações de indicação');
-    return res.status(500).json({ error: 'Erro ao atualizar configurações de indicação.' });
+    return res.status(500).json({ error: error.message || 'Erro ao atualizar configurações de indicação.' });
   }
 });
 

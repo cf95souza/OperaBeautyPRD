@@ -1557,3 +1557,15 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **4. Testes e Compilação**:
     - Criados os testes `tests/campanhasScan.test.js` e `tests/notificationConfirmFix.test.js` (todos 100% aprovados).
     - Executado `npm run build` gerando bundle novo e limpo do Vite em 5.50s.
+
+- [x] **G34 (Hotfix/Produção) — Correção de Regras de Indicação (HTTP 500) e Restauração de Notificações do Sininho**:
+  - **1. Correção no Update de Regras de Indicação (`backend/services/referralService.js`)**:
+    - A função `updateReferralSettings` executava `UPDATE public.cap_tenants ... updated_at = NOW()`. A coluna `updated_at` não existe na tabela `cap_tenants` no banco da VPS, disparando HTTP 500 ao salvar configurações do Indique e Ganhe.
+    - Removida a atribuição a `updated_at` na consulta de `cap_tenants` e rota `PUT /api/referral/admin/settings` ajustada para retornar detalhes descritivos do erro.
+  - **2. Restauração e Sincronização Retroativa de Notificações In-App (`backend/services/notificationService.js`)**:
+    - Implementada sincronização retroativa idempotente em `getMyNotifications` que povoa automaticamente na tabela `cap_notifications` os agendamentos recentes do salão que ainda não possuíam notificação criada.
+    - Expandido o escopo de leitura e gestão de notificações para o perfil `manager` (Gestora/Dona do Salão), garantindo que ela visualize todos os novos agendamentos do estabelecimento no sininho sem bloqueio por filtro restritivo de staff.
+    - Aprimorado o componente `NotificationDropdown.jsx` com carregamento no mount inicial e polling suave a cada 1 minuto, garantindo que o alerta visual (bolinha pulsante) apareça imediatamente.
+  - **3. Testes Automatizados e Build de Produção**:
+    - Criada a suíte `backend/tests/referralSettingsAndNotificationsFix.test.js` (100% aprovada).
+    - Recompilado o frontend com `npm run build` gerando bundle atualizado em `dist/`.

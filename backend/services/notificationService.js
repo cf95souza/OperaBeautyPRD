@@ -247,30 +247,82 @@ export const cancelAppointmentReminders = async (appointmentId) => {
 /**
  * Lista as notificações In-App do profissional ou cliente
  */
-export const getMyNotifications = async (tenantId, userId, isClient = false, limit = 50) => {
-  const query = isClient 
-    ? `SELECT id, title, body, is_read, created_at 
-       FROM public.cap_notifications 
-       WHERE tenant_id = $1 AND client_id = $2
-       ORDER BY created_at DESC LIMIT $3`
-    : `SELECT id, title, body, is_read, created_at 
-       FROM public.cap_notifications 
-       WHERE tenant_id = $1 AND staff_id = $2
-       ORDER BY created_at DESC LIMIT $3`;
+export const getMyNotifications = async (tenantId, userId, isClient = false, limit = 50, userRole = null) => {
+  // Sincronização retroativa segura de agendamentos recentes que ainda não possuem notificação
+  if (!isClient) {
+    try {
+      await tenantQuery(
+        tenantId,
+        `INSERT INTO public.cap_notifications (tenant_id, staff_id, title, body, created_at)
+         SELECT 
+           a.tenant_id,
+           a.staff_id,
+           'Novo Agendamento 📅',
+           CONCAT(COALESCE(c.name, 'Cliente'), ' agendou ', COALESCE(s.name, 'Procedimento'), ' para ', TO_CHAR(a.start_time AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY às HH24:MI'), '.'),
+           a.created_at
+         FROM public.cap_appointments a
+         LEFT JOIN public.cap_clients c ON a.client_id = c.id
+         LEFT JOIN public.cap_services s ON a.service_id = s.id
+         WHERE a.tenant_id = $1
+           AND a.status <> 'cancelled'
+           AND NOT EXISTS (
+             SELECT 1 FROM public.cap_notifications n 
+             WHERE n.tenant_id = a.tenant_id 
+               AND n.body LIKE CONCAT('%', TO_CHAR(a.start_time AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY às HH24:MI'), '%')
+           )
+         ORDER BY a.created_at DESC
+         LIMIT 20`,
+        [tenantId]
+      );
+    } catch (syncErr) {
+      // Falha silenciosa de sincronização retroativa não interrompe a busca
+    }
+  }
 
-  const result = await tenantQuery(tenantId, query, [tenantId, userId, limit]);
-  return result.rows;
+  const isManager = userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin';
+
+  if (isClient) {
+    const query = `SELECT id, title, body, is_read, created_at 
+                   FROM public.cap_notifications 
+                   WHERE tenant_id = $1 AND client_id = $2
+                   ORDER BY created_at DESC LIMIT $3`;
+    const result = await tenantQuery(tenantId, query, [tenantId, userId, limit]);
+    return result.rows;
+  } else if (isManager) {
+    // Gestoras e administradores do salão visualizam todas as notificações do estabelecimento
+    const query = `SELECT id, title, body, is_read, created_at 
+                   FROM public.cap_notifications 
+                   WHERE tenant_id = $1
+                   ORDER BY created_at DESC LIMIT $2`;
+    const result = await tenantQuery(tenantId, query, [tenantId, limit]);
+    return result.rows;
+  } else {
+    // Profissional específico
+    const query = `SELECT id, title, body, is_read, created_at 
+                   FROM public.cap_notifications 
+                   WHERE tenant_id = $1 AND staff_id = $2
+                   ORDER BY created_at DESC LIMIT $3`;
+    const result = await tenantQuery(tenantId, query, [tenantId, userId, limit]);
+    return result.rows;
+  }
 };
 
 /**
  * Marca notificação como lida
  */
-export const markNotificationAsRead = async (tenantId, userId, isClient, notificationId) => {
+export const markNotificationAsRead = async (tenantId, userId, isClient, notificationId, userRole = null) => {
+  const isManager = userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin';
   const query = isClient
     ? `UPDATE public.cap_notifications SET is_read = TRUE WHERE id = $1 AND tenant_id = $2 AND client_id = $3 RETURNING id`
-    : `UPDATE public.cap_notifications SET is_read = TRUE WHERE id = $1 AND tenant_id = $2 AND staff_id = $3 RETURNING id`;
+    : (isManager
+        ? `UPDATE public.cap_notifications SET is_read = TRUE WHERE id = $1 AND tenant_id = $2 RETURNING id`
+        : `UPDATE public.cap_notifications SET is_read = TRUE WHERE id = $1 AND tenant_id = $2 AND staff_id = $3 RETURNING id`);
     
-  const result = await tenantQuery(tenantId, query, [notificationId, tenantId, userId]);
+  const params = isClient 
+    ? [notificationId, tenantId, userId]
+    : (isManager ? [notificationId, tenantId] : [notificationId, tenantId, userId]);
+
+  const result = await tenantQuery(tenantId, query, params);
   
   if (result.rows.length === 0) throw new Error('Notificação não encontrada.');
   return { success: true };
@@ -279,12 +331,16 @@ export const markNotificationAsRead = async (tenantId, userId, isClient, notific
 /**
  * Limpa/Deleta as notificações lidas
  */
-export const clearReadNotifications = async (tenantId, userId, isClient) => {
+export const clearReadNotifications = async (tenantId, userId, isClient, userRole = null) => {
+  const isManager = userRole === 'manager' || userRole === 'admin' || userRole === 'superadmin';
   const query = isClient
     ? `DELETE FROM public.cap_notifications WHERE is_read = TRUE AND tenant_id = $1 AND client_id = $2`
-    : `DELETE FROM public.cap_notifications WHERE is_read = TRUE AND tenant_id = $1 AND staff_id = $2`;
+    : (isManager
+        ? `DELETE FROM public.cap_notifications WHERE is_read = TRUE AND tenant_id = $1`
+        : `DELETE FROM public.cap_notifications WHERE is_read = TRUE AND tenant_id = $1 AND staff_id = $2`);
 
-  await tenantQuery(tenantId, query, [tenantId, userId]);
+  const params = (isClient || !isManager) ? [tenantId, userId] : [tenantId];
+  await tenantQuery(tenantId, query, params);
   return { success: true };
 };
 

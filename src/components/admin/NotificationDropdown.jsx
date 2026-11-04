@@ -24,6 +24,12 @@ const NotificationDropdown = () => {
   const dropdownRef = useRef(null);
 
   useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     if (isOpen) {
       loadNotifications();
     }

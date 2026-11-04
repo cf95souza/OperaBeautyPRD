@@ -2814,3 +2814,13 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
   - **3. Correção do Erro HTTP 500 em Varredura de Campanhas (`campaignService.js`)**:
     * Diagnóstico: Em `runCampaignScan`, a query executava `SELECT id, name, slug FROM public.cap_tenants WHERE is_active = true`. A tabela `cap_tenants` possui a coluna de status nomeada como `status` (valores `'active'`, `'suspended'`), causando erro de coluna inexistente no PostgreSQL. Além disso, o comando `docker compose restart api` na VPS apenas reiniciava o container com a imagem Docker antiga (onde o código backend é copiado durante o build), exigindo o rebuild da imagem.
     * Remediação: Atualizada a cláusula para `WHERE (status = 'active' OR status IS NULL)`. Casts explícitos adicionados para operações de intervalo (`$4::integer`, `$2::integer`, `CURRENT_DATE - s.maintenance_days`), além de `try/catch` defensivo nos envios para clientes em `notifyClient` e retorno detalhado de erro na rota `POST /run`. Teste `backend/tests/campanhasScan.test.js` 100% aprovado.
+
+- **04/11/2026 - Correção de Regras de Indicação (HTTP 500) e Restauração de Notificações do Sininho - G34 [Concluída]:**
+  - **1. Resolução do Erro 500 em Regras de Indicação (`referralService.js`)**:
+    * Diagnóstico: A função `updateReferralSettings` tentava atualizar a coluna `updated_at = NOW()` na tabela `cap_tenants`. Como a tabela `cap_tenants` não contém essa coluna no banco de dados da VPS, o PostgreSQL abortava a consulta com `column "updated_at" does not exist`, impedindo a gravação de regras de indicação.
+    * Remediação: Removida a linha `updated_at = NOW()` da consulta de atualização de `cap_tenants`.
+  - **2. Restauração e Sincronização Retroativa de Notificações In-App (`notificationService.js` & `NotificationDropdown.jsx`)**:
+    * Diagnóstico: Agendamentos criados pelos clientes não estavam aparecendo no sininho da Gestora por conta de filtros restritivos de `staff_id` e ausência de sincronização no histórico.
+    * Remediação: Implementada sincronização retroativa idempotente em `getMyNotifications` que povoa automaticamente na tabela `cap_notifications` os agendamentos recentes do salão. Adicionado suporte amplo para gestores (`manager`) visualizarem todos os alertas do estabelecimento. Componente `NotificationDropdown.jsx` atualizado com carregamento no mount inicial e polling suave.
+  - **3. Testes Automatizados**:
+    * Suíte de testes `backend/tests/referralSettingsAndNotificationsFix.test.js` criada e 100% aprovada.

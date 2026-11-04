@@ -49,7 +49,7 @@ router.post('/subscribe', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const isClient = req.user.role === 'client';
-    const notifications = await getMyNotifications(req.user.tenant_id, req.user.id, isClient);
+    const notifications = await getMyNotifications(req.user.tenant_id, req.user.id, isClient, 50, req.user.role);
     return res.json(notifications);
   } catch (err) {
     req.log.error(err, 'Erro ao buscar notificações');
@@ -61,7 +61,7 @@ router.get('/', async (req, res) => {
 router.put('/:id/read', async (req, res) => {
   try {
     const isClient = req.user.role === 'client';
-    await markNotificationAsRead(req.user.tenant_id, req.user.id, isClient, req.params.id);
+    await markNotificationAsRead(req.user.tenant_id, req.user.id, isClient, req.params.id, req.user.role);
     return res.json({ message: 'Marcada como lida.' });
   } catch (err) {
     req.log.error(err, 'Erro ao marcar notificação como lida');
@@ -73,7 +73,7 @@ router.put('/:id/read', async (req, res) => {
 router.delete('/read', async (req, res) => {
   try {
     const isClient = req.user.role === 'client';
-    await clearReadNotifications(req.user.tenant_id, req.user.id, isClient);
+    await clearReadNotifications(req.user.tenant_id, req.user.id, isClient, req.user.role);
     return res.json({ message: 'Notificações lidas removidas com sucesso.' });
   } catch (err) {
     req.log.error(err, 'Erro ao limpar notificações lidas');

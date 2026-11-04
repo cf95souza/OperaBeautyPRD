@@ -584,8 +584,7 @@ export const updateReferralSettings = async (tenantId, settingsData) => {
          referral_referrer_reward = $3,
          referral_referee_reward = $4,
          referral_trigger = $5,
-         referral_custom_message = $6,
-         updated_at = NOW()
+         referral_custom_message = $6
      WHERE id = $7
      RETURNING referral_program_active, referral_reward_type, referral_referrer_reward, referral_referee_reward, referral_trigger, referral_custom_message`,
     [
