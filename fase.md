@@ -1525,3 +1525,16 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Desindexados 14 arquivos compilados do `dist/` do repositório Git e restaurado `.gitignore`. Suíte `segredosAmbienteC4.test.js` 100% aprovada (11/11 testes).
     - Criada migração `phase23_waitlist_and_reschedule.sql` e alinhada `phase45_plans_and_pricing_structure.sql`. Suítes `remarcarWaitlistD6.test.js` (10/10) e `reestruturacaoPlanosE1.test.js` (10/10) 100% aprovadas.
     - Ignorados artefatos e protótipos de tela legados no `eslint.config.js`.
+
+- [x] **G32 (Hotfix/Produção) — Correção de Validação Zod na Inativação e Atualização de Serviços (HTTP 400)**:
+  - **1. Coerção Numérica para Colunas NUMERIC no PostgreSQL (`backend/routes/services.js`)**:
+    - Substituído `z.number()` por `z.coerce.number()` em `price`, `duration_minutes`, `maintenance_days`, `deposit_amount` e `inputs.quantity_consumed`, permitindo que strings numéricas retornadas pelo driver pg (ex: `"80.00"`) sejam processadas corretamente.
+    - Tornados opcionais campos cadastrais em `updateServiceSchema` (`name`, `duration_minutes`, `price`) para dar suporte a mutações parciais (ex: apenas `is_active: false`).
+  - **2. Blindagem e Fallback no Service (`backend/services/catalogService.js`)**:
+    - `updateService`: Implementado fallback defensivo preservando dados existentes (`oldService.name`, `oldService.duration_minutes`, `oldService.price`, etc.) quando estes não forem enviados no payload parcial.
+    - `inputs`: Condicionado o expurgo e reinserção de `cap_service_inventory` apenas quando `inputs !== undefined`, impedindo exclusão acidental de insumos em atualizações de status.
+  - **3. Higienização no Frontend (`src/pages/admin/GestaoServicos.jsx`)**:
+    - `handleToggleActive`: Coerção explícita de tipos com `parseFloat(service.price)`, `parseInt(service.duration_minutes, 10)`, `parseFloat(service.deposit_amount)` e remoção de campos inexistentes no schema do serviço (`category`, `inputs`).
+  - **4. Validação Automatizada**:
+    - Suíte de testes `servicesUpdateInactivation.test.js` 100% aprovada (3/3 testes).
+    - Compilação limpa do Vite (`npm run build`) concluída com êxito em 8.14s.

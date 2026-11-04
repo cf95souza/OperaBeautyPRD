@@ -157,17 +157,15 @@ const GestaoServicos = () => {
       const payload = {
         name: service.name,
         short_description: service.short_description || null,
-        category: service.category || null,
-        duration_minutes: service.duration_minutes,
-        price: service.price,
-        is_starting_price: service.is_starting_price,
-        maintenance_days: service.maintenance_days || 0,
-        reduces_stock: service.reduces_stock || false,
-        requires_deposit: service.requires_deposit || false,
+        duration_minutes: parseInt(service.duration_minutes, 10) || 30,
+        price: parseFloat(service.price) || 0,
+        is_starting_price: Boolean(service.is_starting_price),
+        maintenance_days: parseInt(service.maintenance_days, 10) || 0,
+        reduces_stock: Boolean(service.reduces_stock),
+        requires_deposit: Boolean(service.requires_deposit),
         deposit_type: service.deposit_type || 'percentage',
-        deposit_amount: service.deposit_amount || 0,
-        is_active: newStatus,
-        inputs: service.inputs || []
+        deposit_amount: parseFloat(service.deposit_amount) || 0,
+        is_active: newStatus
       };
       await api.services.update(service.id, payload);
       setServices(prev => prev.map(s => s.id === service.id ? { ...s, is_active: newStatus } : s));

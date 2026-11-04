@@ -2787,3 +2787,19 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * *Blindagem do Cache (P0)*: Implementado `backend/utils/cacheHelper.js` e integrado em `catalogService.js` e `settingsService.js`. Caso o Redis falhe na VPS, as consultas recorrem de forma transparente ao PostgreSQL, mantendo 100% de disponibilidade.
     * *Desindexação do Build (P1)*: Removidos os 14 arquivos do `dist/` do índice Git e restaurado `dist/` no `.gitignore`. Suíte `segredosAmbienteC4.test.js` 100% aprovada.
     * *Alinhamento de Migrações (P1)*: Adicionada `phase23_waitlist_and_reschedule.sql` e ajustada `phase45_plans_and_pricing_structure.sql` para garantir a proteção de preço congelado para salões fundadores.
+
+
+- **04/11/2026 - Correção de Validação Zod na Inativação e Atualização de Serviços - G32 [Concluída]:**
+  - **1. Diagnóstico da Causa Raiz (HTTP 400)**:
+    * Na inativação de um serviço pelo Gestor (`handleToggleActive` em `GestaoServicos.jsx`), o frontend realizava chamada `PUT /api/services/:id` enviando campos numéricos carregados do PostgreSQL (onde colunas `NUMERIC` como `price` e `deposit_amount` são retornadas como strings, ex: `"80.00"`).
+    * No backend (`backend/routes/services.js`), o schema Zod `updateServiceSchema` utilizava `z.number().positive()`, rejeitando strings com `400 Bad Request: Erro de validação`.
+    * Além disso, `name`, `duration_minutes` e `price` eram tratados como estritamente obrigatórios no schema e o método de banco `updateService` sobrescrevia colunas com `NULL` caso algum campo estivesse ausente.
+  - **2. Remediação Backend (`backend/routes/services.js` & `backend/services/catalogService.js`)**:
+    * Utilizado `z.coerce.number()` em todas as colunas monetárias e numéricas de `createServiceSchema` e `updateServiceSchema`.
+    * Tornados opcionais campos cadastrais em `updateServiceSchema` para permitir updates parciais de status (`is_active`).
+    * Implementado fallback defensivo em `updateService` preservando os valores já cadastrados em `oldService` para qualquer campo omitido.
+    * Protegida a tabela `cap_service_inventory` para só sofrer recadastro caso `inputs !== undefined`.
+  - **3. Higienização no Frontend (`src/pages/admin/GestaoServicos.jsx`)**:
+    * Coerção explícita de tipos com `parseFloat` e `parseInt` no `handleToggleActive` e expurgo de propriedades não aceitas no DDL.
+  - **4. Testes de Regressão**:
+    * Suíte Jest `servicesUpdateInactivation.test.js` criada e 100% aprovada (3/3 testes).

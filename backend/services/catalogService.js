@@ -201,51 +201,63 @@ export const updateService = async (
       'SELECT id, tenant_id, name, short_description, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active, requires_deposit, deposit_type, deposit_amount, created_at FROM public.cap_services WHERE id = $1 AND tenant_id = $2',
       [id, tenantId]
     );
+    if (oldServiceResult.rows.length === 0) {
+      const error = new Error('Serviço não encontrado ou acesso negado.');
+      error.statusCode = 404;
+      throw error;
+    }
     const oldService = oldServiceResult.rows[0];
 
     const hasVariations = Array.isArray(variations) && variations.length > 0;
-    const computedStartingPrice = is_starting_price !== undefined ? (is_starting_price || hasVariations) : undefined;
+    const computedStartingPrice = is_starting_price !== undefined ? (is_starting_price || hasVariations) : oldService.is_starting_price;
+
+    const finalName = name !== undefined ? name : oldService.name;
+    const finalDuration = duration_minutes !== undefined ? duration_minutes : oldService.duration_minutes;
+    const finalPrice = price !== undefined ? price : oldService.price;
+    const finalReducesStock = reduces_stock !== undefined ? reduces_stock : oldService.reduces_stock;
+    const finalMaintenanceDays = maintenance_days !== undefined ? maintenance_days : oldService.maintenance_days;
+    const finalIsActive = is_active !== undefined ? is_active : oldService.is_active;
+    const finalRequiresDeposit = requires_deposit !== undefined ? requires_deposit : oldService.requires_deposit;
+    const finalDepositType = deposit_type !== undefined ? deposit_type : oldService.deposit_type;
+    const finalDepositAmount = deposit_amount !== undefined ? deposit_amount : oldService.deposit_amount;
+    const finalShortDescription = short_description !== undefined ? short_description : oldService.short_description;
 
     const serviceResult = await client.query(
       `UPDATE public.cap_services 
        SET name = $1, 
            duration_minutes = $2, 
            price = $3, 
-           is_starting_price = COALESCE($4, is_starting_price),
+           is_starting_price = $4,
            reduces_stock = $5, 
            maintenance_days = $6,
-           is_active = COALESCE($7, is_active),
-           requires_deposit = COALESCE($8, requires_deposit),
-           deposit_type = COALESCE($9, deposit_type),
-           deposit_amount = COALESCE($10, deposit_amount),
-           short_description = COALESCE($11, short_description)
+           is_active = $7,
+           requires_deposit = $8,
+           deposit_type = $9,
+           deposit_amount = $10,
+           short_description = $11
        WHERE id = $12 AND tenant_id = $13
        RETURNING id, tenant_id, name, short_description, duration_minutes, price, is_starting_price, reduces_stock, maintenance_days, is_active, requires_deposit, deposit_type, deposit_amount, created_at`,
-      [name, duration_minutes, price, computedStartingPrice, reduces_stock, maintenance_days, is_active, requires_deposit, deposit_type, deposit_amount, short_description !== undefined ? short_description : null, id, tenantId]
+      [finalName, finalDuration, finalPrice, computedStartingPrice, finalReducesStock, finalMaintenanceDays, finalIsActive, finalRequiresDeposit, finalDepositType, finalDepositAmount, finalShortDescription, id, tenantId]
     );
-
-    if (serviceResult.rows.length === 0) {
-      const error = new Error('Serviço não encontrado ou acesso negado.');
-      error.statusCode = 404;
-      throw error;
-    }
 
     const updatedService = serviceResult.rows[0];
 
-    // Atualização de insumos
-    await client.query(
-      'DELETE FROM public.cap_service_inventory WHERE service_id = $1 AND tenant_id = $2',
-      [id, tenantId]
-    );
+    // Atualização de insumos apenas quando enviado explicitamente
+    if (inputs !== undefined && Array.isArray(inputs)) {
+      await client.query(
+        'DELETE FROM public.cap_service_inventory WHERE service_id = $1 AND tenant_id = $2',
+        [id, tenantId]
+      );
 
-    if (reduces_stock && inputs && Array.isArray(inputs) && inputs.length > 0) {
-      for (const input of inputs) {
-        if (input.inventory_id && input.quantity_consumed) {
-          await client.query(
-            `INSERT INTO public.cap_service_inventory (tenant_id, service_id, inventory_id, quantity_consumed)
-             VALUES ($1, $2, $3, $4)`,
-            [tenantId, id, input.inventory_id, parseFloat(input.quantity_consumed)]
-          );
+      if (finalReducesStock && inputs.length > 0) {
+        for (const input of inputs) {
+          if (input.inventory_id && input.quantity_consumed) {
+            await client.query(
+              `INSERT INTO public.cap_service_inventory (tenant_id, service_id, inventory_id, quantity_consumed)
+               VALUES ($1, $2, $3, $4)`,
+              [tenantId, id, input.inventory_id, parseFloat(input.quantity_consumed)]
+            );
+          }
         }
       }
     }

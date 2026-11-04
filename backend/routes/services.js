@@ -65,19 +65,19 @@ const createServiceSchema = z.object({
   body: z.object({
     name: z.string().min(1, 'Nome do serviço é obrigatório.'),
     short_description: z.string().max(255).nullable().optional(),
-    duration_minutes: z.number().int().positive('A duração deve ser maior que zero.'),
-    price: z.number().positive('O preço deve ser maior que zero.'),
+    duration_minutes: z.coerce.number().int().positive('A duração deve ser maior que zero.'),
+    price: z.coerce.number().positive('O preço deve ser maior que zero.'),
     is_starting_price: z.boolean().optional(),
     reduces_stock: z.boolean().optional(),
-    maintenance_days: z.number().int().nonnegative().optional(),
-    requires_deposit: z.boolean().optional(),
-    deposit_type: z.enum(['percentage', 'fixed']).optional(),
-    deposit_amount: z.number().nonnegative().optional(),
+    maintenance_days: z.coerce.number().int().nonnegative().optional().default(0),
+    requires_deposit: z.boolean().optional().default(false),
+    deposit_type: z.enum(['percentage', 'fixed']).optional().default('percentage'),
+    deposit_amount: z.coerce.number().nonnegative().optional().default(0),
     variations: z.array(serviceVariationSchema).optional(),
     extras: z.array(serviceExtraSchema).optional(),
     inputs: z.array(z.object({
-      inventory_id: z.string().uuid('ID do produto em estoque inválido.'),
-      quantity_consumed: z.number().positive('A quantidade consumida deve ser maior que zero.')
+      inventory_id: z.string().uuid('ID do produto em estoque inválido.').optional(),
+      quantity_consumed: z.coerce.number().positive('A quantidade consumida deve ser maior que zero.').optional()
     })).optional()
   }),
   query: z.any(), params: z.any()
@@ -88,22 +88,22 @@ const updateServiceSchema = z.object({
     id: z.string().uuid('ID do serviço inválido.')
   }),
   body: z.object({
-    name: z.string().min(1, 'Nome do serviço é obrigatório.'),
+    name: z.string().min(1, 'Nome do serviço é obrigatório.').optional(),
     short_description: z.string().max(255).nullable().optional(),
-    duration_minutes: z.number().int().positive('A duração deve ser maior que zero.'),
-    price: z.number().positive('O preço deve ser maior que zero.'),
+    duration_minutes: z.coerce.number().int().positive('A duração deve ser maior que zero.').optional(),
+    price: z.coerce.number().positive('O preço deve ser maior que zero.').optional(),
     is_starting_price: z.boolean().optional(),
     reduces_stock: z.boolean().optional(),
-    maintenance_days: z.number().int().nonnegative().optional(),
+    maintenance_days: z.coerce.number().int().nonnegative().optional(),
     is_active: z.boolean().optional(),
     requires_deposit: z.boolean().optional(),
     deposit_type: z.enum(['percentage', 'fixed']).optional(),
-    deposit_amount: z.number().nonnegative().optional(),
+    deposit_amount: z.coerce.number().nonnegative().optional(),
     variations: z.array(serviceVariationSchema).optional(),
     extras: z.array(serviceExtraSchema).optional(),
     inputs: z.array(z.object({
-      inventory_id: z.string().uuid('ID do produto em estoque inválido.'),
-      quantity_consumed: z.number().positive('A quantidade consumida deve ser maior que zero.')
+      inventory_id: z.string().uuid('ID do produto em estoque inválido.').optional(),
+      quantity_consumed: z.coerce.number().positive('A quantidade consumida deve ser maior que zero.').optional()
     })).optional()
   }),
   query: z.any()
