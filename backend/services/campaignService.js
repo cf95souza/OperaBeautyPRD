@@ -250,8 +250,8 @@ export const renderCampaignMessage = (template, variables = {}) => {
  */
 export const runCampaignScan = async (specificTenantId = null) => {
   const tenantsQuery = specificTenantId
-    ? await pool.query(`SELECT id, name, slug FROM public.cap_tenants WHERE id = $1 AND is_active = true`, [specificTenantId])
-    : await pool.query(`SELECT id, name, slug FROM public.cap_tenants WHERE is_active = true`);
+    ? await pool.query(`SELECT id, name, slug FROM public.cap_tenants WHERE id = $1 AND (status = 'active' OR status IS NULL)`, [specificTenantId])
+    : await pool.query(`SELECT id, name, slug FROM public.cap_tenants WHERE (status = 'active' OR status IS NULL)`);
 
   const results = {
     processed_tenants: tenantsQuery.rows.length,

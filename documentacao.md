@@ -2803,3 +2803,14 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Coerção explícita de tipos com `parseFloat` e `parseInt` no `handleToggleActive` e expurgo de propriedades não aceitas no DDL.
   - **4. Testes de Regressão**:
     * Suíte Jest `servicesUpdateInactivation.test.js` criada e 100% aprovada (3/3 testes).
+
+- **04/11/2026 - Restauração do Bundle de Produção (VPS 404), Modal Confirm (React Error #31) e Varredura de Campanhas (HTTP 500) - G33 [Concluída]:**
+  - **1. Resolução do Erro 404 no Caddy da VPS**:
+    * Diagnóstico: Na VPS de produção (Ubuntu), o host opera exclusivamente via Docker sem Node/npm instalado. O `docker-compose.yml` mapeia o volume `- ./dist:/srv/dist:ro` no contêiner Caddy. A desindexação do `dist/` no commit anterior fez com que o `git pull` na VPS apagasse os arquivos compilados do disco da VPS, resultando em HTTP 404 em todas as rotas (incluindo rotas SPA de gestão e PDV) e quebrando o Service Worker (Workbox).
+    * Remediação: Removida a linha `dist/` do `.gitignore`, mantendo o bundle de produção compilado rastreado no repositório. O teste `segredosAmbienteC4.test.js` foi adaptado para validar a integridade dos artefatos estáticos para o Caddy sem exigir compilação na VPS.
+  - **2. Correção do Minified React error #31 na Exclusão de Pacotes (`NotificationProvider.jsx`)**:
+    * Diagnóstico: Em `src/pages/admin/GestaoPacotes.jsx`, a exclusão/inativação de um pacote chamava `confirm({ title, message })`. No `NotificationProvider.jsx`, o método esperava `confirm(message, title)` como strings. Ao receber um objeto no primeiro argumento, o JSX renderizava `<p>{confirmState.message}</p>` passando um objeto JavaScript, gerando a quebra imediata da árvore React.
+    * Remediação: O método `confirm` foi refatorado para desempacotar transparentemente tanto chamadas com objeto de opções (`{ title, message }`) quanto argumentos posicionais (`(message, title)`). Teste `backend/tests/notificationConfirmFix.test.js` 100% aprovado.
+  - **3. Correção do Erro HTTP 500 em Varredura de Campanhas (`campaignService.js`)**:
+    * Diagnóstico: Em `runCampaignScan`, a query executava `SELECT id, name, slug FROM public.cap_tenants WHERE is_active = true`. A tabela `cap_tenants` possui a coluna de status nomeada como `status` (valores `'active'`, `'suspended'`), causando erro de coluna inexistente no PostgreSQL.
+    * Remediação: Atualizada a cláusula para `WHERE (status = 'active' OR status IS NULL)`. Teste `backend/tests/campanhasScan.test.js` 100% aprovado.

@@ -1538,3 +1538,18 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **4. Validação Automatizada**:
     - Suíte de testes `servicesUpdateInactivation.test.js` 100% aprovada (3/3 testes).
     - Compilação limpa do Vite (`npm run build`) concluída com êxito em 8.14s.
+
+- [x] **G33 (Hotfix/Produção) — Restauração do Bundle de Produção (VPS 404), Modal Confirm (React Error #31) e Varredura de Campanhas (HTTP 500)**:
+  - **1. Resolução do Erro 404 no Caddy da VPS**:
+    - O ambiente de produção (Ubuntu VPS) não possui Node/npm no host para build sob demanda; o Caddy consome `./dist` via bind mount (`./dist:/srv/dist:ro`).
+    - A desindexação prévia de `dist/` havia deixado o host sem o artefato compilado após o `git pull`, retornando 404 em todas as rotas SPA.
+    - Removida a restrição de `dist/` do `.gitignore` e ajustada a suíte `segredosAmbienteC4.test.js` para garantir que `dist/index.html` esteja presente e compilado no repositório para entrega contínua sem necessidade de compilação pesada na VPS.
+  - **2. Correção do React Error #31 na Exclusão de Pacotes (`src/context/NotificationProvider.jsx`)**:
+    - O método `confirm()` recebia objetos `{ title, message }` (como chamado em `GestaoPacotes.jsx`), atribuindo o objeto inteiro ao campo de mensagem de texto e disparando o React Minified Error #31.
+    - Atualizado o método para desempacotar transparentemente tanto objetos `{ title, message }` quanto chamadas posicionais `confirm(msg, title)`.
+  - **3. Correção de Erro HTTP 500 na Varredura de Campanhas (`backend/services/campaignService.js`)**:
+    - Na função `runCampaignScan`, a busca de salões utilizava `WHERE is_active = true`. Na tabela `cap_tenants`, a coluna de status se chama `status` (valores `'active'`, `'suspended'`), causando erro `column "is_active" does not exist`.
+    - Ajustada a query para `WHERE (status = 'active' OR status IS NULL)`.
+  - **4. Testes e Compilação**:
+    - Criados os testes `tests/campanhasScan.test.js` e `tests/notificationConfirmFix.test.js` (todos 100% aprovados).
+    - Executado `npm run build` gerando bundle novo e limpo do Vite em 5.50s.

@@ -25,8 +25,14 @@ export const NotificationProvider = ({ children }) => {
   const showSuccess = (msg) => showToast(msg, 'success');
   const showError = (msg) => showToast(msg, 'error');
 
-  const confirm = useCallback((message, title = 'Confirmação') => {
+  const confirm = useCallback((messageOrOptions, maybeTitle = 'Confirmação') => {
     return new Promise((resolve) => {
+      let message = messageOrOptions;
+      let title = maybeTitle;
+      if (typeof messageOrOptions === 'object' && messageOrOptions !== null) {
+        message = messageOrOptions.message || '';
+        title = messageOrOptions.title || maybeTitle;
+      }
       setConfirmState({
         title,
         message,

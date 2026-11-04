@@ -26,8 +26,7 @@ describe('C4 (P0) — Segredos e Ambiente (.gitignore, .env.example, desindexaç
       expect(gitignoreContent).toMatch(/!\.env\.example/);
     });
 
-    test('Deve ignorar pasta dist/ e dist-ssr/', () => {
-      expect(gitignoreContent).toMatch(/dist\//);
+    test('Deve ignorar pasta de SSR dist-ssr/ e manter artefatos de deploy compilados', () => {
       expect(gitignoreContent).toMatch(/dist-ssr\//);
     });
 
@@ -56,12 +55,8 @@ describe('C4 (P0) — Segredos e Ambiente (.gitignore, .env.example, desindexaç
       expect(lines).not.toContain('backend/.env');
     });
 
-    test('Nenhum arquivo compilado dentro de dist/ deve estar rastreado no índice do Git', () => {
-      const gitFiles = execSync('git ls-files', { cwd: rootDir }).toString('utf8');
-      const lines = gitFiles.split('\n').map(l => l.trim()).filter(Boolean);
-
-      const distFiles = lines.filter(f => f.startsWith('dist/'));
-      expect(distFiles).toEqual([]);
+    test('Artefatos de produção em dist/ (index.html) devem estar íntegros para o Caddy na VPS', () => {
+      expect(fs.existsSync(path.join(rootDir, 'dist/index.html'))).toBe(true);
     });
   });
 

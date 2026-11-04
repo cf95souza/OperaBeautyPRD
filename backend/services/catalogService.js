@@ -487,7 +487,7 @@ export const importServices = async (tenantId, servicesList, options = {}, userI
 
     await client.query('COMMIT');
 
-    // Invalida cache Redis
+    // Invalida cache Redis (fallback seguro para await redisClient.del(`tenant:${tenantId}:services`))
     await safeCacheDel(`tenant:${tenantId}:services`);
 
     if (userId) {

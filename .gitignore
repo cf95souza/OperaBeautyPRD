@@ -2,7 +2,6 @@
 node_modules/
 
 # Arquivos de Build e Pacotes Compactados
-dist/
 dist-ssr/
 *.zip
 *.tar.gz
