@@ -15,7 +15,8 @@ import {
   Check,
   ChevronRight,
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  Mail
 } from 'lucide-react';
 import { useTenant } from '../context/TenantContext';
 import { api } from '../lib/api';
@@ -31,6 +32,7 @@ const PerfilCliente = () => {
 
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
+  const [email, setEmail] = useState('');
   const [dataNascimento, setDataNascimento] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
@@ -54,6 +56,7 @@ const PerfilCliente = () => {
         if (data && isMounted) {
           setNome(data.name || '');
           setTelefone(data.phone || '');
+          setEmail(data.email || '');
 
           let birthDateStr = '';
           if (data.birth_date) {
@@ -131,10 +134,24 @@ const PerfilCliente = () => {
 
     setLoading(true);
     try {
-      await api.clients.updateMe({
+      const updatedClient = await api.clients.updateMe({
         name: nome,
-        birth_date: dataNascimento || null
+        birth_date: dataNascimento || null,
+        email: email.trim() || null
       });
+
+      // Atualiza dados no localStorage se existir
+      try {
+        const storedUser = localStorage.getItem('operabeauty_user');
+        if (storedUser) {
+          const userObj = JSON.parse(storedUser);
+          userObj.name = updatedClient.name || nome;
+          userObj.email = updatedClient.email || (email.trim() || null);
+          localStorage.setItem('operabeauty_user', JSON.stringify(userObj));
+        }
+      } catch (e) {
+        // Ignora
+      }
 
       if (novaSenha) {
         await api.clients.updateMyPassword(novaSenha);
@@ -362,6 +379,31 @@ const PerfilCliente = () => {
                   onChange={(e) => setDataNascimento(e.target.value)}
                   className="w-full h-12 bg-bg border border-line rounded-xl px-4 text-sm text-ink focus:outline-none focus:border-brand transition-colors font-medium"
                 />
+              </div>
+
+              {/* E-mail de Recuperação */}
+              <div>
+                <label
+                  htmlFor="email-cliente"
+                  className="block text-xs font-semibold text-ink-soft mb-1.5 flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Mail size={13} className="text-brand" />
+                    E-mail para Recuperação de Senha
+                  </span>
+                  <span className="text-[10px] text-ink-soft/70 uppercase">Opcional</span>
+                </label>
+                <input
+                  id="email-cliente"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full h-12 bg-bg border border-line rounded-xl px-4 text-sm text-ink focus:outline-none focus:border-brand transition-colors font-medium placeholder:text-stone-400"
+                  placeholder="seuemail@exemplo.com"
+                />
+                <span className="text-[11px] text-ink-soft/70 mt-1 block">
+                  Usado para recuperar seu acesso caso esqueça a senha.
+                </span>
               </div>
             </div>
 

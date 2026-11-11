@@ -248,13 +248,15 @@ export const importClients = async (tenantId, clientsList, options = {}, userId 
   }
 };
 
-export const updateMe = async (userId, tenantId, name, birth_date) => {
+export const updateMe = async (userId, tenantId, name, birth_date, email = undefined) => {
   const result = await pool.query(
     `UPDATE public.cap_clients 
-     SET name = $1, birth_date = $2
-     WHERE id = $3 AND tenant_id = $4
-     RETURNING id, name, birth_date`,
-    [name, birth_date || null, userId, tenantId]
+     SET name = COALESCE($1, name), 
+         birth_date = COALESCE($2, birth_date),
+         email = CASE WHEN $3::text IS NOT NULL THEN NULLIF(LOWER(TRIM($3)), '') ELSE email END
+     WHERE id = $4 AND tenant_id = $5
+     RETURNING id, name, phone, birth_date, email`,
+    [name !== undefined ? name : null, birth_date !== undefined ? birth_date : null, email !== undefined ? email : null, userId, tenantId]
   );
   return result.rows[0];
 };
@@ -292,7 +294,7 @@ export const getClientById = async (id, tenantId, userId, userRole) => {
   }
 
   const result = await pool.query(
-    'SELECT id, name, phone, birth_date, anamnese_data, vip_tier, no_show_count, is_blocked, blocked_reason, created_at FROM public.cap_clients WHERE id = $1 AND tenant_id = $2',
+    'SELECT id, name, phone, email, birth_date, anamnese_data, vip_tier, no_show_count, is_blocked, blocked_reason, created_at FROM public.cap_clients WHERE id = $1 AND tenant_id = $2',
     [id, tenantId]
   );
 

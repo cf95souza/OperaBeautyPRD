@@ -212,6 +212,28 @@ export const api = {
         body: JSON.stringify({ reset_token: resetToken, new_password: newPassword }),
       });
     },
+    async requestClientResetEmail(tenantSlug, phone, email, birthDate) {
+      return request('/auth/client/request-reset-email', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_slug: tenantSlug,
+          phone,
+          email: email || undefined,
+          birth_date: birthDate || undefined,
+        }),
+      });
+    },
+    async verifyClientResetEmail(tenantSlug, phone, code, newPassword) {
+      return request('/auth/client/verify-reset-email', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_slug: tenantSlug,
+          phone,
+          code,
+          new_password: newPassword,
+        }),
+      });
+    },
     async me() {
       return request('/auth/me');
     },
@@ -358,6 +380,9 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify({ anamnese_data: anamneseData }),
       });
+    },
+    async getMe() {
+      return request('/clients/me');
     },
     async updateMe(payload) {
       return request(`/clients/me`, {

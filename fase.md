@@ -1587,3 +1587,25 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **4. Testes e Compilação**:
     - Criada e aprovada a suíte automatizada `backend/tests/clientPasswordResetAndSuperAdmin.test.js` (6/6 testes aprovados).
     - Compilado o frontend com `npm run build` em 8.02s sem advertências críticas.
+
+- [x] **G36 (Produção) — Recuperação de Senha por E-mail via Resend (Custo Zero), E-mail no Perfil e Modal Educativo**:
+  - **1. Arquitetura Transacional Resend (Custo Zero)**:
+    - Integração direta via API REST oficial do Resend (`https://api.resend.com/emails`) no serviço `backend/services/emailService.js`, sem necessidade de pacotes npm pesados.
+    - Configurado o domínio remetente `recuperacao@operabeauty.tech` com autenticação SPF e DKIM validadas na Hostinger.
+    - Template HTML responsivo de e-mail com layout premium, identidade visual OperaBeauty, código OTP de 6 dígitos em destaque e validade de 15 minutos.
+  - **2. Extensão do Esquema de Banco de Dados (`migrations/phase47_client_email_resend_recovery.sql`)**:
+    - Adicionada a coluna `email VARCHAR(255)` e índice composto `idx_cap_clients_email` na tabela `public.cap_clients`.
+    - Atualizadas as queries de busca e atualização em `clientService.js` (`getClientById`, `updateMe`, `listClients`).
+  - **3. Endpoints e Fluxo de Segurança para Recuperação**:
+    - `POST /api/auth/client/request-reset-email`: Verifica a existência do cliente por telefone e salão.
+      - Para clientes já com e-mail cadastrado: envia o OTP diretamente para o endereço mascarado.
+      - Para clientes legados sem e-mail prévio: exige validação estrita da **data de nascimento** cadastrada no salão para prevenir tomada de contas.
+    - `POST /api/auth/client/verify-reset-email`: Valida o OTP no Redis, redefine a senha com hash seguro (`cap_update_client_password`) e, caso seja novo e-mail, persiste-o automaticamente em `cap_clients.email`.
+  - **4. Experiência do Cliente no Frontend**:
+    - `ModalRecuperacaoSenha.jsx`: Atualizado para oferecer opção proeminente "Recuperar por E-mail", etapas de formulário de validação com data de nascimento, digitação de OTP de 6 dígitos e definição da nova senha com requisitos visíveis.
+    - `PerfilCliente.jsx`: Campo de e-mail opcional integrado para que o próprio cliente possa cadastrar e atualizar seu e-mail a qualquer momento.
+    - `ModalSolicitarEmail.jsx` e `HomeCliente.jsx`: Modal sofisticado com botão de fechar (X) e ação "OK, Cadastrar E-mail" levando à tela de perfil, exibido de forma não intrusiva apenas para clientes sem e-mail cadastrado (com controle de dispensar por sessão).
+  - **5. Qualidade e Testes**:
+    - Criada a suíte `backend/tests/resendEmailRecovery.test.js` com 9 testes automatizados (100% aprovados).
+    - Testes de regressão `clientPasswordResetAndSuperAdmin.test.js` (6/6 testes aprovados).
+    - Build de produção compilado com `npm run build` gerando bundle limpo em `dist/`.

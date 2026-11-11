@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
+import pool from '../config/db.js';
 import { validate } from '../middlewares/validate.js';
 import { authMiddleware, requireRole } from '../middlewares/auth.js';
 import {
@@ -21,7 +22,9 @@ import {
   getMe,
   requestClientOtp,
   verifyClientOtp,
-  resetClientPasswordWithToken
+  resetClientPasswordWithToken,
+  requestClientEmailOtp,
+  verifyClientEmailOtpAndResetPassword
 } from '../services/authService.js';
 
 const router = express.Router();
@@ -230,6 +233,11 @@ router.post('/login-client', loginLimiter, validate(loginClientSchema), async (r
   const { tenant_slug, phone, password } = req.body;
   try {
     const userData = await loginClient(tenant_slug, phone, password);
+    const clientExtra = await pool.query('SELECT email, birth_date FROM public.cap_clients WHERE id = $1', [userData.id]);
+    if (clientExtra.rows.length > 0) {
+      userData.email = clientExtra.rows[0].email || null;
+      userData.birth_date = clientExtra.rows[0].birth_date || null;
+    }
     const payload = { id: userData.id, name: userData.name, tenant_id: userData.tenant_id, role: 'client', phone: phone };
     const deviceId = getRequestDeviceId(req);
     const authData = await generateAuthData(payload, req.ip, req.headers['user-agent'], null, deviceId);
@@ -285,6 +293,51 @@ router.post('/client/reset-password', clientOtpLimiter, validate(resetClientPass
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     req.log.error(error, 'Erro ao redefinir senha do cliente');
     return res.status(500).json({ error: 'Erro ao redefinir senha.' });
+  }
+});
+
+const requestResetEmailSchema = z.object({
+  body: z.object({
+    tenant_slug: z.string().min(1, 'Identificador do salão é obrigatório.'),
+    phone: z.string().min(1, 'Telefone é obrigatório.'),
+    email: z.string().email('E-mail inválido.').optional().or(z.literal('')),
+    birth_date: z.string().optional().or(z.literal(''))
+  }),
+  query: z.any(), params: z.any()
+});
+
+const verifyResetEmailSchema = z.object({
+  body: z.object({
+    tenant_slug: z.string().min(1, 'Identificador do salão é obrigatório.'),
+    phone: z.string().min(1, 'Telefone é obrigatório.'),
+    code: z.string().length(6, 'O código deve conter 6 dígitos.'),
+    new_password: z.string().min(6, 'A nova senha deve ter no mínimo 6 caracteres.').regex(/[a-zA-Z]/, 'Precisa ter 1 letra.').regex(/[0-9]/, 'Precisa ter 1 número.')
+  }),
+  query: z.any(), params: z.any()
+});
+
+// Recuperação de senha por E-mail via Resend (gratuito e sem dependência de WhatsApp)
+router.post('/client/request-reset-email', clientOtpLimiter, validate(requestResetEmailSchema), async (req, res) => {
+  const { tenant_slug, phone, email, birth_date } = req.body;
+  try {
+    const result = await requestClientEmailOtp(tenant_slug, phone, email, birth_date);
+    return res.json(result);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao solicitar código de recuperação por e-mail');
+    return res.status(500).json({ error: 'Erro ao processar solicitação de e-mail.' });
+  }
+});
+
+router.post('/client/verify-reset-email', clientOtpLimiter, validate(verifyResetEmailSchema), async (req, res) => {
+  const { tenant_slug, phone, code, new_password } = req.body;
+  try {
+    const result = await verifyClientEmailOtpAndResetPassword(tenant_slug, phone, code, new_password);
+    return res.json(result);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao verificar código de e-mail e redefinir senha');
+    return res.status(500).json({ error: error.message || 'Erro ao validar código ou redefinir senha.' });
   }
 });
 

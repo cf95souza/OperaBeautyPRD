@@ -8,6 +8,7 @@ import ClienteBottomNavBar from '../components/ClienteBottomNavBar';
 import ReviewModal from '../components/ReviewModal';
 import AssinarTermoModal from '../components/AssinarTermoModal';
 import { ModalIndicarAmiga } from '../components/cliente/ModalIndicarAmiga';
+import { ModalSolicitarEmail } from '../components/cliente/ModalSolicitarEmail';
 import { Botao } from '../components/ui/Botao';
 import { Chip } from '../components/ui/Chip';
 import { TelaCliente } from '../components/ui/TelaCliente';
@@ -61,6 +62,7 @@ const HomeCliente = () => {
   const [selectedConsent, setSelectedConsent] = useState(null);
   const [detalhesModalOpen, setDetalhesModalOpen] = useState(false);
   const [indicarModalOpen, setIndicarModalOpen] = useState(false);
+  const [showEmailPromptModal, setShowEmailPromptModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Faixa de lembretes
@@ -111,6 +113,21 @@ const HomeCliente = () => {
 
       // 2. Dados específicos do cliente autenticado
       if (session && session.role === 'client') {
+        // Checar se cliente não possui e-mail cadastrado para exibir convite amigável
+        const isDismissed = sessionStorage.getItem('operabeauty_dismiss_email_modal');
+        if (!isDismissed) {
+          if (!session.email) {
+            try {
+              const myProfile = await api.clients.getMe();
+              if (myProfile && !myProfile.email && isMounted) {
+                setShowEmailPromptModal(true);
+              }
+            } catch (e) {
+              if (isMounted) setShowEmailPromptModal(true);
+            }
+          }
+        }
+
         // Agendamentos (Próximo e Último concluído)
         setLoadingAppts(true);
         try {
@@ -806,6 +823,14 @@ const HomeCliente = () => {
       <ModalIndicarAmiga
         isOpen={indicarModalOpen}
         onClose={() => setIndicarModalOpen(false)}
+      />
+
+      {/* Modal de Solicitação de E-mail de Recuperação */}
+      <ModalSolicitarEmail
+        isOpen={showEmailPromptModal}
+        onClose={() => setShowEmailPromptModal(false)}
+        tenantSlug={tenant_slug}
+        clientName={session?.name}
       />
 
 

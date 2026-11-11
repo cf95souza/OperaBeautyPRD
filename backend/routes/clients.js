@@ -66,8 +66,9 @@ const router = express.Router();
 
 const updateMeSchema = z.object({
   body: z.object({
-    name: z.string().min(1, 'Nome é obrigatório.'),
-    birth_date: z.string().nullable().optional()
+    name: z.string().min(1, 'Nome é obrigatório.').optional(),
+    birth_date: z.string().nullable().optional(),
+    email: z.string().email('E-mail inválido.').nullable().optional().or(z.literal(''))
   }),
   query: z.any(), params: z.any()
 });
@@ -194,14 +195,28 @@ router.get('/', authMiddleware, requireRole(['manager', 'professional', 'superad
   }
 });
 
+// Obter próprio perfil autenticado
+router.get('/me', authMiddleware, requireRole(['client']), async (req, res) => {
+  const userId = req.user.id;
+  const tenantId = req.user.tenant_id;
+  try {
+    const client = await getClientById(userId, tenantId, userId, 'client');
+    return res.json(client);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao obter dados do perfil');
+    return res.status(500).json({ error: 'Erro interno ao obter dados do perfil.' });
+  }
+});
+
 // Atualizar próprio perfil
 router.put('/me', authMiddleware, requireRole(['client']), validate(updateMeSchema), async (req, res) => {
-  const { name, birth_date } = req.body;
+  const { name, birth_date, email } = req.body;
   const userId = req.user.id;
   const tenantId = req.user.tenant_id;
 
   try {
-    const client = await updateMe(userId, tenantId, name, birth_date);
+    const client = await updateMe(userId, tenantId, name, birth_date, email);
     return res.json(client);
   } catch (error) {
     req.log.error(error, 'Erro ao atualizar perfil');

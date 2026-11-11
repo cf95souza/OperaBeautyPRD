@@ -251,6 +251,7 @@ CREATE TABLE public.cap_clients (
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     phone TEXT NOT NULL,
+    email VARCHAR(255), -- E-mail para recuperação de senha e notificações (Fase G36 / Resend)
     birth_date DATE,
     password_hash TEXT NOT NULL,
     anamnese_data JSONB DEFAULT '{}'::jsonb,
@@ -263,6 +264,7 @@ CREATE TABLE public.cap_clients (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(tenant_id, phone)
 );
+CREATE INDEX IF NOT EXISTS idx_cap_clients_email ON public.cap_clients(tenant_id, email);
 CREATE INDEX IF NOT EXISTS idx_cap_clients_is_blocked ON public.cap_clients(tenant_id, is_blocked);
 CREATE INDEX IF NOT EXISTS idx_cap_clients_referral_code ON public.cap_clients(referral_code);
 CREATE INDEX IF NOT EXISTS idx_cap_clients_referred_by ON public.cap_clients(referred_by);
@@ -2638,5 +2640,10 @@ ALTER TABLE public.cap_reviews
 -- public.cap_whatsapp_auth_keys
 -- public.cap_whatsapp_messages
 -- public.cap_privacy_requests
+
+-- 9. Migração Phase 47 (Recuperação de Acesso por E-mail via Resend & Perfil do Cliente)
+ALTER TABLE public.cap_clients
+  ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+CREATE INDEX IF NOT EXISTS idx_cap_clients_email ON public.cap_clients(tenant_id, email);
 ```
 

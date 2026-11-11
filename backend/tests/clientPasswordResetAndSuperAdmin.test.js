@@ -77,3 +77,4 @@ describe('Fix/Produção: Reset de Senha de Cliente (SuperAdmin & Manager) e Pag
     expect(tenantDetailContent).toContain('handleConfirmResetClientPassword');
   });
 });
+
