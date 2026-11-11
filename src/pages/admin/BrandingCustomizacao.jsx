@@ -33,10 +33,11 @@ const BrandingCustomizacao = () => {
   // Estados do Modal de Recorte Guiado de Imagens (Item A6)
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropModalFile, setCropModalFile] = useState(null);
-  const [cropTarget, setCropTarget] = useState('logo'); // 'logo' ou 'banner'
+  const [cropTarget, setCropTarget] = useState('logo'); // 'logo', 'cover' ou 'banner'
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const logoInputRef = useRef(null);
+  const coverInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
   const [branding, setBranding] = useState({
@@ -46,6 +47,7 @@ const BrandingCustomizacao = () => {
     secondary_color: '#F6E4E4',
     tertiary_color: '#FBF7F5',
     logo_url: '',
+    cover_url: '',
     banners: [],
     welcome_message: 'Bem-vindo ao salão. Agende seu próximo momento de tranquilidade abaixo.'
   });
@@ -70,6 +72,7 @@ const BrandingCustomizacao = () => {
         secondary_color: tenant.secondary_color || '#F6E4E4',
         tertiary_color: tenant.tertiary_color || '#FBF7F5',
         logo_url: tenant.logo_url || '',
+        cover_url: tenant.cover_url || '',
         banners: Array.isArray(tenant.banners) && tenant.banners.length > 0 
           ? tenant.banners 
           : [
@@ -147,6 +150,12 @@ const BrandingCustomizacao = () => {
     }
   };
 
+  const handleTriggerCoverUpload = () => {
+    if (coverInputRef.current) {
+      coverInputRef.current.click();
+    }
+  };
+
   const handleTriggerBannerUpload = () => {
     if (bannerInputRef.current) {
       bannerInputRef.current.click();
@@ -157,6 +166,15 @@ const BrandingCustomizacao = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setCropTarget('logo');
+    setCropModalFile(file);
+    setCropModalOpen(true);
+    e.target.value = '';
+  };
+
+  const handleCoverFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCropTarget('cover');
     setCropModalFile(file);
     setCropModalOpen(true);
     e.target.value = '';
@@ -178,6 +196,9 @@ const BrandingCustomizacao = () => {
       if (cropTarget === 'logo') {
         setBranding(prev => ({ ...prev, logo_url: res.url }));
         showSuccess('Logo recortada e convertida para WebP com sucesso!');
+      } else if (cropTarget === 'cover') {
+        setBranding(prev => ({ ...prev, cover_url: res.url }));
+        showSuccess('Foto de capa recortada (16:9) e convertida para WebP com sucesso!');
       } else if (cropTarget === 'banner') {
         const updated = [...branding.banners];
         if (updated[selectedBannerIndex]) {
@@ -258,6 +279,7 @@ const BrandingCustomizacao = () => {
         theme_id: finalThemeId,
         brand_hex: finalBrandHex,
         logo_url: branding.logo_url,
+        cover_url: branding.cover_url,
         banners: branding.banners,
         welcome_message: branding.welcome_message
       };
@@ -728,6 +750,121 @@ const BrandingCustomizacao = () => {
 
       </div>
 
+      {/* SEÇÃO FOTO DE CAPA / FACHADA (TELA DE ENTRADA DO CLIENTE) */}
+      <section className="mt-6 bg-white rounded-2xl border border-[#EADFDC]/80 p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-serif text-xl text-[#2B2327] flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#8E3B4E]">storefront</span> Foto de Capa / Fachada (Tela de Entrada)
+              </h2>
+              <span className="text-[10px] font-semibold text-[#8E3B4E] bg-[#F6E4E4] px-2.5 py-0.5 rounded-full">
+                16:9 · Tela de Boas-Vindas
+              </span>
+            </div>
+            <p className="text-xs text-[#6F6168] mt-1">
+              Esta é a foto principal exibida aos clientes na tela inicial de login e identificação. Ideal para uma foto do salão, recepção ou fachada.
+            </p>
+          </div>
+        </div>
+
+        {/* Input Oculto de Arquivo da Foto de Capa */}
+        <input 
+          ref={coverInputRef}
+          type="file"
+          accept="image/png, image/jpeg, image/webp"
+          onChange={handleCoverFileChange}
+          className="hidden"
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          {/* Lado Esquerdo: Ações e URL */}
+          <div className="lg:col-span-6 space-y-4">
+            <div className="bg-[#FBF7F5] border border-[#EADFDC] p-4 rounded-xl space-y-3">
+              <p className="text-xs text-[#2B2327] font-medium flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[#8E3B4E] text-[18px]">photo_camera</span>
+                Carregar Imagem do Seu Espaço
+              </p>
+              <p className="text-[11px] text-[#6F6168] leading-relaxed">
+                Envie qualquer foto (horizontal ou vertical). O novo recorte com zoom permite afastar (zoom-out) e enquadrar perfeitamente sem cortar o ambiente.
+              </p>
+
+              <button
+                type="button"
+                onClick={handleTriggerCoverUpload}
+                disabled={uploadingImage}
+                className="w-full py-3 px-4 bg-[#8E3B4E] hover:bg-[#8E3B4E]/90 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {uploadingImage && cropTarget === 'cover' ? 'sync' : 'crop_original'}
+                </span>
+                {uploadingImage && cropTarget === 'cover' ? 'Enviando WebP...' : 'Fazer Upload e Recortar Foto de Capa (16:9)'}
+              </button>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-medium text-[#6F6168] block mb-1">Ou informe uma URL direta para a capa</label>
+              <input 
+                type="url" 
+                placeholder="https://exemplo.com/fachada-salao.jpg"
+                value={branding.cover_url || ''}
+                onChange={e => setBranding({...branding, cover_url: e.target.value})}
+                className="w-full border border-[#EADFDC] rounded-xl p-2.5 text-xs focus:outline-none focus:border-[#8E3B4E]"
+              />
+            </div>
+
+            {branding.cover_url && (
+              <button
+                type="button"
+                onClick={() => setBranding({ ...branding, cover_url: '' })}
+                className="text-xs text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+                Remover foto de capa (usará visual padrão)
+              </button>
+            )}
+          </div>
+
+          {/* Lado Direito: Preview idêntico à Tela de Entrada */}
+          <div className="lg:col-span-6 flex flex-col items-center">
+            <span className="text-[10px] font-semibold text-[#6F6168] uppercase tracking-wider mb-2 self-start flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">visibility</span> Pré-visualização na Tela de Entrada
+            </span>
+            <div className="w-full max-w-[380px] bg-[#FAF8F5] p-5 rounded-3xl border border-[#EADFDC] shadow-sm flex flex-col items-center">
+              <div className="w-12 h-12 rounded-full bg-white border border-[#EADFDC] flex items-center justify-center mb-2 overflow-hidden shadow-sm">
+                {branding.logo_url ? (
+                  <img src={branding.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="font-serif font-bold text-[#8E3B4E]">{branding.name ? branding.name.charAt(0) : 'S'}</span>
+                )}
+              </div>
+              <h3 className="font-serif text-base font-semibold text-[#2B2327] mb-3">{branding.name || 'Nome do Salão'}</h3>
+
+              {/* Caixa da Imagem de Capa */}
+              <div className="w-full h-40 rounded-2xl overflow-hidden border border-[#EADFDC] bg-[#F2EDE8] shadow-inner relative flex items-center justify-center">
+                {branding.cover_url || (branding.banners && branding.banners[0]?.url) ? (
+                  <img 
+                    src={branding.cover_url || (branding.banners && branding.banners[0]?.url)} 
+                    alt="Capa do Salão" 
+                    className="w-full h-full object-cover" 
+                  />
+                ) : (
+                  <div className="flex flex-col items-center text-[#A8989F] gap-1 p-4 text-center">
+                    <span className="material-symbols-outlined text-3xl">storefront</span>
+                    <span className="text-[11px] font-mono tracking-wider">[FOTO NÍTIDA DO SALÃO]</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="w-full mt-3 text-center">
+                <p className="font-serif text-sm font-semibold text-[#2B2327]">Que bom ter você aqui</p>
+                <p className="text-[10px] text-[#6F6168]">Sua jornada de autocuidado e luxo começa aqui.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* SEÇÃO BANNERS PROMOCIONAIS */}
       <section className="mt-6 bg-white rounded-2xl border border-[#EADFDC]/80 p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
@@ -888,7 +1025,13 @@ const BrandingCustomizacao = () => {
         file={cropModalFile}
         aspectRatio={cropTarget === 'logo' ? 1 : 16 / 9}
         isLogo={cropTarget === 'logo'}
-        title={cropTarget === 'logo' ? 'Recorte da Logo da Marca (1:1)' : 'Recorte do Banner Promocional (16:9)'}
+        title={
+          cropTarget === 'logo' 
+            ? 'Recorte da Logo da Marca (1:1)' 
+            : cropTarget === 'cover'
+            ? 'Recorte da Foto de Capa / Fachada (16:9)'
+            : 'Recorte do Banner Promocional (16:9)'
+        }
         onCropComplete={handleCropComplete}
       />
 

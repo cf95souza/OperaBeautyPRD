@@ -1612,3 +1612,20 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Resolução de timezone na comparação de datas de nascimento com `TO_CHAR(birth_date, 'YYYY-MM-DD')` e suporte a cadastro retroativo de data para clientes antigos com campo nulo.
     - Substituição completa do botão "Entrar com código via WhatsApp" por "Entrar com código por E-mail" (`AcessoSenha.jsx` e `ModalRecuperacaoSenha.jsx`), unificando o fluxo transacional sem dependência de WhatsApp.
     - Build de produção compilado com `npm run build` gerando bundle limpo em `dist/`.
+
+- [x] **G37 (Produção) — Foto de Capa / Fachada (Tela de Entrada) e Recorte Guiado com Zoom-Out Sem Cortes**:
+  - **1. Separação Arquitetural entre Foto de Capa e Banners Promocionais**:
+    - Criada a migração `migrations/phase48_add_cover_url_to_tenants.sql` adicionando a coluna `cover_url TEXT` na tabela `public.cap_tenants`.
+    - No backend (`backend/routes/tenants.js` e `backend/services/tenantService.js`), atualizado o endpoint `PUT /api/tenants/branding` e a consulta `getTenantBySlug` para selecionar, validar e persistir `cover_url`.
+    - Mantida total retrocompatibilidade: na ausência de `cover_url`, as telas de entrada continuam usando `banner_url` como fallback.
+  - **2. Seção Dedicada no Painel do Gestor (`src/pages/admin/BrandingCustomizacao.jsx`)**:
+    - Inserida a seção **"Foto de Capa / Fachada (Tela de Entrada)"** com proporção 16:9, orientações claras e preview em tempo real idêntico à tela de login do cliente (`AcessoTelefone.jsx`).
+    - Desacoplamento total dos Banners Promocionais: os donos de salão não precisam mais reaproveitar o carrossel promocional interno para trocar a imagem da tela de acesso.
+  - **3. Correção do Enquadramento e Zoom no Modal de Recorte (`src/components/ui/ModalRecorteImagem.jsx`)**:
+    - Resolvido o corte forçado em fotos verticais e de alta resolução enviadas por smartphones.
+    - Ampliado o range do zoom para permitir **zoom-out** de 40% (0.4) até 300% (3.0), com botões rápidos de zoom-in, zoom-out e botão "Centralizar" com ícone `center_focus_strong`.
+    - Assegurado que a imagem se ajuste proporcionalmente ao viewport (`maxWidth: 100%`, `maxHeight: 100%`, `width: auto`, `height: auto`), permitindo arrastar (pan) e enquadrar qualquer tipo de ambiente ou fachada com 100% de fidelidade no canvas.
+  - **4. Testes e Compilação**:
+    - Criada a suíte automatizada `backend/tests/coverUrlBranding.test.js` (6/6 testes aprovados).
+    - Suíte de regressão `backend/tests/resendEmailRecovery.test.js` (11/11 testes aprovados).
+    - Compilado o frontend com `npm run build` em 5.58s com bundle gerado em `dist/`.

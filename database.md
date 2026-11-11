@@ -2645,5 +2645,10 @@ ALTER TABLE public.cap_reviews
 ALTER TABLE public.cap_clients
   ADD COLUMN IF NOT EXISTS email VARCHAR(255);
 CREATE INDEX IF NOT EXISTS idx_cap_clients_email ON public.cap_clients(tenant_id, email);
+
+-- 10. Migração Phase 48 (Foto de Capa / Fachada da Tela de Entrada em cap_tenants)
+ALTER TABLE public.cap_tenants
+  ADD COLUMN IF NOT EXISTS cover_url TEXT;
+COMMENT ON COLUMN public.cap_tenants.cover_url IS 'Foto de apresentação/fachada exclusiva exibida na tela de login e identificação do cliente';
 ```
 

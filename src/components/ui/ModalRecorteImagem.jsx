@@ -113,9 +113,10 @@ export const ModalRecorteImagem = ({
       const img = imageRef.current;
       const container = containerRef.current;
       const containerRect = container.getBoundingClientRect();
+      const imgRect = img.getBoundingClientRect();
 
       // Dimensões do alvo recortado em alta definição
-      const targetWidth = isLogo ? 500 : 1200;
+      const targetWidth = isLogo ? 600 : 1200;
       const targetHeight = Math.round(targetWidth / aspectRatio);
 
       const canvas = document.createElement('canvas');
@@ -123,40 +124,24 @@ export const ModalRecorteImagem = ({
       canvas.height = targetHeight;
       const ctx = canvas.getContext('2d');
 
-      // Escala e coordenadas relativas
-      const renderedImgWidth = img.width * zoom;
-      const renderedImgHeight = img.height * zoom;
-
-      const scaleX = img.naturalWidth / renderedImgWidth;
-      const scaleY = img.naturalHeight / renderedImgHeight;
-
-      // Centro do corte em relação à imagem renderizada
-      const centerOffsetX = (containerRect.width / 2) - (position.x + (renderedImgWidth / 2));
-      const centerOffsetY = (containerRect.height / 2) - (position.y + (renderedImgHeight / 2));
-
-      const sourceWidth = (containerRect.width * scaleX);
-      const sourceHeight = (containerRect.height * scaleY);
-
-      const sourceX = (img.naturalWidth / 2) - (sourceWidth / 2) + (centerOffsetX * scaleX);
-      const sourceY = (img.naturalHeight / 2) - (sourceHeight / 2) + (centerOffsetY * scaleY);
-
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
-      ctx.drawImage(
-        img,
-        Math.max(0, sourceX),
-        Math.max(0, sourceY),
-        Math.min(img.naturalWidth, sourceWidth),
-        Math.min(img.naturalHeight, sourceHeight),
-        0,
-        0,
-        targetWidth,
-        targetHeight
-      );
+      // Fundo neutro
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+      // Projeção exata: o que estiver dentro da moldura na tela é renderizado no canvas
+      const canvasScale = targetWidth / containerRect.width;
+      const destX = (imgRect.left - containerRect.left) * canvasScale;
+      const destY = (imgRect.top - containerRect.top) * canvasScale;
+      const destWidth = imgRect.width * canvasScale;
+      const destHeight = imgRect.height * canvasScale;
+
+      ctx.drawImage(img, destX, destY, destWidth, destHeight);
 
       // Converte para WebP Blob
-      const webpBlob = await canvasToWebpBlob(canvas, 0.88);
+      const webpBlob = await canvasToWebpBlob(canvas, 0.90);
       const previewUrl = URL.createObjectURL(webpBlob);
 
       onCropComplete({
@@ -231,11 +216,13 @@ export const ModalRecorteImagem = ({
             alt="Para recortar"
             onLoad={handleImageLoaded}
             style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              width: 'auto',
+              height: 'auto',
               transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
               transformOrigin: 'center center',
               transition: isDragging ? 'none' : 'transform 0.05s ease-out',
-              maxWidth: 'none',
-              maxHeight: 'none',
               pointerEvents: 'none'
             }}
             className="user-select-none"
@@ -249,19 +236,49 @@ export const ModalRecorteImagem = ({
           </div>
         </div>
 
-        {/* Controles de Zoom */}
+        {/* Controles de Zoom Flexíveis (Permite Zoom-out e Zoom-in) */}
         <div className="mt-5 flex items-center gap-3 px-2">
-          <span className="material-symbols-outlined text-[#6F6168] text-[18px]">zoom_out</span>
+          <button
+            type="button"
+            onClick={() => setZoom(prev => Math.max(0.4, Number((prev - 0.1).toFixed(2))))}
+            className="p-1 rounded-lg text-[#6F6168] hover:bg-stone-100 transition-colors cursor-pointer"
+            title="Reduzir zoom"
+          >
+            <span className="material-symbols-outlined text-[18px]">zoom_out</span>
+          </button>
+          
           <input 
             type="range"
-            min="1"
+            min="0.4"
             max="3"
             step="0.05"
             value={zoom}
             onChange={(e) => setZoom(parseFloat(e.target.value))}
             className="flex-1 accent-[#8E3B4E] cursor-pointer"
           />
-          <span className="material-symbols-outlined text-[#6F6168] text-[18px]">zoom_in</span>
+
+          <button
+            type="button"
+            onClick={() => setZoom(prev => Math.min(3, Number((prev + 0.1).toFixed(2))))}
+            className="p-1 rounded-lg text-[#6F6168] hover:bg-stone-100 transition-colors cursor-pointer"
+            title="Aumentar zoom"
+          >
+            <span className="material-symbols-outlined text-[18px]">zoom_in</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setZoom(1);
+              setPosition({ x: 0, y: 0 });
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-[#8E3B4E] bg-[#F6E4E4] hover:bg-[#F6E4E4]/80 rounded-lg transition-colors cursor-pointer"
+            title="Restaurar tamanho inicial"
+          >
+            <span className="material-symbols-outlined text-[14px]">center_focus_strong</span>
+            Centralizar
+          </button>
+
           <span className="text-xs font-mono text-[#6F6168] w-12 text-right">
             {Math.round(zoom * 100)}%
           </span>

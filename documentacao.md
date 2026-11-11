@@ -2862,3 +2862,20 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Imunização de timezone no PostgreSQL com `TO_CHAR(birth_date, 'YYYY-MM-DD')` e suporte a clientes com campo de nascimento prévio nulo.
     * Substituição definitiva do botão "Entrar com código via WhatsApp" por "Entrar com código por E-mail" (`AcessoSenha.jsx` e `ModalRecuperacaoSenha.jsx`), unificando o fluxo em e-mail sem WhatsApp.
     * Frontend compilado para produção (`npm run build`) com êxito em 5.51s.
+
+- **11/11/2026 - Foto de Capa / Fachada (Tela de Entrada) e Recorte com Zoom-Out Sem Cortes - G37 [Concluída]:**
+  - **1. Separação Conceitual & Arquitetural (Capa do Salão vs Banners Promocionais)**:
+    * Na modelagem original, a imagem da tela de entrada do cliente (`[FOTO NÍTIDA DO SALÃO]` em `AcessoTelefone.jsx` e `AcessoSenha.jsx`) representava a foto de fachada ou recepção do estúdio (`cover_url`), enquanto a seção de banners era destinada ao carrossel de promoções internas da cliente (`HomeCliente.jsx`).
+    * Criada a migração idempotente `migrations/phase48_add_cover_url_to_tenants.sql`, introduzindo a coluna `cover_url TEXT` na tabela `public.cap_tenants`.
+    * No backend (`backend/services/tenantService.js` e `backend/routes/tenants.js`), o endpoint `PUT /api/tenants/branding` e a consulta `getTenantBySlug` foram atualizados para selecionar, validar via Zod e persistir `cover_url`. Mantido fallback para `banner_url` garantindo compatibilidade total com salões já configurados.
+  - **2. Seção Dedicada de Capa no Painel do Gestor (`src/pages/admin/BrandingCustomizacao.jsx`)**:
+    * Adicionado card dedicado e elegante **"Foto de Capa / Fachada (Tela de Entrada)"** com proporção 16:9, orientações didáticas para o gestor e preview fiel da tela de login do cliente.
+    * Donos de salão agora possuem controle claro e independente sobre a imagem de recepção sem precisar alterar os Banners Promocionais.
+  - **3. Correção do Zoom e Enquadramento no Modal de Recorte (`src/components/ui/ModalRecorteImagem.jsx`)**:
+    * Solucionado o problema em que fotos verticais e de alta definição ficavam cortadas horizontal e verticalmente no zoom mínimo de 100%.
+    * Range de zoom expandido para permitir **zoom-out** de 40% (0.4) até 300% (3.0), acompanhado por botões de zoom-out, zoom-in e botão rápido "Centralizar" (`center_focus_strong`).
+    * Elemento `<img>` ajustado para `maxWidth: 100%`, `maxHeight: 100%`, permitindo que imagens verticais caibam inteiramente no viewport de recorte e possam ser arrastadas e enquadradas com fidelidade milimétrica no canvas WebP.
+  - **4. Testes e Compilação**:
+    * Criada e aprovada a suíte `backend/tests/coverUrlBranding.test.js` (6/6 testes aprovados).
+    * Testes de regressão `backend/tests/resendEmailRecovery.test.js` (11/11 testes aprovados).
+    * Build de produção Vite concluído em 5.58s com bundle gerado em `dist/`.
