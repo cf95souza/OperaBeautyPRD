@@ -588,8 +588,8 @@ const FichaClienteCRM = () => {
   // Redefinir Senha
   const handleResetPassword = async (e) => {
     e.preventDefault();
-    if (!newPassword || newPassword.length < 4) {
-      showError('A senha precisa ter pelo menos 4 caracteres.');
+    if (!newPassword || newPassword.length < 6 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      showError('A senha deve ter no mínimo 6 caracteres, contendo pelo menos 1 letra e 1 número (ex: cliente123).');
       return;
     }
 
@@ -1519,11 +1519,14 @@ const FichaClienteCRM = () => {
                 <input
                   type="password"
                   required
-                  placeholder="Mínimo de 4 caracteres"
+                  placeholder="Mínimo 6 caracteres (com letras e números)"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-white border border-line rounded-xl text-sm text-on-surface focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
                 />
+                <p className="text-[11px] text-secondary/80 mt-1.5">
+                  Mínimo de 6 caracteres, contendo pelo menos 1 letra e 1 número (Ex: cliente123).
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-2">

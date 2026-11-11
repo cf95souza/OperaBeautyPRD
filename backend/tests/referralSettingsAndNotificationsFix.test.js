@@ -29,3 +29,4 @@ describe('Fix/Produção: Referral Settings sem updated_at em cap_tenants & Noti
     expect(notifContent).toContain('SELECT 1 FROM public.cap_notifications');
   });
 });
+

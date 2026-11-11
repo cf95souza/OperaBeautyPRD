@@ -183,6 +183,180 @@ const ModalSuspenderSalao = ({ isOpen, onClose, tenant, onConfirm, isSubmitting 
   );
 };
 
+const PaginationControls = ({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+  onItemsPerPageChange,
+  itemsPerPageOptions = [10, 25, 50],
+  itemLabel = 'registros'
+}) => {
+  if (totalItems === 0) return null;
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="p-4 border-t border-stone-100 flex flex-col sm:flex-row justify-between items-center gap-3 bg-stone-50/50">
+      <div className="flex items-center gap-3 text-xs text-stone-500">
+        <span>
+          Mostrando <strong className="font-semibold text-stone-700">{startItem}</strong> a{' '}
+          <strong className="font-semibold text-stone-700">{endItem}</strong> de{' '}
+          <strong className="font-semibold text-stone-700">{totalItems}</strong> {itemLabel}
+        </span>
+        {itemsPerPageOptions && itemsPerPageOptions.length > 1 && (
+          <div className="flex items-center gap-1.5 ml-2 border-l border-stone-200 pl-3">
+            <span>Exibir:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+              className="bg-white border border-stone-200 text-stone-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-[#7C3A4D]"
+            >
+              {itemsPerPageOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >
+          Anterior
+        </button>
+
+        <span className="text-xs text-stone-600 px-2">
+          Página <strong className="font-semibold text-stone-900">{currentPage}</strong> de{' '}
+          <strong className="font-semibold text-stone-900">{totalPages}</strong>
+        </span>
+
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage >= totalPages}
+          className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >
+          Próxima
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const ModalResetClientPassword = ({ isOpen, onClose, client, onConfirm, isSubmitting }) => {
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setPassword('');
+      setShowPassword(false);
+      setErrorMsg('');
+    }
+  }, [isOpen]);
+
+  if (!isOpen || !client) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!password || password.length < 6 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      setErrorMsg('A senha deve ter no mínimo 6 caracteres, com pelo menos 1 letra e 1 número (ex: cliente123).');
+      return;
+    }
+    setErrorMsg('');
+    onConfirm(password);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div 
+        className="bg-white w-full max-w-md rounded-[28px] shadow-2xl border border-stone-200 overflow-hidden flex flex-col"
+        role="dialog"
+      >
+        <div className="p-6 border-b border-stone-100 flex items-start justify-between">
+          <div>
+            <h3 className="font-display font-bold text-lg text-stone-900">
+              Redefinir Senha do Cliente
+            </h3>
+            <p className="text-xs text-stone-500 mt-1">
+              Cliente: <strong className="text-stone-800">{client.name}</strong> ({client.phone})
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="text-stone-400 hover:text-stone-600 p-1 rounded-full transition-colors cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-stone-600 uppercase tracking-wider mb-1">
+              Nova Senha Provisória *
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                placeholder="Ex: cliente123"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setErrorMsg(''); }}
+                className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-xl text-sm text-stone-900 focus:outline-none focus:border-[#7C3A4D] focus:ring-1 focus:ring-[#7C3A4D]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-2.5 text-xs text-stone-500 hover:text-stone-800 cursor-pointer"
+              >
+                {showPassword ? 'Ocultar' : 'Ver'}
+              </button>
+            </div>
+            <p className="text-[11px] text-stone-500 mt-1.5">
+              Mínimo de 6 caracteres, contendo pelo menos 1 letra e 1 número.
+            </p>
+            {errorMsg && (
+              <p className="text-xs text-rose-600 font-medium mt-1">
+                {errorMsg}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-stone-100">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-full border border-stone-200 text-stone-600 hover:bg-stone-50 text-xs font-medium transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2 rounded-full bg-[#7C3A4D] text-white hover:bg-[#682F40] text-xs font-semibold transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
+            >
+              {isSubmitting ? 'Salvando...' : 'Salvar Nova Senha'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const TenantDetailAdmin = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -198,6 +372,28 @@ const TenantDetailAdmin = () => {
   const [appointments, setAppointments] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [plans, setPlans] = useState([]);
+
+  // Paginação - Clientes
+  const [clientsPage, setClientsPage] = useState(1);
+  const [clientsPerPage, setClientsPerPage] = useState(10);
+  const totalClientsPages = Math.ceil(clients.length / clientsPerPage) || 1;
+  const paginatedClients = clients.slice((clientsPage - 1) * clientsPerPage, clientsPage * clientsPerPage);
+
+  // Paginação - Faturamento / Agendamentos
+  const [billingPage, setBillingPage] = useState(1);
+  const [billingPerPage, setBillingPerPage] = useState(10);
+  const totalBillingPages = Math.ceil(appointments.length / billingPerPage) || 1;
+  const paginatedAppointments = appointments.slice((billingPage - 1) * billingPerPage, billingPage * billingPerPage);
+
+  // Paginação - Faturas SaaS
+  const [invoicesPage, setInvoicesPage] = useState(1);
+  const [invoicesPerPage, setInvoicesPerPage] = useState(10);
+  const totalInvoicesPages = Math.ceil(invoices.length / invoicesPerPage) || 1;
+  const paginatedInvoices = invoices.slice((invoicesPage - 1) * invoicesPerPage, invoicesPage * invoicesPerPage);
+
+  // Modal Reset Senha do Cliente
+  const [clientForResetModal, setClientForResetModal] = useState(null);
+  const [isResettingClientPwd, setIsResettingClientPwd] = useState(false);
 
   // States for Editing
   const [editForm, setEditForm] = useState({
@@ -279,7 +475,7 @@ const TenantDetailAdmin = () => {
 
   const fetchAppointments = async () => {
     try {
-      const data = await api.appointments.list({ tenant_id: id, limit: 50 });
+      const data = await api.appointments.list({ tenant_id: id, limit: 500 });
       setAppointments(data || []);
     } catch (error) {
       console.error('Error fetching appointments:', error);
@@ -417,16 +613,22 @@ const TenantDetailAdmin = () => {
     }
   };
 
-  const resetClientPassword = async (clientId) => {
-    const newPassword = prompt("Digite a nova senha para este cliente:");
-    if (!newPassword) return;
+  const handleOpenResetClientModal = (client) => {
+    setClientForResetModal(client);
+  };
 
+  const handleConfirmResetClientPassword = async (newPassword) => {
+    if (!clientForResetModal) return;
+    setIsResettingClientPwd(true);
     try {
-      await api.clients.updatePassword(clientId, newPassword);
-      showSuccess('Senha do cliente redefinida com sucesso!');
+      await api.clients.updatePassword(clientForResetModal.id, newPassword);
+      showSuccess(`Senha de ${clientForResetModal.name} redefinida com sucesso!`);
+      setClientForResetModal(null);
     } catch (err) {
       console.error('Erro ao resetar senha do cliente', err);
-      showError('Falha ao resetar senha.');
+      showError(err.message || 'Falha ao resetar senha do cliente.');
+    } finally {
+      setIsResettingClientPwd(false);
     }
   };
 
@@ -933,34 +1135,47 @@ const TenantDetailAdmin = () => {
                 />
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-stone-100 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
-                      <th className="py-3 px-4">Nome</th>
-                      <th className="py-3 px-4">Telefone</th>
-                      <th className="py-3 px-4 text-right">Ação Mestre</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100/80">
-                    {clients.map(c => (
-                      <tr key={c.id} className="hover:bg-stone-50/70 transition-colors">
-                        <td className="py-3.5 px-4 font-semibold text-xs text-stone-900">{c.name}</td>
-                        <td className="py-3.5 px-4 text-xs text-stone-600 tabular-nums">{c.phone}</td>
-                        <td className="py-3.5 px-4 text-right">
-                          <button 
-                            type="button"
-                            onClick={() => resetClientPassword(c.id)} 
-                            className="text-xs text-[#7C3A4D] hover:underline font-semibold cursor-pointer"
-                          >
-                            Resetar Senha
-                          </button>
-                        </td>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-stone-100 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+                        <th className="py-3 px-4">Nome</th>
+                        <th className="py-3 px-4">Telefone</th>
+                        <th className="py-3 px-4 text-right">Ação Mestre</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100/80">
+                      {paginatedClients.map(c => (
+                        <tr key={c.id} className="hover:bg-stone-50/70 transition-colors">
+                          <td className="py-3.5 px-4 font-semibold text-xs text-stone-900">{c.name}</td>
+                          <td className="py-3.5 px-4 text-xs text-stone-600 tabular-nums">{c.phone}</td>
+                          <td className="py-3.5 px-4 text-right">
+                            <button 
+                              type="button"
+                              onClick={() => handleOpenResetClientModal(c)} 
+                              className="text-xs text-[#7C3A4D] hover:underline font-semibold cursor-pointer"
+                            >
+                              Resetar Senha
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <PaginationControls
+                  currentPage={clientsPage}
+                  totalPages={totalClientsPages}
+                  totalItems={clients.length}
+                  itemsPerPage={clientsPerPage}
+                  onPageChange={setClientsPage}
+                  onItemsPerPageChange={(val) => { setClientsPerPage(val); setClientsPage(1); }}
+                  itemsPerPageOptions={[10, 25, 50]}
+                  itemLabel="clientes"
+                />
+              </>
             )}
           </div>
         )}
@@ -990,7 +1205,7 @@ const TenantDetailAdmin = () => {
             <div className="bg-white rounded-[24px] border border-stone-200/80 shadow-2xs overflow-hidden">
               <div className="p-6 border-b border-stone-100">
                 <h3 className="font-display font-bold text-xl text-stone-900">
-                  Últimos Agendamentos (Máx 50)
+                  Agendamentos e Faturamento ({appointments.length})
                 </h3>
               </div>
 
@@ -1002,32 +1217,45 @@ const TenantDetailAdmin = () => {
                   />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-stone-100 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
-                        <th className="py-3 px-4">Data e Hora</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4 text-right">Valor Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-100/80">
-                      {appointments.map(app => (
-                        <tr key={app.id} className="hover:bg-stone-50/70 transition-colors">
-                          <td className="py-3.5 px-4 text-xs text-stone-800">{new Date(app.start_time).toLocaleString('pt-BR')}</td>
-                          <td className="py-3.5 px-4">
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(app.status)}`}>
-                              {getStatusLabel(app.status)}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right text-xs font-semibold text-stone-900 tabular-nums lining-nums">
-                            {formatCurrency(app.total_price)}
-                          </td>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-stone-100 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+                          <th className="py-3 px-4">Data e Hora</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Valor Total</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100/80">
+                        {paginatedAppointments.map(app => (
+                          <tr key={app.id} className="hover:bg-stone-50/70 transition-colors">
+                            <td className="py-3.5 px-4 text-xs text-stone-800">{new Date(app.start_time).toLocaleString('pt-BR')}</td>
+                            <td className="py-3.5 px-4">
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(app.status)}`}>
+                                {getStatusLabel(app.status)}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-right text-xs font-semibold text-stone-900 tabular-nums lining-nums">
+                              {formatCurrency(app.total_price)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <PaginationControls
+                    currentPage={billingPage}
+                    totalPages={totalBillingPages}
+                    totalItems={appointments.length}
+                    itemsPerPage={billingPerPage}
+                    onPageChange={setBillingPage}
+                    onItemsPerPageChange={(val) => { setBillingPerPage(val); setBillingPage(1); }}
+                    itemsPerPageOptions={[10, 25, 50]}
+                    itemLabel="agendamentos"
+                  />
+                </>
               )}
             </div>
           </div>
@@ -1061,50 +1289,63 @@ const TenantDetailAdmin = () => {
                   />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-stone-100 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
-                        <th className="py-3 px-4">Mês / Referência</th>
-                        <th className="py-3 px-4">Vencimento</th>
-                        <th className="py-3 px-4">Valor</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4 text-right">Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-100/80">
-                      {invoices.map(inv => (
-                        <tr key={inv.id} className="hover:bg-stone-50/70 transition-colors">
-                          <td className="py-3.5 px-4 font-semibold text-xs text-stone-900">{inv.reference_month}</td>
-                          <td className="py-3.5 px-4 text-xs text-stone-600">{new Date(inv.due_date).toLocaleDateString('pt-BR')}</td>
-                          <td className="py-3.5 px-4 text-xs font-semibold text-stone-900 tabular-nums lining-nums">{formatCurrency(inv.amount)}</td>
-                          <td className="py-3.5 px-4">
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              inv.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 
-                              inv.status === 'pending' ? 'bg-amber-50 text-amber-700' : 
-                              'bg-rose-50 text-rose-700'
-                            }`}>
-                              {inv.status === 'paid' ? 'Pago' : inv.status === 'pending' ? 'Pendente' : 'Vencida'}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            {inv.status !== 'paid' ? (
-                              <button 
-                                type="button"
-                                onClick={() => handleMarkAsPaid(inv.id)}
-                                className="text-xs text-[#7C3A4D] hover:underline font-semibold cursor-pointer"
-                              >
-                                Dar Baixa Manual
-                              </button>
-                            ) : (
-                              <span className="text-stone-400 text-xs">Pago em {new Date(inv.paid_at).toLocaleDateString('pt-BR')}</span>
-                            )}
-                          </td>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-stone-100 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+                          <th className="py-3 px-4">Mês / Referência</th>
+                          <th className="py-3 px-4">Vencimento</th>
+                          <th className="py-3 px-4">Valor</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Ação</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100/80">
+                        {paginatedInvoices.map(inv => (
+                          <tr key={inv.id} className="hover:bg-stone-50/70 transition-colors">
+                            <td className="py-3.5 px-4 font-semibold text-xs text-stone-900">{inv.reference_month}</td>
+                            <td className="py-3.5 px-4 text-xs text-stone-600">{new Date(inv.due_date).toLocaleDateString('pt-BR')}</td>
+                            <td className="py-3.5 px-4 text-xs font-semibold text-stone-900 tabular-nums lining-nums">{formatCurrency(inv.amount)}</td>
+                            <td className="py-3.5 px-4">
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                inv.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 
+                                inv.status === 'pending' ? 'bg-amber-50 text-amber-700' : 
+                                'bg-rose-50 text-rose-700'
+                              }`}>
+                                {inv.status === 'paid' ? 'Pago' : inv.status === 'pending' ? 'Pendente' : 'Vencida'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              {inv.status !== 'paid' ? (
+                                <button 
+                                  type="button"
+                                  onClick={() => handleMarkAsPaid(inv.id)}
+                                  className="text-xs text-[#7C3A4D] hover:underline font-semibold cursor-pointer"
+                                >
+                                  Dar Baixa Manual
+                                </button>
+                              ) : (
+                                <span className="text-stone-400 text-xs">Pago em {new Date(inv.paid_at).toLocaleDateString('pt-BR')}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <PaginationControls
+                    currentPage={invoicesPage}
+                    totalPages={totalInvoicesPages}
+                    totalItems={invoices.length}
+                    itemsPerPage={invoicesPerPage}
+                    onPageChange={setInvoicesPage}
+                    onItemsPerPageChange={(val) => { setInvoicesPerPage(val); setInvoicesPage(1); }}
+                    itemsPerPageOptions={[10, 25]}
+                    itemLabel="faturas"
+                  />
+                </>
               )}
             </div>
           </div>
@@ -1118,6 +1359,15 @@ const TenantDetailAdmin = () => {
         tenant={tenant}
         onConfirm={handleConfirmSuspend}
         isSubmitting={isSuspending}
+      />
+
+      {/* Modal: Redefinir Senha de Cliente pelo Super Admin */}
+      <ModalResetClientPassword
+        isOpen={Boolean(clientForResetModal)}
+        onClose={() => setClientForResetModal(null)}
+        client={clientForResetModal}
+        onConfirm={handleConfirmResetClientPassword}
+        isSubmitting={isResettingClientPwd}
       />
     </div>
   );

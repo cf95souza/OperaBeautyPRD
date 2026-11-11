@@ -2824,3 +2824,18 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Remediação: Implementada sincronização retroativa idempotente em `getMyNotifications` que povoa automaticamente na tabela `cap_notifications` os agendamentos recentes do salão. Adicionado suporte amplo para gestores (`manager`) visualizarem todos os alertas do estabelecimento. Componente `NotificationDropdown.jsx` atualizado com carregamento no mount inicial e polling suave.
   - **3. Testes Automatizados**:
     * Suíte de testes `backend/tests/referralSettingsAndNotificationsFix.test.js` criada e 100% aprovada.
+
+- **11/11/2026 - Paginação SuperAdmin (Clientes, Faturamento, Faturas SaaS) e Reset de Senha de Clientes - G35 [Concluída]:**
+  - **1. Paginação no Painel do Salão pelo Super Admin (`TenantDetailAdmin.jsx`)**:
+    * Implementado o componente `PaginationControls` com layout Rosé Editorial nas abas Clientes, Faturamento e Faturas SaaS.
+    * Permite navegação fluida entre páginas, seleção de densidade de registros (10, 25, 50 itens por página) e contagem precisa de itens processados.
+    * Consulta de faturamento (`fetchAppointments`) ampliada de 50 para 500 agendamentos para visualização integral do histórico recente.
+  - **2. Desbloqueio e Correção no Reset de Senha do Cliente pelo Super Admin (HTTP 403 Forbidden)**:
+    * Diagnóstico: A rota `PUT /api/clients/:id/password` exigia exclusivamente a role `manager`. O token do Super Admin (`role: 'superadmin'`) era rejeitado com 403 Forbidden.
+    * Remediação: Rota `backend/routes/clients.js` atualizada para aceitar `['manager', 'superadmin']`. O serviço `backend/services/clientService.js` foi configurado para resolver dinamicamente o `tenant_id` da cliente a partir da tabela `cap_clients` quando requisitado pelo Super Admin, preservando a trava estrita de isolamento de salão para o perfil `manager`. Criado o componente `ModalResetClientPassword` no painel do Super Admin.
+  - **3. Correção do Erro 400 Bad Request (Validação) para a Gestora**:
+    * Diagnóstico: Os formulários em `GestaoClientes.jsx` e `FichaClienteCRM.jsx` continham texto de ajuda indicando "mínimo de 4 caracteres". Porém, a validação no backend (`updatePasswordSchema`) exige no mínimo 6 caracteres, com pelo menos 1 letra e 1 número. O cliente HTTP (`api.js`) omitia o array de `details` em erros 400, fazendo a tela exibir apenas o texto genérico "Erro de validação".
+    * Remediação: `src/lib/api.js` foi aprimorado para concatenar os detalhes específicos de `errorData.details` em mensagens de erro. Os formulários no frontend foram alinhados com o backend, incluindo validação client-side prévia e instruções claras (ex: `cliente123`).
+  - **4. Testes Automatizados e Build de Produção**:
+    * Criada a suíte `backend/tests/clientPasswordResetAndSuperAdmin.test.js` com 6 testes aprovados (100%).
+    * Build de produção via Vite (`dist/`) concluído com sucesso em 8.02s.

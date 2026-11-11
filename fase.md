@@ -1569,3 +1569,21 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **3. Testes Automatizados e Build de Produção**:
     - Criada a suíte `backend/tests/referralSettingsAndNotificationsFix.test.js` (100% aprovada).
     - Recompilado o frontend com `npm run build` gerando bundle atualizado em `dist/`.
+
+- [x] **G35 (Produção) — Paginação no Super Admin (Clientes, Faturamento e Faturas SaaS) e Correção no Reset de Senha de Clientes**:
+  - **1. Paginação no Painel do Salão pelo Super Admin (`src/pages/superadmin/TenantDetailAdmin.jsx`)**:
+    - Implementado componente padronizado `PaginationControls` nas abas **Clientes**, **Faturamento** e **Faturas SaaS**.
+    - Suporte a seletor de itens por página (10, 25, 50 registros), navegação Anterior/Próxima, contador de registros ativos e indicador de página atual.
+    - Na aba de Faturamento, ampliado o limite de busca de agendamentos de 50 para 500 para permitir visão completa do histórico.
+  - **2. Desbloqueio e Correção no Reset de Senha do Cliente pelo Super Admin (HTTP 403 Forbidden)**:
+    - A rota `PUT /api/clients/:id/password` continha a trava exclusiva `requireRole(['manager'])`, bloqueando o Super Admin com 403 Forbidden.
+    - Atualizada a rota em `backend/routes/clients.js` para `requireRole(['manager', 'superadmin'])`.
+    - No serviço `backend/services/clientService.js`, adicionada resolução dinâmica de `tenant_id` para o perfil `superadmin`, mantendo isolamento estrito de salão para o perfil `manager`.
+    - Criado o componente `ModalResetClientPassword` no painel do Super Admin com validação imediata e feedback visual.
+  - **3. Resolução do Erro 400 (Bad Request / Erro de Validação) para a Gestora**:
+    - Identificada discrepância entre o schema Zod (mínimo 6 caracteres, 1 letra e 1 número) e os formulários de reset na interface (`GestaoClientes.jsx` e `FichaClienteCRM.jsx`), que indicavam "mínimo 4 caracteres" e não apresentavam os detalhes do erro retornado pelo backend.
+    - Atualizado o cliente HTTP (`src/lib/api.js`) para extrair e concatenar os detalhes descritivos de `errorData.details` em respostas 400, eliminando mensagens opacas de erro.
+    - Formulários no frontend agora possuem validação prévia transparente, mensagens claras de orientação e instruções de preenchimento (ex: `cliente123`).
+  - **4. Testes e Compilação**:
+    - Criada e aprovada a suíte automatizada `backend/tests/clientPasswordResetAndSuperAdmin.test.js` (6/6 testes aprovados).
+    - Compilado o frontend com `npm run build` em 8.02s sem advertências críticas.

@@ -259,10 +259,28 @@ export const updateMe = async (userId, tenantId, name, birth_date) => {
   return result.rows[0];
 };
 
-export const updateClientPassword = async (clientId, tenantId, password) => {
+export const updateClientPassword = async (clientId, tenantId, password, userRole = 'manager') => {
+  let targetTenantId = tenantId;
+  if (userRole === 'superadmin') {
+    const clientRow = await pool.query('SELECT tenant_id FROM public.cap_clients WHERE id = $1', [clientId]);
+    if (clientRow.rows.length === 0) {
+      const error = new Error('Cliente não encontrado.');
+      error.statusCode = 404;
+      throw error;
+    }
+    targetTenantId = clientRow.rows[0].tenant_id;
+  } else {
+    const clientRow = await pool.query('SELECT id FROM public.cap_clients WHERE id = $1 AND tenant_id = $2', [clientId, tenantId]);
+    if (clientRow.rows.length === 0) {
+      const error = new Error('Cliente não encontrado neste salão.');
+      error.statusCode = 404;
+      throw error;
+    }
+  }
+
   await pool.query(
     'SELECT cap_update_client_password($1, $2, $3)',
-    [clientId, tenantId, password]
+    [clientId, targetTenantId, password]
   );
 };
 

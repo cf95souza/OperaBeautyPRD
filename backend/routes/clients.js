@@ -323,16 +323,18 @@ router.put('/:id/anamnese', authMiddleware, requireRole(['manager', 'professiona
   }
 });
 
-// Alterar senha do cliente pelo Gerente
-router.put('/:id/password', authMiddleware, requireRole(['manager']), validate(updatePasswordSchema), async (req, res) => {
+// Alterar senha do cliente pelo Gerente ou Super Admin
+router.put('/:id/password', authMiddleware, requireRole(['manager', 'superadmin']), validate(updatePasswordSchema), async (req, res) => {
   const { id } = req.params;
   const { password } = req.body;
   const tenantId = req.user.tenant_id;
+  const role = req.user.role;
 
   try {
-    await updateClientPassword(id, tenantId, password);
-    return res.json({ message: 'Senha do cliente redefinida com sucesso pelo gerente.' });
+    await updateClientPassword(id, tenantId, password, role);
+    return res.json({ message: 'Senha do cliente redefinida com sucesso.' });
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     req.log.error(error, 'Erro ao atualizar senha do cliente');
     return res.status(500).json({ error: 'Erro interno ao redefinir senha do cliente.' });
   }

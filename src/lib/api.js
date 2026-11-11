@@ -110,7 +110,12 @@ async function request(path, options = {}) {
     let errorMessage = 'Erro ao processar requisição.';
     try {
       const errorData = await response.json();
-      errorMessage = errorData.error || errorMessage;
+      if (errorData.details && Array.isArray(errorData.details) && errorData.details.length > 0) {
+        const detailStr = errorData.details.map(d => (typeof d === 'string' ? d.replace(/^body\./, '') : JSON.stringify(d))).join('; ');
+        errorMessage = errorData.error ? `${errorData.error}: ${detailStr}` : detailStr;
+      } else {
+        errorMessage = errorData.error || errorMessage;
+      }
     } catch (e) {
       // Ignora erro de parse
     }

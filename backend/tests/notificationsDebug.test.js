@@ -8,3 +8,4 @@ describe('Diagnóstico de Notificações In-App e Staff', () => {
     expect(typeof getMyNotifications).toBe('function');
   });
 });
+
