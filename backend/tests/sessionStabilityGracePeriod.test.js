@@ -49,3 +49,4 @@ describe('Fase G38 - Estabilidade de Sessão e Prevenção de Desconexões Espú
     expect(content).not.toMatch(/cacheName:\s*'pages-cache'/);
   });
 });
+
