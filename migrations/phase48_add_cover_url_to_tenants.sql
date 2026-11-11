@@ -7,3 +7,4 @@ ALTER TABLE public.cap_tenants
 
 -- >>> DOWN >>>
 ALTER TABLE public.cap_tenants DROP COLUMN IF EXISTS cover_url;
+

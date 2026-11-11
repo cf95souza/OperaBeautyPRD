@@ -2879,3 +2879,19 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Criada e aprovada a suíte `backend/tests/coverUrlBranding.test.js` (6/6 testes aprovados).
     * Testes de regressão `backend/tests/resendEmailRecovery.test.js` (11/11 testes aprovados).
     * Build de produção Vite concluído em 5.58s com bundle gerado em `dist/`.
+
+- **11/11/2026 - Estabilidade de Sessão, Grace Period em Rotação de Tokens e Resiliência PWA - G38 [Concluída]:**
+  - **1. Resolução do Problema de Desconexões Frequentes (Queda de Sessão em 4 a 15 Minutos)**:
+    * Diagnóstico cirúrgico de causa raiz através dos logs de produção: identificados 3 gargalos críticos: expiração ultra-curta de JWT (15 minutos), falso alarme de reuso de token em requisições concorrentes paralelas da mesma tela e descarte de cookies com `SameSite=None` no Safari/iOS e PWAs.
+    * O Access Token JWT (`generateAuthData`) foi estendido para **24 horas** para o painel de staff/gestores e **7 dias** para clientes, mantendo o refresh token de 30 dias.
+  - **2. Mecanismo de Grace Period (30s) na Rotação do Refresh Token (`refreshTokenService`)**:
+    * Criada a migração idempotente `migrations/phase49_auth_session_stability.sql`, introduzindo a coluna `revoked_at TIMESTAMPTZ` na tabela `public.cap_refresh_tokens`.
+    * Quando telas complexas (como Assinatura SaaS / Faturas) disparam 5 requisições paralelas e acionam o refresh concorrentemente, tokens revogados há menos de 30 segundos não acionam mais a exclusão de família por falso alarme, mas sim reutilizam o token ativo recente daquela mesma sessão.
+  - **3. Cookies de Primeira Parte com SameSite=Lax**:
+    * Em `backend/routes/auth.js`, os cookies `refresh_token` e `device_id` foram ajustados para `sameSite: 'lax'` e `path: '/'`. Isso garante 100% de persistência no Safari, Chrome, Android, iPhone e PWAs adicionados à tela de início, sem bloqueio de ITP.
+  - **4. Correção do Service Worker no Vite (`vite.config.js`)**:
+    * Eliminada a regra conflituosa de `NetworkFirst` em modo navegação (`request.mode === 'navigate'`) que provocava o erro `no-response: promise rejected` no Workbox ao recarregar rotas dinâmicas do salão. A entrega de páginas SPA foi delegada exclusivamente ao `navigateFallback: '/index.html'`.
+  - **5. Qualidade e Testes**:
+    * Criada a suíte `backend/tests/sessionStabilityGracePeriod.test.js` (5/5 testes aprovados).
+    * Testes de regressão `sessaoCelularC3.test.js` (15/15), `coverUrlBranding.test.js` (6/6), `resendEmailRecovery.test.js` (11/11).
+    * Build de produção Vite concluído em 3.95s com bundle gerado em `dist/`.

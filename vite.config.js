@@ -28,17 +28,10 @@ export default defineConfig({
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         importScripts: ['/custom-sw.js'],
-        // Garantir que navegação sempre retorna o /index.html raiz (SPA)
+        // Garantir que navegação sempre retorna o /index.html raiz (SPA) de forma resiliente
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/uploads/],
         runtimeCaching: [
-          {
-            urlPattern: ({ request, url }) => request.mode === 'navigate' && !url.pathname.startsWith('/api'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'pages-cache',
-            }
-          },
           {
             urlPattern: ({ url }) => !url.pathname.startsWith('/api') && !url.pathname.startsWith('/uploads'),
             handler: 'StaleWhileRevalidate',

@@ -200,14 +200,16 @@ function setAuthCookies(res, authData, deviceId = null) {
   res.cookie('refresh_token', authData.refreshToken, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? 'none' : 'lax',
+    sameSite: 'lax',
+    path: '/',
     maxAge: authData.maxAge
   });
   if (deviceId) {
     res.cookie('device_id', deviceId, {
       httpOnly: false,
       secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
+      sameSite: 'lax',
+      path: '/',
       maxAge: 365 * 24 * 60 * 60 * 1000 // 1 ano
     });
   }
@@ -536,7 +538,7 @@ router.post('/refresh-token', async (req, res) => {
     setAuthCookies(res, authData, payload.deviceId);
     return res.json({ token: authData.token, user: payload });
   } catch (error) {
-    res.clearCookie('refresh_token');
+    res.clearCookie('refresh_token', { path: '/', sameSite: 'lax' });
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     return res.status(500).json({ error: 'Erro ao renovar token.' });
   }
@@ -549,7 +551,7 @@ router.post('/logout', async (req, res) => {
   } catch (e) {
     req.log.error(e, 'Erro não crítico ao fazer logout');
   } finally {
-    res.clearCookie('refresh_token');
+    res.clearCookie('refresh_token', { path: '/', sameSite: 'lax' });
     return res.json({ message: 'Logout realizado com sucesso.' });
   }
 });

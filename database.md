@@ -2650,5 +2650,12 @@ CREATE INDEX IF NOT EXISTS idx_cap_clients_email ON public.cap_clients(tenant_id
 ALTER TABLE public.cap_tenants
   ADD COLUMN IF NOT EXISTS cover_url TEXT;
 COMMENT ON COLUMN public.cap_tenants.cover_url IS 'Foto de apresentação/fachada exclusiva exibida na tela de login e identificação do cliente';
+
+-- 11. Migração Phase 49 (Estabilidade de Sessão e Grace Period em cap_refresh_tokens)
+ALTER TABLE public.cap_refresh_tokens
+  ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_cap_refresh_tokens_family_active 
+ON public.cap_refresh_tokens(family_id, is_revoked, created_at DESC);
+COMMENT ON COLUMN public.cap_refresh_tokens.revoked_at IS 'Data/hora da revogação para controle de Grace Period (30s) em concorrência de rede';
 ```
 

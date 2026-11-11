@@ -15,10 +15,11 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error("FATAL ERROR: JWT_SECRET is not defined.");
 
 export const generateAuthData = async (userPayload, ipAddress, userAgent, existingFamilyId = null, deviceId = null) => {
-  const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '15m' });
-  
   const isClient = userPayload.role === 'client';
-  const days = isClient ? 30 : 7;
+  const tokenExpiresIn = isClient ? '7d' : '24h';
+  const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: tokenExpiresIn });
+  
+  const days = 30; // 30 dias de persistência para sessões móveis estáveis
   const refreshToken = crypto.randomBytes(40).toString('hex');
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + days);
@@ -278,19 +279,73 @@ export const registerClient = async (tenant_id, name, phone, password, birth_dat
 };
 
 export const refreshTokenService = async (oldRefreshToken, ipAddress, userAgent, deviceId = null) => {
-  const result = await pool.query(
-    'SELECT id, user_id, token, expires_at, created_at, is_revoked, family_id, ip_address, user_agent, device_id FROM public.cap_refresh_tokens WHERE token = $1',
-    [oldRefreshToken]
-  );
-  if (result.rows.length === 0) {
-    const error = new Error('Refresh token inválido.');
-    error.statusCode = 401;
-    throw error;
+  let tokenData = null;
+  try {
+    const result = await pool.query(
+      'SELECT id, user_id, token, expires_at, created_at, is_revoked, family_id, ip_address, user_agent, device_id, revoked_at FROM public.cap_refresh_tokens WHERE token = $1',
+      [oldRefreshToken]
+    );
+    if (result.rows.length === 0) {
+      const error = new Error('Refresh token inválido.');
+      error.statusCode = 401;
+      throw error;
+    }
+    tokenData = result.rows[0];
+  } catch (dbErr) {
+    if (dbErr.code === '42703') {
+      const fallbackResult = await pool.query(
+        'SELECT id, user_id, token, expires_at, created_at, is_revoked, family_id, ip_address, user_agent, device_id FROM public.cap_refresh_tokens WHERE token = $1',
+        [oldRefreshToken]
+      );
+      if (fallbackResult.rows.length === 0) {
+        const error = new Error('Refresh token inválido.');
+        error.statusCode = 401;
+        throw error;
+      }
+      tokenData = fallbackResult.rows[0];
+    } else {
+      throw dbErr;
+    }
   }
 
-  const tokenData = result.rows[0];
+  const reqIp = ipAddress || 'unknown';
+  const reqUa = userAgent || 'unknown';
+  const reqDeviceId = deviceId || null;
 
   if (tokenData.is_revoked) {
+    // Grace Period de 30s: Acomoda requisições legítimas paralelas da mesma tela sem falso alarme
+    const revokedTime = tokenData.revoked_at ? new Date(tokenData.revoked_at).getTime() : new Date(tokenData.created_at).getTime();
+    const isWithinGrace = (Date.now() - revokedTime) <= 30000;
+
+    if (isWithinGrace) {
+      const latestActive = await pool.query(
+        'SELECT id, user_id, token, expires_at, created_at, is_revoked, family_id, ip_address, user_agent, device_id FROM public.cap_refresh_tokens WHERE family_id = $1 AND is_revoked = false ORDER BY created_at DESC LIMIT 1',
+        [tokenData.family_id]
+      );
+      if (latestActive.rows.length > 0) {
+        const activeTokenData = latestActive.rows[0];
+        const userId = activeTokenData.user_id;
+        let p = null;
+        let uRec = await pool.query('SELECT id, name, tenant_id, role, email FROM public.cap_staff WHERE id = $1 AND is_active = true', [userId]);
+        if (uRec.rows.length > 0) {
+          p = { ...uRec.rows[0] };
+        } else {
+          uRec = await pool.query('SELECT id, name, tenant_id, phone FROM public.cap_clients WHERE id = $1', [userId]);
+          if (uRec.rows.length > 0) {
+            p = { ...uRec.rows[0], role: 'client' };
+          } else {
+            uRec = await pool.query('SELECT id, name, email FROM public.cap_platform_admins WHERE id = $1', [userId]);
+            if (uRec.rows.length > 0) p = { ...uRec.rows[0], role: 'superadmin' };
+          }
+        }
+        if (p) {
+          p.familyId = activeTokenData.family_id;
+          p.deviceId = reqDeviceId || activeTokenData.device_id || null;
+          return p;
+        }
+      }
+    }
+
     await pool.query('DELETE FROM public.cap_refresh_tokens WHERE family_id = $1', [tokenData.family_id]);
     const error = new Error('Reuso de token detectado. Sessão finalizada por segurança.');
     error.statusCode = 401;
@@ -302,10 +357,6 @@ export const refreshTokenService = async (oldRefreshToken, ipAddress, userAgent,
     error.statusCode = 401;
     throw error;
   }
-
-  const reqIp = ipAddress || 'unknown';
-  const reqUa = userAgent || 'unknown';
-  const reqDeviceId = deviceId || null;
 
   // C3 (P0): Validação de dispositivo vs mudança de rede móvel (Wi-Fi <-> 4G/5G)
   // 1. Se ambos possuem device_id registrado e forem diferentes -> Alerta crítico de roubo de token/sessão em outro aparelho
@@ -358,7 +409,11 @@ export const refreshTokenService = async (oldRefreshToken, ipAddress, userAgent,
   payload.familyId = tokenData.family_id;
   payload.deviceId = reqDeviceId || tokenData.device_id || null;
 
-  await pool.query('UPDATE public.cap_refresh_tokens SET is_revoked = true WHERE id = $1', [tokenData.id]);
+  try {
+    await pool.query('UPDATE public.cap_refresh_tokens SET is_revoked = true, revoked_at = NOW() WHERE id = $1', [tokenData.id]);
+  } catch (revErr) {
+    await pool.query('UPDATE public.cap_refresh_tokens SET is_revoked = true WHERE id = $1', [tokenData.id]);
+  }
 
   return payload;
 };

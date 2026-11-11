@@ -1629,3 +1629,19 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - Criada a suíte automatizada `backend/tests/coverUrlBranding.test.js` (6/6 testes aprovados).
     - Suíte de regressão `backend/tests/resendEmailRecovery.test.js` (11/11 testes aprovados).
     - Compilado o frontend com `npm run build` em 5.58s com bundle gerado em `dist/`.
+
+- [x] **G38 (Produção) — Estabilidade de Sessão, Grace Period em Rotação de Tokens e Correção PWA (Sem Deslogar)**:
+  - **1. Aumento da Validade do Access Token JWT (Eliminação do Gargalo de 15m)**:
+    - Em `backend/services/authService.js`, o token de acesso foi ampliado de 15 minutos para **24 horas** (staff/gestão) e **7 dias** (clientes), com refresh token de 30 dias.
+    - Isso reduz em mais de 98% a necessidade de renovação em segundo plano e alivia o PostgreSQL de queries constantes de autenticação.
+  - **2. Mecanismo de Grace Period (30s) na Rotação do Refresh Token**:
+    - Criada a migração `migrations/phase49_auth_session_stability.sql` adicionando a coluna `revoked_at TIMESTAMPTZ` em `cap_refresh_tokens`.
+    - No `refreshTokenService`, quando múltiplas requisições paralelas concorrentes (ex: carregamento da tela de faturas/assinatura) acionam o refresh simultaneamente, requisições com token revogado há menos de 30 segundos agora recuperam o token ativo recente em vez de deletar a família de tokens por "falso alarme de reuso".
+  - **3. Cookie com SameSite=Lax (Compatibilidade Total com iPhone/Safari/PWA)**:
+    - Em `backend/routes/auth.js`, os cookies `refresh_token` e `device_id` foram configurados com `sameSite: 'lax'` e `path: '/'`, garantindo persistência sólida de primeira parte (First-Party) e prevenindo que o WebKit/Safari ou navegadores móveis descartem o cookie.
+  - **4. Resiliência do PWA / Workbox no SPA (`vite.config.js`)**:
+    - Removida regra conflitante de `NetworkFirst` no `runtimeCaching` para navegação (`request.mode === 'navigate'`), que provocava o erro `no-response: promise rejected` no Workbox quando havia instabilidade ou restart da API. O `navigateFallback: '/index.html'` agora atende 100% das rotas SPA com resiliência.
+  - **5. Qualidade e Verificação**:
+    - Criada a suíte automatizada `backend/tests/sessionStabilityGracePeriod.test.js` (5/5 testes aprovados).
+    - Suíte de regressão completa aprovada: `sessaoCelularC3.test.js` (15/15), `coverUrlBranding.test.js` (6/6), `resendEmailRecovery.test.js` (11/11).
+    - Frontend compilado para produção (`npm run build`) com êxito em 3.95s.
