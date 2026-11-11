@@ -301,7 +301,8 @@ const requestResetEmailSchema = z.object({
     tenant_slug: z.string().min(1, 'Identificador do salão é obrigatório.'),
     phone: z.string().min(1, 'Telefone é obrigatório.'),
     email: z.string().email('E-mail inválido.').optional().or(z.literal('')),
-    birth_date: z.string().optional().or(z.literal(''))
+    birth_date: z.string().optional().or(z.literal('')),
+    purpose: z.enum(['login', 'reset_password']).optional().default('reset_password')
   }),
   query: z.any(), params: z.any()
 });
@@ -311,33 +312,52 @@ const verifyResetEmailSchema = z.object({
     tenant_slug: z.string().min(1, 'Identificador do salão é obrigatório.'),
     phone: z.string().min(1, 'Telefone é obrigatório.'),
     code: z.string().length(6, 'O código deve conter 6 dígitos.'),
-    new_password: z.string().min(6, 'A nova senha deve ter no mínimo 6 caracteres.').regex(/[a-zA-Z]/, 'Precisa ter 1 letra.').regex(/[0-9]/, 'Precisa ter 1 número.')
+    purpose: z.enum(['login', 'reset_password']).optional().default('reset_password'),
+    new_password: z.string().min(6, 'A nova senha deve ter no mínimo 6 caracteres.').regex(/[a-zA-Z]/, 'Precisa ter 1 letra.').regex(/[0-9]/, 'Precisa ter 1 número.').optional()
   }),
   query: z.any(), params: z.any()
 });
 
-// Recuperação de senha por E-mail via Resend (gratuito e sem dependência de WhatsApp)
+// Recuperação de senha ou Login por E-mail via Resend (gratuito e sem dependência de WhatsApp)
 router.post('/client/request-reset-email', clientOtpLimiter, validate(requestResetEmailSchema), async (req, res) => {
-  const { tenant_slug, phone, email, birth_date } = req.body;
+  const { tenant_slug, phone, email, birth_date, purpose } = req.body;
   try {
-    const result = await requestClientEmailOtp(tenant_slug, phone, email, birth_date);
+    const result = await requestClientEmailOtp(tenant_slug, phone, email, birth_date, purpose);
     return res.json(result);
   } catch (error) {
-    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
-    req.log.error(error, 'Erro ao solicitar código de recuperação por e-mail');
-    return res.status(500).json({ error: 'Erro ao processar solicitação de e-mail.' });
+    req.log.error(error, 'Erro ao solicitar código por e-mail');
+    return res.status(error.statusCode || 500).json({ 
+      error: error.message || 'Erro ao processar solicitação de e-mail.' 
+    });
   }
 });
 
 router.post('/client/verify-reset-email', clientOtpLimiter, validate(verifyResetEmailSchema), async (req, res) => {
-  const { tenant_slug, phone, code, new_password } = req.body;
+  const { tenant_slug, phone, code, new_password, purpose } = req.body;
+  const deviceId = getRequestDeviceId(req);
+
   try {
-    const result = await verifyClientEmailOtpAndResetPassword(tenant_slug, phone, code, new_password);
+    const result = await verifyClientEmailOtpAndResetPassword(
+      tenant_slug, 
+      phone, 
+      code, 
+      new_password, 
+      purpose, 
+      req.ip, 
+      req.headers['user-agent'], 
+      deviceId
+    );
+
+    if (result.purpose === 'login' && result.authData) {
+      setAuthCookies(res, result.authData, deviceId);
+    }
+
     return res.json(result);
   } catch (error) {
-    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
-    req.log.error(error, 'Erro ao verificar código de e-mail e redefinir senha');
-    return res.status(500).json({ error: error.message || 'Erro ao validar código ou redefinir senha.' });
+    req.log.error(error, 'Erro ao verificar código de e-mail e processar autenticação');
+    return res.status(error.statusCode || 500).json({ 
+      error: error.message || 'Erro ao validar código ou autenticar cliente.' 
+    });
   }
 });
 

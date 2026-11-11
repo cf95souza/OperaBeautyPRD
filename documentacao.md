@@ -2856,6 +2856,9 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * `PerfilCliente.jsx`: Adicionado campo de e-mail opcional para atualização direta pelo cliente autenticado.
     * `ModalSolicitarEmail.jsx` e `HomeCliente.jsx`: Modal sofisticado que convida clientes sem e-mail a realizarem o preenchimento, com botão "X" para fechar e botão "OK" que encaminha para o perfil.
   - **5. Qualidade e Verificação**:
-    * Suíte de testes `backend/tests/resendEmailRecovery.test.js` com 9 testes automatizados (100% de sucesso).
+    * Suíte de testes `backend/tests/resendEmailRecovery.test.js` expandida com 11 testes automatizados (100% de aprovação).
     * Testes de regressão `backend/tests/clientPasswordResetAndSuperAdmin.test.js` aprovados (6/6).
-    * Frontend compilado para produção (`npm run build`) com êxito.
+    * `docker-compose.yml` atualizado para repassar `RESEND_API_KEY: ${RESEND_API_KEY}` para o container `operabeauty-api`.
+    * Imunização de timezone no PostgreSQL com `TO_CHAR(birth_date, 'YYYY-MM-DD')` e suporte a clientes com campo de nascimento prévio nulo.
+    * Substituição definitiva do botão "Entrar com código via WhatsApp" por "Entrar com código por E-mail" (`AcessoSenha.jsx` e `ModalRecuperacaoSenha.jsx`), unificando o fluxo em e-mail sem WhatsApp.
+    * Frontend compilado para produção (`npm run build`) com êxito em 5.51s.

@@ -83,6 +83,7 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:5173,http://localhost}
       WA_GATEWAY_URL: http://wa-gateway:4000
       INTERNAL_SECRET: ${INTERNAL_SECRET:-operabeauty-m2m-internal-secret-token-32chars}
+      RESEND_API_KEY: ${RESEND_API_KEY}
     logging:
       driver: "json-file"
       options:

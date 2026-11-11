@@ -19,6 +19,8 @@ describe('Fase G36 - Recuperação de Senha por E-mail via Resend & Perfil do Cl
   const modalSolicitarEmailPath = path.join(rootDir, 'src/components/cliente/ModalSolicitarEmail.jsx');
   const perfilClientePath = path.join(rootDir, 'src/pages/PerfilCliente.jsx');
   const homeClientePath = path.join(rootDir, 'src/pages/HomeCliente.jsx');
+  const acessoSenhaPath = path.join(rootDir, 'src/pages/AcessoSenha.jsx');
+  const dockerComposePath = path.join(rootDir, 'docker-compose.yml');
   const apiPath = path.join(rootDir, 'src/lib/api.js');
 
   const migrationContent = fs.readFileSync(migrationPath, 'utf8');
@@ -31,6 +33,8 @@ describe('Fase G36 - Recuperação de Senha por E-mail via Resend & Perfil do Cl
   const modalSolicitarEmailContent = fs.readFileSync(modalSolicitarEmailPath, 'utf8');
   const perfilClienteContent = fs.readFileSync(perfilClientePath, 'utf8');
   const homeClienteContent = fs.readFileSync(homeClientePath, 'utf8');
+  const acessoSenhaContent = fs.readFileSync(acessoSenhaPath, 'utf8');
+  const dockerComposeContent = fs.readFileSync(dockerComposePath, 'utf8');
   const apiContent = fs.readFileSync(apiPath, 'utf8');
 
   it('1. Migration Phase47 deve adicionar a coluna email e índice em cap_clients', () => {
@@ -48,7 +52,8 @@ describe('Fase G36 - Recuperação de Senha por E-mail via Resend & Perfil do Cl
     expect(authServiceContent).toContain('requestClientEmailOtp');
     expect(authServiceContent).toContain('verifyClientEmailOtpAndResetPassword');
     expect(authServiceContent).toContain('Data de nascimento não confere com o cadastro deste salão.');
-    expect(authServiceContent).toContain('UPDATE public.cap_clients SET email = $1 WHERE id = $2 AND tenant_id = $3');
+    expect(authServiceContent).toContain('UPDATE public.cap_clients');
+    expect(authServiceContent).toContain('WHERE id = $2 AND tenant_id = $3');
   });
 
   it('4. Rotas de auth devem expor endpoints para solicitação e verificação de código por e-mail', () => {
@@ -66,12 +71,11 @@ describe('Fase G36 - Recuperação de Senha por E-mail via Resend & Perfil do Cl
     expect(clientServiceContent).toContain('SET name = COALESCE($1, name)');
   });
 
-  it('6. ModalRecuperacaoSenha deve conter fluxos para envio por e-mail (EMAIL_FORM, EMAIL_OTP, EMAIL_NEW_PASSWORD)', () => {
-    expect(modalRecoveryContent).toContain('handleGoToEmailForm');
+  it('6. ModalRecuperacaoSenha deve conter fluxos diretos para envio por e-mail sem WhatsApp', () => {
     expect(modalRecoveryContent).toContain('handleSendEmailOtp');
     expect(modalRecoveryContent).toContain('handleVerifyEmailOtp');
-    expect(modalRecoveryContent).toContain('handleSaveNewPasswordEmail');
-    expect(modalRecoveryContent).toContain('Recuperação por E-mail');
+    expect(modalRecoveryContent).toContain('handleSaveNewPassword');
+    expect(modalRecoveryContent).toContain('Recuperar por E-mail');
   });
 
   it('7. ModalSolicitarEmail e HomeCliente devem convidar clientes sem e-mail com botão X e OK para perfil', () => {
@@ -93,5 +97,14 @@ describe('Fase G36 - Recuperação de Senha por E-mail via Resend & Perfil do Cl
     expect(emailSchema.safeParse('teste.beauty@operabeauty.tech').success).toBe(true);
     expect(emailSchema.safeParse('invalido').success).toBe(false);
     expect(emailSchema.safeParse('@semusuario.com').success).toBe(false);
+  });
+
+  it('10. AcessoSenha deve disponibilizar botão Entrar com código por E-mail em substituição ao WhatsApp', () => {
+    expect(acessoSenhaContent).toContain('Entrar com código por E-mail');
+    expect(acessoSenhaContent).not.toContain('Entrar com código via WhatsApp');
+  });
+
+  it('11. docker-compose.yml deve injetar RESEND_API_KEY no container da API', () => {
+    expect(dockerComposeContent).toContain('RESEND_API_KEY: ${RESEND_API_KEY}');
   });
 });

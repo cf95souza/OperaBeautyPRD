@@ -5,7 +5,7 @@ import { Botao } from '../components/ui/Botao';
 import { CampoTexto } from '../components/ui/CampoTexto';
 import { TelaCliente } from '../components/ui/TelaCliente';
 import { ModalRecuperacaoSenha } from '../components/auth/ModalRecuperacaoSenha';
-import { ArrowLeft, ArrowRight, Lock, Eye, EyeOff, MessageCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Lock, Eye, EyeOff, Mail } from 'lucide-react';
 
 const AcessoSenha = () => {
   const { tenant_slug } = useParams();
@@ -148,6 +148,7 @@ const AcessoSenha = () => {
             error={error}
             required
             autoFocus
+            autoComplete="current-password"
             iconeEsquerda={<Lock size={20} strokeWidth={1.8} />}
             iconeDireita={
               <button
@@ -196,7 +197,7 @@ const AcessoSenha = () => {
               <div className="flex-grow border-t border-line"></div>
             </div>
 
-            {/* Botão Acesso Rápido por Código WhatsApp */}
+            {/* Botão Acesso Rápido por Código de E-mail */}
             <button
               type="button"
               onClick={() => {
@@ -205,8 +206,8 @@ const AcessoSenha = () => {
               }}
               className="w-full min-h-[46px] px-4 rounded-full border border-line bg-surface text-ink hover:bg-brand-tint/30 text-[13px] font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs active:scale-98"
             >
-              <MessageCircle size={16} className="text-emerald-700" />
-              <span>Entrar com código via WhatsApp</span>
+              <Mail size={16} className="text-brand" />
+              <span>Entrar com código por E-mail</span>
             </button>
           </div>
         </form>

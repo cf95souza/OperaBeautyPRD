@@ -702,7 +702,7 @@ export const resetClientPasswordWithToken = async (resetToken, newPassword) => {
  * - Para clientes com e-mail cadastrado: envia diretamente.
  * - Para clientes legados (sem e-mail): exige e valida data de nascimento antes de enviar.
  */
-export const requestClientEmailOtp = async (tenantSlugOrId, phone, email = null, birthDate = null) => {
+export const requestClientEmailOtp = async (tenantSlugOrId, phone, email = null, birthDate = null, purpose = 'reset_password') => {
   const cleanPhone = (phone || '').replace(/\D/g, '');
   if (cleanPhone.length < 10) {
     const error = new Error('Telefone inválido.');
@@ -721,15 +721,15 @@ export const requestClientEmailOtp = async (tenantSlugOrId, phone, email = null,
     throw error;
   }
   const tenant = tenantResult.rows[0];
-  if (tenant.status !== 'active') {
+  if (tenant.status && tenant.status !== 'active') {
     const error = new Error('Este estabelecimento está temporariamente suspenso.');
     error.statusCode = 403;
     throw error;
   }
 
-  // 2. Localiza o cliente
+  // 2. Localiza o cliente com formatação segura de data do PostgreSQL
   const clientResult = await pool.query(
-    `SELECT id, name, phone, email, birth_date 
+    `SELECT id, name, phone, email, birth_date, TO_CHAR(birth_date, 'YYYY-MM-DD') AS birth_date_str 
      FROM public.cap_clients 
      WHERE tenant_id = $1 
        AND (
@@ -751,6 +751,7 @@ export const requestClientEmailOtp = async (tenantSlugOrId, phone, email = null,
   const client = clientResult.rows[0];
   let destinationEmail = (client.email || '').trim().toLowerCase();
   let isNewEmail = false;
+  let newBirthDate = null;
 
   // Se o cliente NÃO possui e-mail cadastrado:
   if (!destinationEmail) {
@@ -777,31 +778,39 @@ export const requestClientEmailOtp = async (tenantSlugOrId, phone, email = null,
       }
     }
 
-    let clientBd = null;
-    if (client.birth_date) {
+    let clientBd = client.birth_date_str || null;
+    if (!clientBd && client.birth_date) {
       if (client.birth_date instanceof Date) {
-        clientBd = client.birth_date.toISOString().slice(0, 10);
+        const y = client.birth_date.getUTCFullYear();
+        const m = String(client.birth_date.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(client.birth_date.getUTCDate()).padStart(2, '0');
+        clientBd = `${y}-${m}-${d}`;
       } else {
         clientBd = String(client.birth_date).slice(0, 10);
       }
     }
 
-    if (!clientBd || clientBd !== inputBd) {
-      const error = new Error('Data de nascimento não confere com o cadastro deste salão. Em caso de dúvidas, contate a recepção.');
-      error.statusCode = 400;
-      throw error;
+    if (clientBd) {
+      if (clientBd !== inputBd) {
+        const error = new Error('Data de nascimento não confere com o cadastro deste salão. Em caso de dúvidas, contate a recepção.');
+        error.statusCode = 400;
+        throw error;
+      }
+    } else {
+      // Cliente antigo não possuía data de nascimento salva no banco: aceita a data informada para o cadastro
+      newBirthDate = inputBd;
     }
 
     destinationEmail = email.trim().toLowerCase();
     isNewEmail = true;
   }
 
-  // Rate limiter por telefone no Redis (3 solicitações por 10 min)
+  // Rate limiter por telefone no Redis (5 solicitações por 10 min)
   const rateKey = `ratelimit:email_otp_req:${tenant.id}:${cleanPhone}`;
   const currentCount = await redisClient.incr(rateKey);
   if (currentCount === 1) {
     await redisClient.expire(rateKey, 600);
-  } else if (currentCount > 3) {
+  } else if (currentCount > 5) {
     const err = new Error('Muitas solicitações consecutivas. Aguarde alguns minutos antes de tentar novamente.');
     err.statusCode = 429;
     throw err;
@@ -818,6 +827,8 @@ export const requestClientEmailOtp = async (tenantSlugOrId, phone, email = null,
     phone: client.phone,
     email: destinationEmail,
     is_new_email: isNewEmail,
+    new_birth_date: newBirthDate,
+    purpose: purpose || 'reset_password',
     attempts: 0
   };
   await redisClient.setex(otpKey, 900, JSON.stringify(otpData));
@@ -827,7 +838,8 @@ export const requestClientEmailOtp = async (tenantSlugOrId, phone, email = null,
     to: destinationEmail,
     clientName: client.name,
     salonName: tenant.name,
-    otpCode: code
+    otpCode: code,
+    purpose: purpose || 'reset_password'
   });
 
   const [userPart, domainPart] = destinationEmail.split('@');
@@ -848,16 +860,19 @@ export const requestClientEmailOtp = async (tenantSlugOrId, phone, email = null,
 /**
  * Validação do código OTP de e-mail e redefinição de senha com persistência do e-mail
  */
-export const verifyClientEmailOtpAndResetPassword = async (tenantSlugOrId, phone, code, newPassword) => {
+export const verifyClientEmailOtpAndResetPassword = async (
+  tenantSlugOrId, 
+  phone, 
+  code, 
+  newPassword = null, 
+  purpose = 'reset_password',
+  ip = null,
+  userAgent = null,
+  deviceId = null
+) => {
   const cleanPhone = (phone || '').replace(/\D/g, '');
   if (!code || code.length !== 6) {
     const error = new Error('O código deve conter 6 dígitos.');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (!newPassword || newPassword.length < 6 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-    const error = new Error('A nova senha deve ter no mínimo 6 caracteres, contendo pelo menos 1 letra e 1 número.');
     error.statusCode = 400;
     throw error;
   }
@@ -897,25 +912,71 @@ export const verifyClientEmailOtpAndResetPassword = async (tenantSlugOrId, phone
     throw error;
   }
 
-  // Sucesso! Atualiza a senha no banco
-  await pool.query(
-    'SELECT cap_update_client_password($1, $2, $3)',
-    [otpData.client_id, tenant.id, newPassword]
-  );
-
-  // Se o e-mail foi cadastrado e validado neste fluxo, persiste no cap_clients
-  if (otpData.is_new_email && otpData.email) {
+  // Se o e-mail ou data de nascimento foram informados neste fluxo, persiste no cap_clients
+  if (otpData.email) {
     await pool.query(
-      'UPDATE public.cap_clients SET email = $1 WHERE id = $2 AND tenant_id = $3',
-      [otpData.email, otpData.client_id, tenant.id]
+      `UPDATE public.cap_clients 
+       SET email = COALESCE($1, email),
+           birth_date = COALESCE(birth_date, $4::date)
+       WHERE id = $2 AND tenant_id = $3`,
+      [otpData.email, otpData.client_id, tenant.id, otpData.new_birth_date || null]
     );
   }
 
   // Remove a chave do Redis
   await redisClient.del(otpKey);
 
+  const effectivePurpose = purpose || otpData.purpose || 'reset_password';
+
+  // Se o objetivo for LOGIN:
+  if (effectivePurpose === 'login') {
+    const clientRes = await pool.query(
+      'SELECT id, name, phone, email, tenant_id FROM public.cap_clients WHERE id = $1 AND tenant_id = $2',
+      [otpData.client_id, tenant.id]
+    );
+    if (clientRes.rows.length === 0) {
+      const error = new Error('Cliente não encontrado.');
+      error.statusCode = 404;
+      throw error;
+    }
+    const client = clientRes.rows[0];
+    const payload = {
+      id: client.id,
+      name: client.name,
+      tenant_id: tenant.id,
+      role: 'client',
+      phone: client.phone,
+      email: client.email
+    };
+    const authData = await generateAuthData(payload, ip, userAgent, null, deviceId);
+    return {
+      success: true,
+      verified: true,
+      purpose: 'login',
+      token: authData.token,
+      authData,
+      user: payload,
+      message: 'Login realizado com sucesso!'
+    };
+  }
+
+  // Se o objetivo for RESET DE SENHA:
+  if (!newPassword || newPassword.length < 6 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+    const error = new Error('A nova senha deve ter no mínimo 6 caracteres, contendo pelo menos 1 letra e 1 número.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Sucesso! Atualiza a senha no banco
+  await pool.query(
+    'SELECT cap_update_client_password($1, $2, $3)',
+    [otpData.client_id, tenant.id, newPassword]
+  );
+
   return {
     success: true,
+    verified: true,
+    purpose: 'reset_password',
     message: 'Senha redefinida com sucesso! Você já pode fazer login com sua nova senha.'
   };
 };

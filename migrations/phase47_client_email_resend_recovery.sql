@@ -18,3 +18,4 @@ END $$;
 -- >>> DOWN >>>
 DROP INDEX IF EXISTS idx_cap_clients_email;
 ALTER TABLE public.cap_clients DROP COLUMN IF EXISTS email;
+

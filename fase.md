@@ -1606,6 +1606,9 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
     - `PerfilCliente.jsx`: Campo de e-mail opcional integrado para que o próprio cliente possa cadastrar e atualizar seu e-mail a qualquer momento.
     - `ModalSolicitarEmail.jsx` e `HomeCliente.jsx`: Modal sofisticado com botão de fechar (X) e ação "OK, Cadastrar E-mail" levando à tela de perfil, exibido de forma não intrusiva apenas para clientes sem e-mail cadastrado (com controle de dispensar por sessão).
   - **5. Qualidade e Testes**:
-    - Criada a suíte `backend/tests/resendEmailRecovery.test.js` com 9 testes automatizados (100% aprovados).
+    - Criada a suíte `backend/tests/resendEmailRecovery.test.js` com 11 testes automatizados (100% aprovados).
     - Testes de regressão `clientPasswordResetAndSuperAdmin.test.js` (6/6 testes aprovados).
+    - Injeção da variável `RESEND_API_KEY: ${RESEND_API_KEY}` no serviço `api` do `docker-compose.yml`.
+    - Resolução de timezone na comparação de datas de nascimento com `TO_CHAR(birth_date, 'YYYY-MM-DD')` e suporte a cadastro retroativo de data para clientes antigos com campo nulo.
+    - Substituição completa do botão "Entrar com código via WhatsApp" por "Entrar com código por E-mail" (`AcessoSenha.jsx` e `ModalRecuperacaoSenha.jsx`), unificando o fluxo transacional sem dependência de WhatsApp.
     - Build de produção compilado com `npm run build` gerando bundle limpo em `dist/`.

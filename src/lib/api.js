@@ -212,7 +212,7 @@ export const api = {
         body: JSON.stringify({ reset_token: resetToken, new_password: newPassword }),
       });
     },
-    async requestClientResetEmail(tenantSlug, phone, email, birthDate) {
+    async requestClientResetEmail(tenantSlug, phone, email, birthDate, purpose = 'reset_password') {
       return request('/auth/client/request-reset-email', {
         method: 'POST',
         body: JSON.stringify({
@@ -220,17 +220,19 @@ export const api = {
           phone,
           email: email || undefined,
           birth_date: birthDate || undefined,
+          purpose,
         }),
       });
     },
-    async verifyClientResetEmail(tenantSlug, phone, code, newPassword) {
+    async verifyClientResetEmail(tenantSlug, phone, code, newPassword, purpose = 'reset_password') {
       return request('/auth/client/verify-reset-email', {
         method: 'POST',
         body: JSON.stringify({
           tenant_slug: tenantSlug,
           phone,
           code,
-          new_password: newPassword,
+          new_password: newPassword || undefined,
+          purpose,
         }),
       });
     },

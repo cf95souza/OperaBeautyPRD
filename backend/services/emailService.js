@@ -41,28 +41,37 @@ export const sendEmail = async ({ to, subject, html, text }) => {
 };
 
 /**
- * Disparo de OTP de 6 dígitos para recuperação de senha do cliente
+ * Disparo de OTP de 6 dígitos para recuperação de senha ou login do cliente
  */
-export const sendClientPasswordResetOtpEmail = async ({ to, clientName, salonName, otpCode }) => {
-  const subject = `Código de Recuperação: ${otpCode} - ${salonName || 'OperaBeauty'}`;
+export const sendClientPasswordResetOtpEmail = async ({ to, clientName, salonName, otpCode, purpose = 'reset_password' }) => {
+  const isLogin = purpose === 'login';
+  const title = isLogin ? 'Acesso Rápido por Código' : 'Recuperação de Senha';
+  const subject = isLogin
+    ? `Seu Código de Acesso: ${otpCode} - ${salonName || 'OperaBeauty'}`
+    : `Código de Recuperação: ${otpCode} - ${salonName || 'OperaBeauty'}`;
+  
+  const actionText = isLogin
+    ? `Recebemos uma solicitação para entrar na sua conta no <strong>${salonName}</strong>. Utilize o código de 6 dígitos abaixo para acessar:`
+    : `Recebemos uma solicitação para redefinir a sua senha no <strong>${salonName}</strong>. Utilize o código de 6 dígitos abaixo para confirmar sua identidade:`;
+
   const html = `
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Recuperação de Senha</title>
+      <title>${title}</title>
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #FAFAF9; margin: 0; padding: 24px; color: #1C1917;">
       <div style="max-width: 520px; margin: 0 auto; background-color: #FFFFFF; border-radius: 24px; border: 1px solid #E7E5E4; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
         <div style="background-color: #7C3A4D; padding: 32px 24px; text-align: center;">
           <h1 style="color: #FFFFFF; font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.5px;">${salonName || 'OperaBeauty'}</h1>
-          <p style="color: rgba(255,255,255,0.85); font-size: 13px; margin: 6px 0 0 0;">Recuperação de Senha de Acesso</p>
+          <p style="color: rgba(255,255,255,0.85); font-size: 13px; margin: 6px 0 0 0;">${title}</p>
         </div>
         <div style="padding: 32px 24px;">
           <p style="font-size: 15px; margin: 0 0 16px 0;">Olá, <strong>${clientName || 'Cliente'}</strong>!</p>
           <p style="font-size: 14px; color: #57534E; line-height: 1.5; margin: 0 0 24px 0;">
-            Recebemos uma solicitação para redefinir a sua senha no <strong>${salonName}</strong>. Utilize o código de 6 dígitos abaixo para confirmar sua identidade:
+            ${actionText}
           </p>
           
           <div style="background-color: #FDF4F6; border: 1px dashed #E0A2B1; border-radius: 16px; padding: 20px; text-align: center; margin: 0 0 24px 0;">
@@ -74,7 +83,7 @@ export const sendClientPasswordResetOtpEmail = async ({ to, clientName, salonNam
             ⏰ Este código é válido por <strong>15 minutos</strong>. Não compartilhe com ninguém.
           </p>
           <p style="font-size: 12px; color: #A8A29E; margin: 0; border-top: 1px solid #F5F5F4; padding-top: 16px;">
-            Se você não solicitou a redefinição de senha, desconsidere este e-mail. Seus dados continuam protegidos.
+            Se você não solicitou este código, desconsidere este e-mail. Seus dados continuam protegidos.
           </p>
         </div>
         <div style="background-color: #FAFAF9; padding: 16px 24px; text-align: center; border-top: 1px solid #E7E5E4;">
