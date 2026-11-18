@@ -2917,9 +2917,10 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Criada a tabela `public.cap_saas_coupons` na migração `migrations/phase50_plans_v2_and_saas_coupons.sql`.
     * Criado o serviço `backend/services/saasCouponService.js` com suporte a cupons percentuais e fixos, limites de utilização, elegibilidade por plano e expiração.
     * Inseridos cupons sementes oficiais: `ESSENCIAL30` (30% no 1º mês do Essencial) e `PREMIUM40` (40% no 1º mês do Premium).
-    * Adicionada a aba **"Cupons & Campanhas SaaS"** em `src/pages/superadmin/PlanosAdmin.jsx` permitindo criar, ativar, pausar e excluir cupons com facilidade.
+    * Adicionada a página dedicada **"Cupons e Descontos"** (`src/pages/superadmin/CuponsSaasAdmin.jsx`) com atalho direto no menu lateral do Super Admin (`/superadmin/cupons` sob a seção "Negócio"), além da aba em `src/pages/superadmin/PlanosAdmin.jsx`, permitindo criar, ativar, pausar e excluir cupons com facilidade.
     * Adicionado campo de cupom no modal de pagamento PIX (`ModalPagamentoPixSaaS.jsx`), com recálculo automático da fatura e regeneração instantânea do QR Code com o desconto aplicado.
     * Adicionado botão de **"Desconto"** manual na listagem de faturas de salões no Super Admin (`TenantDetailAdmin.jsx`).
+    * Atualizada a Home do site (`src/pages/LandingPage.jsx`) e a página de planos (`src/pages/PaginaPlanos.jsx`): removido 100% o plano Signature antigo, grid reformatado para 3 colunas e exibidos os badges da estratégia de aquisição do Print 3 (*"Custa menos que 1 serviço"*, *"30% OFF 1º Mês"* e *"Mais Escolhido • 40% OFF"*).
   - **5. Diagnóstico e Verificação Proativa do Gateway de Pagamento (Mercado Pago PIX)**:
     * Criada a função `verifySaaSInvoicePayment` em `backend/services/saasBillingService.js` e endpoint `POST /api/invoices/:id/verify-payment`.
     * Adicionado o botão **"Já fiz o PIX, verificar agora"** no modal de pagamento, consultando o status diretamente na API do Mercado Pago e dando baixa imediata caso o webhook sofra oscilações.

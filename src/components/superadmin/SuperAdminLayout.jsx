@@ -34,6 +34,7 @@ const SuperAdminLayout = () => {
         { to: '/superadmin', icon: 'dashboard', label: 'Painel Geral' },
         { to: '/superadmin/tenants', icon: 'storefront', label: 'Salões e Clientes' },
         { to: '/superadmin/planos', icon: 'subscriptions', label: 'Gestão de Planos' },
+        { to: '/superadmin/cupons', icon: 'local_offer', label: 'Cupons e Descontos' },
         { to: '/superadmin/parceiros', icon: 'handshake', label: 'Parceiros e Revenda' },
       ]
     },

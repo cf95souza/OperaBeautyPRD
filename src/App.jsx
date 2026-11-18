@@ -207,6 +207,7 @@ import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
 import TenantDetailAdmin from './pages/superadmin/TenantDetailAdmin';
 import TenantListAdmin from './pages/superadmin/TenantListAdmin';
 import PlanosAdmin from './pages/superadmin/PlanosAdmin';
+import CuponsSaasAdmin from './pages/superadmin/CuponsSaasAdmin';
 import ParceirosAdmin from './pages/superadmin/ParceirosAdmin';
 import SettingsAdmin from './pages/superadmin/SettingsAdmin';
 import EquipeAdmin from './pages/superadmin/EquipeAdmin';
@@ -244,6 +245,7 @@ function App() {
               <Route path="/superadmin/tenants" element={<TenantListAdmin />} />
               <Route path="/superadmin/tenants/:id" element={<TenantDetailAdmin />} />
               <Route path="/superadmin/planos" element={<PlanosAdmin />} />
+              <Route path="/superadmin/cupons" element={<CuponsSaasAdmin />} />
               <Route path="/superadmin/parceiros" element={<ParceirosAdmin />} />
               <Route path="/superadmin/equipe" element={<EquipeAdmin />} />
               <Route path="/superadmin/features" element={<FeatureFlagsAdmin />} />

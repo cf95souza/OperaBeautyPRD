@@ -91,92 +91,84 @@ export default function LandingPage() {
     .catch(err => console.error('Erro ao gerar QR Code demo:', err));
   }, []);
   
-  // Planos Dinâmicos da API e Ciclo de Cobrança
+  // Planos Dinâmicos da API e Ciclo de Cobrança (3 Planos Oficiais: Básico, Essencial e Premium)
   const [plans, setPlans] = useState([
     {
       id: 'basico',
       slug: 'basico',
       name: 'Básico',
-      description: 'Solução completa para o seu salão de beleza.',
-      price: 69.90,
+      description: 'Ideal para autônomos e estúdios no início da operação.',
+      price: 39.90,
       max_staff: 2,
-      max_whatsapp_messages: 0,
+      max_whatsapp_messages: 100,
       is_featured: false,
-      badge_label: null,
+      badge_label: 'Custa menos que 1 serviço',
+      promo_label: 'Custa menos que 1 serviço do seu salão!',
       marketing_features: [
-        'Profissionais ilimitados',
+        'Até 2 profissionais inclusos',
         'Agenda online com link exclusivo',
+        'Agendamentos ilimitados',
         'App com a sua marca e cores',
-        'WhatsApp ilimitado',
-        'Suporte via WhatsApp'
+        'Lembretes automáticos via WhatsApp'
       ]
     },
     {
       id: 'essencial',
       slug: 'essencial',
       name: 'Essencial',
-      description: 'Para salões pequenos e barbearias em expansão.',
-      price: 79.90,
-      max_staff: 3,
+      description: 'Para salões em crescimento que precisam de mini-site e controle de fichas.',
+      price: 59.90,
+      max_staff: 5,
       max_whatsapp_messages: 300,
       is_featured: false,
-      badge_label: null,
+      badge_label: '30% OFF 1º Mês',
+      promo_label: '1º Mês por R$ 41,93 com cupom ESSENCIAL30',
       marketing_features: [
-        'Até 3 profissionais inclusos',
-        'Tudo do plano Solo',
-        'Controle de caixa e financeiro',
-        'Cálculo automático de comissões',
-        '300 lembretes WhatsApp/mês'
+        'Até 5 profissionais inclusos',
+        'Tudo do plano Básico',
+        'Mini-site exclusivo do seu salão',
+        'Anamnese digital & termos com assinatura',
+        'Controle de estoque e comissões automáticas'
       ]
     },
     {
       id: 'premium',
       slug: 'premium',
       name: 'Premium',
-      description: 'A solução completa para salões que desejam fidelizar e lucrar mais.',
-      price: 129.90,
-      max_staff: 6,
+      description: 'A solução completa de retenção, fidelidade e frente de caixa integrada.',
+      price: 79.90,
+      max_staff: 15,
       max_whatsapp_messages: 1000,
       is_featured: true,
-      badge_label: 'Mais Escolhido',
+      badge_label: 'Mais Escolhido • 40% OFF',
+      promo_label: '1º Mês por R$ 47,94 com cupom PREMIUM40',
       marketing_features: [
-        'Até 6 profissionais inclusos',
-        'Tudo do Essencial',
-        'Clube de Assinatura recorrente',
-        'Programa de Cashback automático',
-        '1.000 lembretes WhatsApp/mês'
-      ]
-    },
-    {
-      id: 'signature',
-      slug: 'signature',
-      name: 'Signature',
-      description: 'Para salões de grande porte, franquias e alta performance.',
-      price: 199.90,
-      max_staff: 12,
-      max_whatsapp_messages: 999999,
-      is_featured: false,
-      badge_label: 'Alta Performance',
-      marketing_features: [
-        'Até 12 profissionais inclusos',
-        'Tudo do Premium',
-        'Frente de Caixa (PDV) completa',
-        'Disparos WhatsApp ilimitados',
-        'Suporte prioritário via WhatsApp'
+        'Até 15 profissionais inclusos',
+        'Tudo do plano Essencial',
+        'Frente de Caixa (PDV) e conferência cega',
+        'Clube de fidelidade & cashback automático',
+        'Pacotes de sessões pré-pagos'
       ]
     }
   ]);
   const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' | 'yearly'
   const [loadingPlans, setLoadingPlans] = useState(true);
 
-  // Carrega planos dinamicamente da API
+  // Carrega planos dinamicamente da API garantindo exclusão de planos arquivados ou inativos
   useEffect(() => {
     let isMounted = true;
     async function fetchPlans() {
       try {
         const data = await api.plans.list(true);
         if (isMounted && Array.isArray(data) && data.length > 0) {
-          setPlans(data);
+          const activePlans = data.filter(p => 
+            p.is_active !== false && 
+            p.slug !== 'signature' && 
+            !String(p.name || '').toLowerCase().includes('signature')
+          );
+          if (activePlans.length > 0) {
+            setPlans(activePlans);
+          }
         }
       } catch (err) {
         console.warn('Usando planos padrão na LandingPage:', err?.message);
@@ -299,16 +291,16 @@ export default function LandingPage() {
         {
           '@type': 'SoftwareApplication',
           'name': 'OperaBeauty',
-          'url': 'https://operabeauty.com.br',
+          'url': 'https://operabeauty.tech',
           'applicationCategory': 'BusinessApplication',
           'operatingSystem': 'Web, iOS, Android (PWA)',
           'description': 'Software de gestão e aplicativo White-Label para salões de beleza, barbearias e clínicas de estética com agendamento online 24h e lembretes automáticos.',
           'offers': {
             '@type': 'AggregateOffer',
             'priceCurrency': 'BRL',
-            'lowPrice': '49.90',
-            'highPrice': '199.90',
-            'offerCount': '4'
+            'lowPrice': '39.90',
+            'highPrice': '79.90',
+            'offerCount': '3'
           },
           'aggregateRating': {
             '@type': 'AggregateRating',
@@ -319,8 +311,8 @@ export default function LandingPage() {
         {
           '@type': 'Organization',
           'name': 'OperaBeauty SaaS',
-          'url': 'https://operabeauty.com.br',
-          'logo': 'https://operabeauty.com.br/favicon.png',
+          'url': 'https://operabeauty.tech',
+          'logo': 'https://operabeauty.tech/favicon.png',
           'sameAs': [
             'https://instagram.com/operabeautyapp'
           ],
@@ -1359,8 +1351,8 @@ export default function LandingPage() {
               </span>
             </div>
 
-            {/* Grid dos 4 Planos Oficiais */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+            {/* Grid dos 3 Planos Oficiais */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch max-w-5xl mx-auto">
               {plans.map((p) => {
                 const numericPrice = typeof p.price === 'number' ? p.price : parseFloat(p.price) || 0;
                 const isYearly = billingCycle === 'yearly';
@@ -1372,19 +1364,28 @@ export default function LandingPage() {
                 const featuresList = (Array.isArray(p.marketing_features) && p.marketing_features.length > 0)
                   ? p.marketing_features
                   : [
-                      p.max_staff ? (p.max_staff === 1 ? '1 profissional incluso' : `Até ${p.max_staff} profissionais`) : 'Profissionais ilimitados',
+                      p.max_staff ? `Até ${p.max_staff} profissionais` : 'Até 2 profissionais',
                       'Agenda online com link exclusivo',
                       'App com a sua marca e cores',
-                      p.max_whatsapp_messages && p.max_whatsapp_messages < 999999 ? `${p.max_whatsapp_messages} lembretes WhatsApp/mês` : 'WhatsApp ilimitado',
+                      p.max_whatsapp_messages ? `${p.max_whatsapp_messages} lembretes WhatsApp/mês` : 'Lembretes WhatsApp inclusos',
                       'Suporte via WhatsApp'
                     ];
+
+                // Estratégia de precificação (Print 3)
+                const promoNotice = p.slug === 'basico' || p.name === 'Básico'
+                  ? 'Custa menos que 1 serviço!'
+                  : p.slug === 'essencial' || p.name === 'Essencial'
+                  ? '1º Mês por R$ 41,93 (30% OFF com cupom ESSENCIAL30)'
+                  : p.slug === 'premium' || p.name === 'Premium'
+                  ? '1º Mês por R$ 47,94 (40% OFF com cupom PREMIUM40)'
+                  : null;
 
                 return (
                   <div 
                     key={p.slug || p.id || p.name}
                     className={`bg-white rounded-[24px] p-6 border flex flex-col justify-between relative transition-all duration-200 ${
                       isFeatured 
-                        ? 'border-2 border-[#8E3B4E] shadow-[0_12px_32px_rgba(142,59,78,0.14)] transform lg:-translate-y-2' 
+                        ? 'border-2 border-[#8E3B4E] shadow-[0_12px_32px_rgba(142,59,78,0.14)] transform md:-translate-y-2' 
                         : 'border-[#EADFDC] shadow-sm hover:shadow-md'
                     }`}
                   >
@@ -1393,7 +1394,7 @@ export default function LandingPage() {
                       {p.badge_label ? (
                         <div className="mb-3">
                           <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider inline-block ${
-                            isFeatured ? 'bg-[#6E1F34] text-white shadow-sm' : 'bg-[#EADFDC] text-[#2B2327]'
+                            isFeatured ? 'bg-[#6E1F34] text-white shadow-sm' : 'bg-[#FAF5F3] text-[#8E3B4E] border border-[#8E3B4E]/20'
                           }`}>
                             {p.badge_label}
                           </span>
@@ -1402,7 +1403,7 @@ export default function LandingPage() {
                         <div className="h-6 mb-3" />
                       )}
 
-                      <h3 className="text-lg font-bold text-[#2B2327] mb-1">{p.name}</h3>
+                      <h3 className="text-xl font-bold text-[#2B2327] mb-1">{p.name}</h3>
                       <p className="text-xs text-[#6F6168] mb-4 min-h-[32px] line-clamp-2">
                         {p.description || 'Solução completa para o seu salão de beleza.'}
                       </p>
@@ -1415,13 +1416,17 @@ export default function LandingPage() {
                           </span>
                           <span className="text-xs text-[#6F6168]">/mês</span>
                         </div>
-                        {isYearly && (
+                        {isYearly ? (
                           <p className="text-[11px] text-[#4F7F68] font-medium mt-1">
                             Cobrado anualmente R$ {annualBilled.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (2 meses grátis)
                           </p>
-                        )}
+                        ) : promoNotice ? (
+                          <p className="text-[11px] text-[#8E3B4E] font-semibold mt-1">
+                            ✨ {promoNotice}
+                          </p>
+                        ) : null}
                         <p className="text-xs text-[#6F6168] mt-1 font-medium">
-                          {p.max_staff === 1 ? '1 profissional incluso' : `Até ${p.max_staff || '∞'} profissionais`}
+                          {p.max_staff === 1 ? '1 profissional incluso' : `Até ${p.max_staff || 2} profissionais`}
                         </p>
                       </div>
 
