@@ -10,7 +10,10 @@ import {
   Clock, 
   Smartphone, 
   ArrowRight,
-  RefreshCw
+  RefreshCw,
+  CreditCard,
+  ExternalLink,
+  Lock
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useNotification } from '../../context/NotificationProvider';
@@ -18,7 +21,7 @@ import { useTenant } from '../../context/TenantContext';
 import { api } from '../../lib/api';
 
 /**
- * Modal de Pagamento PIX e Regularização do SaaS (Fase 44 - D18 P1)
+ * Modal de Pagamento Híbrido SaaS (PIX + Cartão Seguro Mercado Pago - Fase 51 - G40)
  */
 const ModalPagamentoPixSaaS = ({ 
   isOpen, 
@@ -30,6 +33,10 @@ const ModalPagamentoPixSaaS = ({
   const { showSuccess, showError } = useNotification();
   const { session } = useTenant();
   const [currentInvoice, setCurrentInvoice] = useState(invoice);
+  const [activeTab, setActiveTab] = useState('pix'); // 'pix' | 'card'
+  const [installments, setInstallments] = useState(12);
+  const [generatingCard, setGeneratingCard] = useState(false);
+  const [subscribingCard, setSubscribingCard] = useState(false);
   const [copied, setCopied] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,6 +81,44 @@ const ModalPagamentoPixSaaS = ({
       showError(err.message || 'Erro ao consultar status no gateway.');
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const handlePayWithCard = async () => {
+    if (!currentInvoice?.id) return;
+    setGeneratingCard(true);
+    try {
+      const res = await api.invoices.createCardPreference(currentInvoice.id, installments);
+      if (res?.init_point) {
+        showSuccess('Redirecionando para o ambiente seguro do Mercado Pago...');
+        window.open(res.init_point, '_blank');
+      } else {
+        showError('Não foi possível obter o link de checkout do Mercado Pago.');
+      }
+    } catch (err) {
+      showError(err.message || 'Falha ao iniciar pagamento com cartão no Mercado Pago.');
+    } finally {
+      setGeneratingCard(false);
+    }
+  };
+
+  const handleSubscribeCard = async () => {
+    setSubscribingCard(true);
+    try {
+      const res = await api.invoices.subscribeCard({
+        plan_slug: billingStatus?.tenant?.plan_slug,
+        coupon_code: currentInvoice?.applied_coupon_code
+      });
+      if (res?.init_point) {
+        showSuccess('Abrindo tela oficial do Mercado Pago para autorizar o débito automático...');
+        window.open(res.init_point, '_blank');
+      } else {
+        showError('Não foi possível iniciar a assinatura no Mercado Pago.');
+      }
+    } catch (err) {
+      showError(err.message || 'Erro ao iniciar débito automático no cartão.');
+    } finally {
+      setSubscribingCard(false);
     }
   };
 
@@ -172,12 +217,12 @@ const ModalPagamentoPixSaaS = ({
         <div className="bg-[#FAF7F5] px-6 py-5 border-b border-line flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-brand-tint flex items-center justify-center text-brand">
-              <QrCode className="w-5 h-5" />
+              {activeTab === 'pix' ? <QrCode className="w-5 h-5" /> : <CreditCard className="w-5 h-5" />}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold uppercase tracking-wider text-brand">
-                  Fatura SaaS • {currentInvoice.reference_month}
+                  Assinatura SaaS • {currentInvoice.reference_month}
                 </span>
                 {isBlocked ? (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
@@ -190,7 +235,7 @@ const ModalPagamentoPixSaaS = ({
                 ) : null}
               </div>
               <h2 className="font-display font-bold text-xl text-ink leading-tight">
-                Pagar com PIX
+                {activeTab === 'pix' ? 'Pagar com PIX' : 'Pagar com Cartão de Crédito'}
               </h2>
             </div>
           </div>
@@ -224,7 +269,7 @@ const ModalPagamentoPixSaaS = ({
             <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/60 flex items-center gap-2.5">
               <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
               <span className="text-xs text-emerald-800">
-                Baixa automática e compensação em segundos pelo Banco Central.
+                Baixa automática e compensação instantânea via Mercado Pago.
               </span>
             </div>
           )}
@@ -232,7 +277,7 @@ const ModalPagamentoPixSaaS = ({
           {/* Destaque do Valor e Vencimento */}
           <div className="p-4 rounded-2xl bg-stone-50 border border-line flex items-baseline justify-between">
             <div>
-              <span className="text-xs text-ink-soft font-medium uppercase tracking-wider">Valor da mensalidade</span>
+              <span className="text-xs text-ink-soft font-medium uppercase tracking-wider">Valor da Assinatura</span>
               <p className="text-xs text-ink-soft mt-0.5">
                 Vencimento: <strong className="text-ink">{formatDate(currentInvoice.due_date)}</strong>
               </p>
@@ -254,7 +299,7 @@ const ModalPagamentoPixSaaS = ({
             </div>
           </div>
 
-          {/* Campo de Cupom Promocional SaaS (Fase 50) */}
+          {/* Campo de Cupom Promocional SaaS (Fase 50/51) */}
           {Number(currentInvoice.discount_amount || 0) === 0 && (
             <div className="p-3.5 rounded-2xl bg-[#FBF7F5] border border-line/70 space-y-2">
               <div className="flex items-center justify-between text-xs">
@@ -284,103 +329,198 @@ const ModalPagamentoPixSaaS = ({
             </div>
           )}
 
-          {/* QR Code PIX Central */}
-          <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-line shadow-2xs">
-            <div className="p-2.5 rounded-xl bg-white border border-stone-200 shadow-xs mb-2">
-              {currentInvoice.pix_qr_code ? (
-                <img 
-                  src={currentInvoice.pix_qr_code} 
-                  alt="QR Code PIX para pagamento da fatura SaaS" 
-                  className="w-44 h-44 object-contain"
-                />
-              ) : (
-                <div className="w-44 h-44 flex flex-col items-center justify-center text-ink-soft text-xs text-center p-2">
-                  <QrCode className="w-12 h-12 text-brand mb-2" />
-                  <span>Utilize o código Copia e Cola abaixo</span>
-                </div>
-              )}
-            </div>
-
-            <p className="text-xs text-ink-soft text-center flex items-center gap-1.5 font-medium">
-              <Smartphone className="w-3.5 h-3.5 text-brand" />
-              Aponte a câmera do aplicativo do seu banco para escanear
-            </p>
-
+          {/* Seletor de Método de Pagamento (Fase 51 - Híbrido PIX vs Cartão) */}
+          <div className="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-stone-100 border border-line/80">
             <button
               type="button"
-              disabled={refreshing}
-              onClick={handleRefreshPix}
-              className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-line bg-stone-50 hover:bg-stone-100 text-[11px] font-semibold text-ink-soft hover:text-ink transition-colors cursor-pointer disabled:opacity-50"
-              title="Gera um novo QR Code válido caso o anterior tenha expirado no seu banco"
+              onClick={() => setActiveTab('pix')}
+              className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'pix'
+                  ? 'bg-white text-ink shadow-xs border border-line/60'
+                  : 'text-ink-soft hover:text-ink'
+              }`}
             >
-              <RefreshCw className={`w-3 h-3 text-brand ${refreshing ? 'animate-spin' : ''}`} />
-              <span>{refreshing ? 'Atualizando cobrança...' : 'Código expirado? Gerar Novo QR Code'}</span>
+              <QrCode className="w-4 h-4 text-emerald-600" />
+              <span>Pagar com PIX</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('card')}
+              className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'card'
+                  ? 'bg-white text-ink shadow-xs border border-line/60'
+                  : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              <CreditCard className="w-4 h-4 text-[#009EE3]" />
+              <span>Cartão de Crédito</span>
             </button>
           </div>
 
-          {/* Dica de Segurança e Testes */}
-          <div className="p-3.5 rounded-xl bg-stone-50 border border-line/60 text-[11px] text-ink-soft space-y-1">
-            <div className="flex items-center gap-1.5 font-semibold text-ink">
-              <Sparkles className="w-3.5 h-3.5 text-brand" />
-              <span>Dica de Teste em Produção</span>
-            </div>
-            <p className="leading-relaxed">
-              Caso esteja testando via app do Mercado Pago, utilize uma conta de titularidade diferente do Super Admin (o sistema bancário bloqueia pagamentos entre a mesma conta). No Nubank, Itaú ou outros bancos, o pagamento cai normalmente.
-            </p>
-          </div>
+          {/* ABA 1: CONTEÚDO PIX */}
+          {activeTab === 'pix' && (
+            <div className="space-y-4 animate-fade-in">
+              {/* QR Code PIX Central */}
+              <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-line shadow-2xs">
+                <div className="p-2.5 rounded-xl bg-white border border-stone-200 shadow-xs mb-2">
+                  {currentInvoice.pix_qr_code ? (
+                    <img 
+                      src={currentInvoice.pix_qr_code} 
+                      alt="QR Code PIX para pagamento da fatura SaaS" 
+                      className="w-44 h-44 object-contain"
+                    />
+                  ) : (
+                    <div className="w-44 h-44 flex flex-col items-center justify-center text-ink-soft text-xs text-center p-2">
+                      <QrCode className="w-12 h-12 text-brand mb-2" />
+                      <span>Utilize o código Copia e Cola abaixo</span>
+                    </div>
+                  )}
+                </div>
 
-          {/* Código Copia e Cola */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <label className="font-semibold text-ink">Código Pix Copia e Cola</label>
-              <span className="text-ink-soft">Válido para qualquer banco</span>
+                <p className="text-xs text-ink-soft text-center flex items-center gap-1.5 font-medium">
+                  <Smartphone className="w-3.5 h-3.5 text-brand" />
+                  Aponte a câmera do aplicativo do seu banco para escanear
+                </p>
+
+                <button
+                  type="button"
+                  disabled={refreshing}
+                  onClick={handleRefreshPix}
+                  className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-line bg-stone-50 hover:bg-stone-100 text-[11px] font-semibold text-ink-soft hover:text-ink transition-colors cursor-pointer disabled:opacity-50"
+                  title="Gera um novo QR Code válido caso o anterior tenha expirado no seu banco"
+                >
+                  <RefreshCw className={`w-3 h-3 text-brand ${refreshing ? 'animate-spin' : ''}`} />
+                  <span>{refreshing ? 'Atualizando cobrança...' : 'Código expirado? Gerar Novo QR Code'}</span>
+                </button>
+              </div>
+
+              {/* Código Copia e Cola */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-semibold text-ink">Código Pix Copia e Cola</label>
+                  <span className="text-ink-soft">Válido para qualquer banco</span>
+                </div>
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    readOnly
+                    value={currentInvoice.pix_copy_paste || ''}
+                    className="w-full text-xs font-mono bg-stone-50 text-ink-soft px-3.5 py-3 pr-28 rounded-xl border border-line focus:outline-none select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className={`absolute right-1.5 top-1.5 bottom-1.5 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      copied 
+                        ? 'bg-emerald-600 text-white' 
+                        : 'bg-brand hover:bg-brand-hover text-white'
+                    }`}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Passo a Passo Ilustrado */}
+              <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                <div className="p-2.5 rounded-xl bg-stone-50 border border-line/60">
+                  <span className="text-[10px] font-bold text-brand uppercase tracking-wider block mb-1">Passo 1</span>
+                  <p className="text-[11px] text-ink leading-tight font-medium">Abra o app do seu banco</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-stone-50 border border-line/60">
+                  <span className="text-[10px] font-bold text-brand uppercase tracking-wider block mb-1">Passo 2</span>
+                  <p className="text-[11px] text-ink leading-tight font-medium">Escolha Pix Copia e Cola</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-stone-50 border border-line/60">
+                  <span className="text-[10px] font-bold text-brand uppercase tracking-wider block mb-1">Passo 3</span>
+                  <p className="text-[11px] text-ink leading-tight font-medium">Confirme e ative na hora</p>
+                </div>
+              </div>
             </div>
-            <div className="relative flex items-center">
-              <input
-                type="text"
-                readOnly
-                value={currentInvoice.pix_copy_paste || ''}
-                className="w-full text-xs font-mono bg-stone-50 text-ink-soft px-3.5 py-3 pr-28 rounded-xl border border-line focus:outline-none select-all"
-              />
+          )}
+
+          {/* ABA 2: CONTEÚDO CARTÃO DE CRÉDITO (MERCADO PAGO) */}
+          {activeTab === 'card' && (
+            <div className="space-y-4 animate-fade-in">
+              {/* Box de Segurança Máxima PCI-DSS */}
+              <div className="p-4 rounded-2xl bg-[#F0F8FF] border border-[#009EE3]/30 flex items-start gap-3">
+                <Lock className="w-5 h-5 text-[#009EE3] shrink-0 mt-0.5" />
+                <div className="text-xs text-[#003B5C] leading-relaxed">
+                  <strong className="font-semibold block mb-0.5">Segurança Bancária Certificada:</strong>
+                  O pagamento é processado <strong>100% no ambiente criptografado do Mercado Pago</strong> (PCI-DSS Nível 1). Nenhum dado do seu cartão é salvo ou trafega em nosso servidor.
+                </div>
+              </div>
+
+              {/* Seletor de Parcelamento (Até 12x) */}
+              <div className="p-4 rounded-2xl bg-white border border-line space-y-3">
+                <label className="text-xs font-semibold text-ink block">
+                  Escolha o número de parcelas no cartão:
+                </label>
+                <select
+                  value={installments}
+                  onChange={(e) => setInstallments(Number(e.target.value))}
+                  className="w-full text-xs font-medium bg-stone-50 px-3.5 py-2.5 rounded-xl border border-line focus:outline-none focus:border-[#009EE3]"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => {
+                    const totalVal = parseFloat(currentInvoice.amount) || 0;
+                    const installmentVal = totalVal / n;
+                    return (
+                      <option key={n} value={n}>
+                        {n}x de {formatCurrency(installmentVal)} {n === 1 ? '(à vista)' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="text-[11px] text-ink-soft">
+                  Aceita Visa, Mastercard, Elo, Hipercard, American Express e saldo Mercado Pago.
+                </p>
+              </div>
+
+              {/* Botão de Checkout Oficial Mercado Pago */}
               <button
                 type="button"
-                onClick={handleCopy}
-                className={`absolute right-1.5 top-1.5 bottom-1.5 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  copied 
-                    ? 'bg-emerald-600 text-white' 
-                    : 'bg-brand hover:bg-brand-hover text-white'
-                }`}
+                disabled={generatingCard}
+                onClick={handlePayWithCard}
+                className="w-full py-3.5 px-5 rounded-2xl bg-[#009EE3] hover:bg-[#0081B9] text-white text-xs sm:text-sm font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
-                {copied ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Copiado!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copiar</span>
-                  </>
-                )}
+                <CreditCard className="w-4 h-4" />
+                <span>{generatingCard ? 'Iniciando Checkout Seguro...' : 'Pagar com Cartão no Mercado Pago'}</span>
+                <ExternalLink className="w-4 h-4 ml-1 opacity-80" />
               </button>
-            </div>
-          </div>
 
-          {/* Passo a Passo Ilustrado */}
-          <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-            <div className="p-2.5 rounded-xl bg-stone-50 border border-line/60">
-              <span className="text-[10px] font-bold text-brand uppercase tracking-wider block mb-1">Passo 1</span>
-              <p className="text-[11px] text-ink leading-tight font-medium">Abra o app do seu banco</p>
+              {/* Opção Adicional: Débito Automático Mensal */}
+              <div className="pt-3 border-t border-line/60">
+                <div className="p-3.5 rounded-2xl bg-stone-50 border border-line/60 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-ink">
+                    <RefreshCw className="w-3.5 h-3.5 text-brand" />
+                    <span>Débito Automático Mensal</span>
+                  </div>
+                  <p className="text-[11px] text-ink-soft leading-relaxed">
+                    Deseja cadastrar seu cartão uma única vez para não se preocupar em pagar todo mês? O Mercado Pago cuida da renovação automática.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={subscribingCard}
+                    onClick={handleSubscribeCard}
+                    className="w-full py-2 px-3 rounded-xl border border-line hover:border-brand bg-white text-xs font-semibold text-ink hover:text-brand flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-2xs"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-brand" />
+                    <span>{subscribingCard ? 'Conectando ao Mercado Pago...' : 'Ativar Débito Automático no Cartão'}</span>
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="p-2.5 rounded-xl bg-stone-50 border border-line/60">
-              <span className="text-[10px] font-bold text-brand uppercase tracking-wider block mb-1">Passo 2</span>
-              <p className="text-[11px] text-ink leading-tight font-medium">Escolha Pix Copia e Cola</p>
-            </div>
-            <div className="p-2.5 rounded-xl bg-stone-50 border border-line/60">
-              <span className="text-[10px] font-bold text-brand uppercase tracking-wider block mb-1">Passo 3</span>
-              <p className="text-[11px] text-ink leading-tight font-medium">Confirme e ative na hora</p>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Rodapé com botão de simulação Sandbox para homologação */}

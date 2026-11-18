@@ -1674,3 +1674,38 @@ Os prints do sistema antigo (`docs/layout/atual/...` no plano) **não estão no 
   - **7. Testes e Compilação**:
     - Suíte de testes `backend/tests/plansV2AndSaasCoupons.test.js` com 10/10 testes aprovados.
     - Frontend compilado com sucesso para produção (`dist/`).
+
+## Fase 51: G40 (Concluída) — Checkout Híbrido SaaS Seguro (PIX + Cartão Recorrente Mensal + Parcelamento Anual 12x via Mercado Pago) com UX de Cupons Unificada
+
+- [x] **G40.1 — Blindagem de Segurança e Princípio de Não-Retenção (PCI-DSS Compliance)**:
+  - Garantido que **zero** dados de cartão de crédito (número, validade, CVV) trafeguem ou sejam armazenados nos servidores do OperaBeauty ou na VPS.
+  - Toda captura, tokenização e autenticação bancária 3D Secure/antifraude é terceirizada compulsoriamente para os servidores certificados do Mercado Pago (PCI-DSS Nível 1).
+  - O sistema OperaBeauty apenas gera intenções de cobrança (preferências/assinaturas) e recebe confirmações criptografadas via Webhooks assinados.
+
+- [x] **G40.2 — Modal de Pagamento Híbrido e UX Unificada de Cupons (`ModalPagamentoPixSaaS`)**:
+  - Modal unificado com abas dinâmicas:
+    * **Resumo & Cupom Unificado**:
+      - Campo de cupom promocional visível (`[ Inserir Cupom ] [ Aplicar ]`).
+      - Feedback em tempo real com valor original riscado, badge de desconto e recálculo instantâneo para ambas as modalidades.
+    * **Aba 1: 🟢 PIX Instantâneo**:
+      - QR Code dinâmico oficial, Copia e Cola em 1 clique e botão "Já fiz o PIX, verificar agora".
+    * **Aba 2: 💳 Cartão de Crédito Seguro (Mercado Pago)**:
+      - Selo de segurança PCI-DSS com aviso transparente ao usuário.
+      - Seletor de parcelamento em até 12x para faturas anuais ou pagamentos à vista.
+      - Botão oficial de redirecionamento para o Checkout Seguro do Mercado Pago.
+      - Opção de ativação de Débito Automático Mensal no cartão (`preapproval`).
+
+- [x] **G40.3 — Backend: Endpoints de Cartão Seguro & Recorrência no Mercado Pago**:
+  - `POST /api/invoices/:id/create-card-preference`:
+    * Gera preferência de pagamento seguro no Mercado Pago com suporte a parcelamento em até 12x para faturas anuais (`saasBillingService.createSaaSCardPreference`).
+  - `POST /api/invoices/subscribe-card`:
+    * Criação de assinatura recorrente mensal via API `preapproval` do Mercado Pago com valor do plano e desconto de primeiro mês se aplicável (`saasBillingService.createSaaSSubscriptionPreapproval`).
+
+- [x] **G40.4 — Webhook e Sincronização de Assinatura**:
+  - Tratamento unificado de webhook para baixas de pagamentos avulsos e autorizações de assinaturas recorrentes com liberação imediata do salão.
+
+- [x] **G40.5 — Testes Automatizados, Migração DB & Preservação dos Salões Existentes**:
+  - Migração `migrations/phase51_card_payments_and_recurrent_billing.sql` criada com `IF NOT EXISTS` (zero impacto no salão da VPS).
+  - Suíte Jest `backend/tests/hybridBillingCardAndRecurrence.test.js` (6/6 testes aprovados).
+  - Suíte de regressão `backend/tests/plansV2AndSaasCoupons.test.js` (10/10 testes aprovados).
+  - Compilação Vite para produção (`npm run build`) concluída com êxito em 5.39s.

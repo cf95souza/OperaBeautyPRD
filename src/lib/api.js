@@ -1253,6 +1253,18 @@ export const api = {
         method: 'POST'
       });
     },
+    async createCardPreference(id, installments = 12) {
+      return request(`/invoices/${id}/create-card-preference`, {
+        method: 'POST',
+        body: JSON.stringify({ installments })
+      });
+    },
+    async subscribeCard(payload) {
+      return request('/invoices/subscribe-card', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
     async validateCoupon(payload) {
       return request('/invoices/validate-coupon', {
         method: 'POST',

@@ -2931,3 +2931,14 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Criada a suíte `backend/tests/plansV2AndSaasCoupons.test.js` com 10 testes (100% de aprovação).
     * Suítes de regressão aprovadas: `sessionStabilityGracePeriod.test.js` (5/5), `coverUrlBranding.test.js` (6/6), `resendEmailRecovery.test.js` (11/11).
     * Compilação Vite para produção (`npm run build`) concluída com sucesso em 4.46s.
+
+- **18/11/2026 - Fase 51: G40 — Checkout Híbrido SaaS Seguro (PIX + Cartão Recorrente Mensal + Parcelamento Anual 12x via Mercado Pago) com UX de Cupons Unificada [Planejamento & Execução]:**
+  - **1. Blindagem de Segurança e Princípio de Não-Retenção (PCI-DSS Level 1)**:
+    * Zero tráfego e zero armazenamento de dados sensíveis de cartão de crédito (número, validade, CVV) no servidor OperaBeauty ou na VPS.
+    * Todas as transações com cartão ocorrem na interface oficial, criptografada e autenticada do Mercado Pago.
+    * O OperaBeauty atua apenas emitindo preferências de cobrança e recebendo webhooks assinados.
+  - **2. Estratégia de Pagamento Híbrida**:
+    * **Mensal**: Salão pode escolher entre PIX dinâmico mês a mês ou **Assinatura Recorrente no Cartão** (débito automático mensal via API `preapproval` do Mercado Pago).
+    * **Anual**: Salão tem 2 meses grátis (17% OFF) e pode pagar à vista no PIX ou **parcelar em até 12x no Cartão de Crédito** via Checkout Seguro do Mercado Pago.
+  - **3. Experiência de Cupom Unificada**:
+    * Campo de cupom visível no modal/checkout antes da escolha da forma de pagamento, com aplicação instantânea, feedback do valor original tachado, desconto aplicado e recálculo da ordem no gateway de pagamento.

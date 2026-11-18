@@ -890,3 +890,232 @@ export const verifySaaSInvoicePayment = async (invoiceId) => {
   }
 };
 
+/**
+ * Recupera de forma segura o token do Mercado Pago das configurações da plataforma.
+ */
+export const getMercadoPagoToken = async () => {
+  const platformRes = await pool.query(
+    'SELECT gateway_api_key, payment_gateway FROM public.cap_platform_settings LIMIT 1'
+  );
+  const encryptedKey = platformRes.rows[0]?.gateway_api_key;
+  if (!encryptedKey) return null;
+  try {
+    return decrypt(encryptedKey).trim();
+  } catch (_) {
+    return String(encryptedKey).trim();
+  }
+};
+
+/**
+ * Cria Preferência Segura de Checkout com Cartão de Crédito no Mercado Pago (Fase 51 - G40)
+ * Permite parcelamento em até 12x (especialmente para planos anuais).
+ * Zero dados de cartão trafegam pelo nosso servidor (PCI-DSS Compliance).
+ */
+export const createSaaSCardPreference = async ({ invoiceId, tenantId, installments = 12 }) => {
+  // 1. Busca dados da fatura e salão
+  const invRes = await pool.query(
+    `SELECT i.*, t.name as tenant_name, t.slug as tenant_slug 
+     FROM public.cap_invoices i 
+     JOIN public.cap_tenants t ON t.id = i.tenant_id 
+     WHERE i.id = $1 ${tenantId ? 'AND i.tenant_id = $2' : ''}`,
+    tenantId ? [invoiceId, tenantId] : [invoiceId]
+  );
+  if (invRes.rows.length === 0) {
+    throw new Error('Fatura não encontrada ou não pertence ao seu salão.');
+  }
+  const invoice = invRes.rows[0];
+
+  const token = await getMercadoPagoToken();
+  if (!token) {
+    throw new Error('Gateway de pagamento Mercado Pago não configurado na plataforma.');
+  }
+
+  // 2. Busca e-mail do gestor do salão
+  let payerEmail = `financeiro@${invoice.tenant_slug || 'salao'}.operabeauty.tech`;
+  let payerName = invoice.tenant_name || 'Gestor Salão';
+
+  const staffRes = await pool.query(
+    "SELECT email, name FROM public.cap_staff WHERE tenant_id = $1 AND role = 'manager' AND is_active = true ORDER BY created_at ASC LIMIT 1",
+    [invoice.tenant_id]
+  );
+  if (staffRes.rows.length > 0) {
+    if (staffRes.rows[0].email) payerEmail = staffRes.rows[0].email;
+    if (staffRes.rows[0].name) payerName = staffRes.rows[0].name;
+  }
+
+  const appUrl = process.env.APP_URL || 'https://operabeauty.tech';
+  const nameParts = (payerName || 'Gestor').trim().split(' ');
+  const firstName = nameParts[0] || 'Cliente';
+  const lastName = nameParts.slice(1).join(' ') || 'Assinante';
+  const finalAmount = Number(parseFloat(invoice.amount).toFixed(2));
+
+  const preferencePayload = {
+    items: [
+      {
+        id: String(invoice.id),
+        title: `Assinatura OperaBeauty SaaS - ${invoice.tenant_name} (${invoice.reference_month})`,
+        description: `Plano SaaS OperaBeauty - Vencimento ${invoice.due_date}`,
+        unit_price: finalAmount,
+        quantity: 1,
+        currency_id: 'BRL'
+      }
+    ],
+    payer: {
+      name: firstName,
+      surname: lastName,
+      email: payerEmail.includes('@') ? payerEmail : `contato@${invoice.tenant_slug || 'salao'}.operabeauty.tech`
+    },
+    payment_methods: {
+      excluded_payment_types: [
+        { id: 'ticket' } // Exclui boleto para focar em Cartão e PIX
+      ],
+      installments: Number(installments) || 12
+    },
+    back_urls: {
+      success: `${appUrl}/admin/assinatura?payment=success&invoice_id=${invoice.id}`,
+      failure: `${appUrl}/admin/assinatura?payment=failure&invoice_id=${invoice.id}`,
+      pending: `${appUrl}/admin/assinatura?payment=pending&invoice_id=${invoice.id}`
+    },
+    auto_return: 'approved',
+    external_reference: String(invoice.id),
+    notification_url: `${appUrl}/api/invoices/webhook/mercadopago`
+  };
+
+  const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(preferencePayload)
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.message || 'Erro ao gerar checkout seguro no Mercado Pago.');
+  }
+
+  const data = await response.json();
+  const initPoint = data.init_point;
+  const preferenceId = data.id;
+
+  // Atualiza fatura com os metadados da preferência
+  await pool.query(
+    'UPDATE public.cap_invoices SET mp_preference_id = $1, mp_init_point = $2, installments = $3 WHERE id = $4',
+    [preferenceId, initPoint, Number(installments) || 12, invoice.id]
+  );
+
+  return {
+    preference_id: preferenceId,
+    init_point: initPoint,
+    sandbox_init_point: data.sandbox_init_point,
+    amount: finalAmount,
+    installments: Number(installments) || 12
+  };
+};
+
+/**
+ * Cria Assinatura Recorrente Mensal no Mercado Pago (Preapproval - Fase 51 - G40)
+ * Permite débito automático mensal no cartão de crédito do salão.
+ * Zero dados de cartão trafegam pelo nosso servidor (PCI-DSS Compliance).
+ */
+export const createSaaSSubscriptionPreapproval = async ({ tenantId, planSlug, couponCode }) => {
+  const token = await getMercadoPagoToken();
+  if (!token) {
+    throw new Error('Gateway de pagamento Mercado Pago não configurado na plataforma.');
+  }
+
+  // 1. Busca dados do tenant
+  const tenantRes = await pool.query('SELECT * FROM public.cap_tenants WHERE id = $1', [tenantId]);
+  if (tenantRes.rows.length === 0) throw new Error('Salão não encontrado.');
+  const tenant = tenantRes.rows[0];
+
+  // 2. Busca plano
+  const planRes = await pool.query(
+    'SELECT * FROM public.cap_subscription_plans WHERE slug = $1 AND is_active = true LIMIT 1',
+    [planSlug || tenant.plan_slug || 'essencial']
+  );
+  if (planRes.rows.length === 0) throw new Error('Plano não encontrado ou inativo.');
+  const plan = planRes.rows[0];
+
+  let monthlyAmount = parseFloat(plan.price);
+
+  // Aplica cupom se informado
+  let discountAmount = 0;
+  if (couponCode) {
+    const couponRes = await pool.query(
+      `SELECT * FROM public.cap_saas_coupons 
+       WHERE UPPER(code) = UPPER($1) AND is_active = true 
+       AND (valid_until IS NULL OR valid_until > NOW()) 
+       AND (max_uses IS NULL OR current_uses < max_uses) LIMIT 1`,
+      [couponCode.trim()]
+    );
+    if (couponRes.rows.length > 0) {
+      const coupon = couponRes.rows[0];
+      if (coupon.discount_type === 'percentage') {
+        discountAmount = (monthlyAmount * parseFloat(coupon.discount_value)) / 100;
+      } else {
+        discountAmount = parseFloat(coupon.discount_value);
+      }
+      monthlyAmount = Math.max(1.00, monthlyAmount - discountAmount);
+    }
+  }
+
+  const appUrl = process.env.APP_URL || 'https://operabeauty.tech';
+
+  let payerEmail = `financeiro@${tenant.slug || 'salao'}.operabeauty.tech`;
+  const staffRes = await pool.query(
+    "SELECT email FROM public.cap_staff WHERE tenant_id = $1 AND role = 'manager' AND is_active = true ORDER BY created_at ASC LIMIT 1",
+    [tenant.id]
+  );
+  if (staffRes.rows.length > 0 && staffRes.rows[0].email) {
+    payerEmail = staffRes.rows[0].email;
+  }
+
+  const preapprovalPayload = {
+    payer_email: payerEmail.includes('@') ? payerEmail : `contato@${tenant.slug}.operabeauty.tech`,
+    back_url: `${appUrl}/admin/assinatura?subscription=success`,
+    reason: `Assinatura Mensal OperaBeauty SaaS - ${tenant.name} (Plano ${plan.name})`,
+    auto_recurring: {
+      frequency: 1,
+      frequency_type: 'months',
+      transaction_amount: Number(monthlyAmount.toFixed(2)),
+      currency_id: 'BRL'
+    },
+    external_reference: String(tenant.id)
+  };
+
+  const response = await fetch('https://api.mercadopago.com/preapproval', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(preapprovalPayload)
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.message || 'Erro ao gerar assinatura recorrente no Mercado Pago.');
+  }
+
+  const data = await response.json();
+  const preapprovalId = data.id;
+  const initPoint = data.init_point;
+
+  // Atualiza tenant com a assinatura recorrente
+  await pool.query(
+    'UPDATE public.cap_tenants SET mp_preapproval_id = $1, auto_renew_payment_method = $2 WHERE id = $3',
+    [preapprovalId, 'credit_card', tenant.id]
+  );
+
+  return {
+    preapproval_id: preapprovalId,
+    init_point: initPoint,
+    amount: monthlyAmount,
+    discount_amount: discountAmount,
+    plan_name: plan.name
+  };
+};
+
+

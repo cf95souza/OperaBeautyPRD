@@ -2705,5 +2705,42 @@ ON public.cap_refresh_tokens(family_id, is_revoked, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_cap_refresh_tokens_device 
 ON public.cap_refresh_tokens(device_id);
 COMMENT ON COLUMN public.cap_refresh_tokens.revoked_at IS 'Data/hora da revogação para controle de Grace Period (30s) em concorrência de rede';
+
+-- 12. Migração Phase 50 (Tabela de Cupons SaaS e Descontos em cap_invoices)
+CREATE TABLE IF NOT EXISTS public.cap_saas_coupons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code VARCHAR(50) NOT NULL UNIQUE,
+    discount_type VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
+    discount_value NUMERIC(10, 2) NOT NULL CHECK (discount_value > 0),
+    max_uses INTEGER DEFAULT NULL,
+    current_uses INTEGER DEFAULT 0,
+    valid_until TIMESTAMPTZ DEFAULT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    applies_to VARCHAR(20) DEFAULT 'first_invoice' CHECK (applies_to IN ('first_invoice', 'all_invoices')),
+    plan_slugs TEXT[] DEFAULT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.cap_invoices
+  ADD COLUMN IF NOT EXISTS original_amount NUMERIC(10, 2),
+  ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10, 2) DEFAULT 0.00,
+  ADD COLUMN IF NOT EXISTS applied_coupon_code VARCHAR(50),
+  ADD COLUMN IF NOT EXISTS discount_applied_by UUID REFERENCES public.cap_users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS discount_reason TEXT;
+
+-- 13. Migração Phase 51 (Cartão de Crédito Seguro e Recorrência SaaS via Mercado Pago)
+ALTER TABLE public.cap_tenants
+  ADD COLUMN IF NOT EXISTS mp_preapproval_id VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS auto_renew_payment_method VARCHAR(20) DEFAULT 'pix',
+  ADD COLUMN IF NOT EXISTS card_last_four VARCHAR(4);
+
+ALTER TABLE public.cap_invoices
+  ADD COLUMN IF NOT EXISTS mp_preference_id VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS mp_init_point TEXT,
+  ADD COLUMN IF NOT EXISTS installments INTEGER DEFAULT 1;
+
+COMMENT ON COLUMN public.cap_tenants.mp_preapproval_id IS 'ID da assinatura recorrente mensal ativa no Mercado Pago (Preapproval)';
+COMMENT ON COLUMN public.cap_invoices.mp_init_point IS 'URL segura de checkout hospedada no Mercado Pago para pagamento com cartão';
 ```
 

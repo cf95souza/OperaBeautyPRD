@@ -10,7 +10,9 @@ import {
   processBillingWebhook,
   checkOverdueInvoicesAndEnforceGracePeriod,
   refreshSaaSInvoicePix,
-  verifySaaSInvoicePayment
+  verifySaaSInvoicePayment,
+  createSaaSCardPreference,
+  createSaaSSubscriptionPreapproval
 } from '../services/saasBillingService.js';
 import {
   validateSaaSCoupon,
@@ -83,6 +85,47 @@ router.post('/:id/refresh-pix', authMiddleware, requireRole(['superadmin', 'mana
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     req.log.error(error, 'Erro ao renovar QR Code PIX da fatura');
     return res.status(500).json({ error: error.message || 'Erro ao renovar PIX da fatura.' });
+  }
+});
+
+// Gerar link seguro de pagamento com Cartão de Crédito (Mercado Pago Checkout Pro - Parcelamento até 12x)
+router.post('/:id/create-card-preference', authMiddleware, requireRole(['superadmin', 'manager']), async (req, res) => {
+  const { id } = req.params;
+  const { installments } = req.body || {};
+  const userTenantId = req.user.role === 'superadmin' ? null : req.user.tenant_id;
+
+  try {
+    const result = await createSaaSCardPreference({
+      invoiceId: id,
+      tenantId: userTenantId,
+      installments: installments || 12
+    });
+    return res.json(result);
+  } catch (error) {
+    req.log.error(error, 'Erro ao criar preferência de cartão no Mercado Pago');
+    return res.status(400).json({ error: error.message || 'Erro ao gerar link de pagamento com cartão.' });
+  }
+});
+
+// Criar Assinatura Recorrente Mensal no Cartão (Débito Automático via Mercado Pago Preapproval)
+router.post('/subscribe-card', authMiddleware, requireRole(['superadmin', 'manager']), async (req, res) => {
+  const { plan_slug, coupon_code } = req.body || {};
+  const targetTenantId = req.user.role === 'superadmin' && req.body?.tenant_id ? req.body.tenant_id : req.user.tenant_id;
+
+  if (!targetTenantId) {
+    return res.status(400).json({ error: 'Tenant ID não identificado.' });
+  }
+
+  try {
+    const result = await createSaaSSubscriptionPreapproval({
+      tenantId: targetTenantId,
+      planSlug: plan_slug,
+      couponCode: coupon_code
+    });
+    return res.json(result);
+  } catch (error) {
+    req.log.error(error, 'Erro ao criar assinatura recorrente no Mercado Pago');
+    return res.status(400).json({ error: error.message || 'Erro ao iniciar assinatura com cartão.' });
   }
 });
 
