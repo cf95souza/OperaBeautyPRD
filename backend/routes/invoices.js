@@ -9,8 +9,15 @@ import {
   simulateSaaSInvoicePayment,
   processBillingWebhook,
   checkOverdueInvoicesAndEnforceGracePeriod,
-  refreshSaaSInvoicePix
+  refreshSaaSInvoicePix,
+  verifySaaSInvoicePayment
 } from '../services/saasBillingService.js';
+import {
+  validateSaaSCoupon,
+  applyCouponToInvoice,
+  applyManualDiscountToInvoice
+} from '../services/saasCouponService.js';
+import { decrypt } from '../utils/crypto.js';
 
 const router = express.Router();
 
@@ -110,6 +117,134 @@ router.post('/check-overdue', authMiddleware, requireRole(['superadmin', 'manage
   } catch (error) {
     req.log.error(error, 'Erro ao processar checagem de inadimplência SaaS');
     return res.status(500).json({ error: 'Erro ao verificar faturas em atraso.' });
+  }
+});
+
+// Verificar Pagamento Manualmente no Gateway em Tempo Real (Mercado Pago PIX)
+router.post('/:id/verify-payment', authMiddleware, requireRole(['superadmin', 'manager']), async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await verifySaaSInvoicePayment(id);
+    return res.json(result);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao verificar pagamento da fatura no gateway');
+    return res.status(500).json({ error: error.message || 'Erro ao verificar pagamento.' });
+  }
+});
+
+// Validar Cupom de Desconto SaaS
+router.post('/validate-coupon', authMiddleware, async (req, res) => {
+  const { code, plan_slug, current_amount } = req.body;
+
+  try {
+    const result = await validateSaaSCoupon({
+      code,
+      planSlug: plan_slug,
+      currentAmount: current_amount
+    });
+    return res.json(result);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao validar cupom SaaS');
+    return res.status(400).json({ error: error.message || 'Cupom inválido.' });
+  }
+});
+
+// Aplicar Cupom de Desconto na Fatura SaaS Aberta
+router.post('/:id/apply-coupon', authMiddleware, requireRole(['superadmin', 'manager']), async (req, res) => {
+  const { id } = req.params;
+  const { code } = req.body;
+  const userTenantId = req.user.role === 'superadmin' ? null : req.user.tenant_id;
+
+  try {
+    const result = await applyCouponToInvoice({
+      invoiceId: id,
+      couponCode: code,
+      tenantId: userTenantId
+    });
+    return res.json(result);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao aplicar cupom na fatura');
+    return res.status(400).json({ error: error.message || 'Erro ao aplicar cupom.' });
+  }
+});
+
+// Aplicar Desconto Manual em Fatura (Exclusivo Super Admin)
+router.post('/:id/manual-discount', authMiddleware, requireRole(['superadmin']), async (req, res) => {
+  const { id } = req.params;
+  const { discount_amount, reason } = req.body;
+
+  try {
+    const result = await applyManualDiscountToInvoice({
+      invoiceId: id,
+      discountAmount: discount_amount,
+      reason,
+      superAdminId: req.user.id
+    });
+    return res.json(result);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log.error(error, 'Erro ao aplicar desconto manual na fatura');
+    return res.status(400).json({ error: error.message || 'Erro ao aplicar desconto.' });
+  }
+});
+
+// Testar credenciais e conectividade com o Gateway (Exclusivo Super Admin)
+router.post('/test-gateway', authMiddleware, requireRole(['superadmin']), async (req, res) => {
+  try {
+    const platformRes = await pool.query(
+      'SELECT payment_gateway, gateway_api_key, pix_key, pix_key_type, environment FROM public.cap_platform_settings LIMIT 1'
+    );
+    const settings = platformRes.rows[0];
+
+    if (!settings || settings.payment_gateway !== 'mercadopago' || !settings.gateway_api_key) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Gateway Mercado Pago não configurado. Adicione o Access Token nas configurações da plataforma.' 
+      });
+    }
+
+    let token = null;
+    try {
+      token = decrypt(settings.gateway_api_key);
+    } catch {
+      token = settings.gateway_api_key;
+    }
+    if (!token) token = settings.gateway_api_key;
+    token = token.trim();
+
+    // Consultar dados da conta do Mercado Pago para testar o token
+    const testRes = await fetch('https://api.mercadopago.com/users/me', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!testRes.ok) {
+      const errData = await testRes.json().catch(() => ({}));
+      return res.status(400).json({ 
+        success: false, 
+        error: `Access Token rejeitado pelo Mercado Pago (${testRes.status}): ${errData.message || 'Token inválido ou revogado.'}` 
+      });
+    }
+
+    const userData = await testRes.json();
+
+    return res.json({
+      success: true,
+      message: 'Conexão com Mercado Pago validada com sucesso!',
+      account: {
+        id: userData.id,
+        nickname: userData.nickname,
+        email: userData.email,
+        site_id: userData.site_id,
+        environment: settings.environment || 'production'
+      }
+    });
+  } catch (error) {
+    req.log.error(error, 'Erro ao testar conexão com Mercado Pago');
+    return res.status(500).json({ success: false, error: error.message || 'Erro de conexão.' });
   }
 });
 

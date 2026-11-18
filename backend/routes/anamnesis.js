@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { validate } from '../middlewares/validate.js';
 import { authMiddleware } from '../middlewares/auth.js';
+import { requireFeature } from '../middlewares/featureFlagMiddleware.js';
 import { getTemplate, updateTemplate, getClientAnamnesis, submitClientAnamnesis } from '../services/anamnesisService.js';
 
 const router = express.Router();
@@ -44,8 +45,8 @@ router.get('/template/:tenantId', async (req, res) => {
   }
 });
 
-// 2. Atualizar template do salão (Apenas Gestor/Admin)
-router.put('/template', authMiddleware, validate(updateTemplateSchema), async (req, res) => {
+// 2. Atualizar template do salão (Apenas Gestor/Admin com recurso no plano)
+router.put('/template', authMiddleware, requireFeature('anamnesis'), validate(updateTemplateSchema), async (req, res) => {
   const { tenant_id, role } = req.user;
   const { fields_schema, terms_text, terms_version, require_terms, require_signature } = req.body;
   
@@ -69,7 +70,7 @@ router.put('/template', authMiddleware, validate(updateTemplateSchema), async (r
 });
 
 // 3. Obter a ficha de um cliente específico (Gestor/Profissional vinculado/Cliente)
-router.get('/client/:clientId', authMiddleware, async (req, res) => {
+router.get('/client/:clientId', authMiddleware, requireFeature('anamnesis'), async (req, res) => {
   const { tenant_id } = req.user;
   const { clientId } = req.params;
 

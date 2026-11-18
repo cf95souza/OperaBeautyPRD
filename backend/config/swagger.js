@@ -14,7 +14,7 @@ const options = {
         description: 'Servidor de Desenvolvimento',
       },
       {
-        url: 'https://api.operabeauty.com.br',
+        url: 'https://operabeauty.tech',
         description: 'Servidor de Produção',
       }
     ],

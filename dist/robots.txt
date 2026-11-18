@@ -1,4 +1,4 @@
-# robots.txt para OperaBeauty SaaS (https://operabeauty.com.br)
+# robots.txt para OperaBeauty SaaS (https://operabeauty.tech)
 User-agent: *
 Allow: /
 Allow: /planos
@@ -12,4 +12,4 @@ Disallow: /superadmin/
 Disallow: /staff/
 Disallow: /private_uploads/
 
-Sitemap: https://operabeauty.com.br/sitemap.xml
+Sitemap: https://operabeauty.tech/sitemap.xml

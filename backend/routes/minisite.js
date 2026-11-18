@@ -1,5 +1,6 @@
 import express from 'express';
 import { authMiddleware, requireRole } from '../middlewares/auth.js';
+import { requireFeature } from '../middlewares/featureFlagMiddleware.js';
 import { z } from 'zod';
 import { validate } from '../middlewares/validate.js';
 import { getMinisiteData, updateMinisiteSettings } from '../services/minisiteService.js';
@@ -54,9 +55,9 @@ router.get('/:slug/seo', async (req, res) => {
 });
 
 /**
- * Atualiza configurações do mini-site (Apenas Gestor e Admin)
+ * Atualiza configurações do mini-site (Apenas Gestor e Admin com plano Essencial ou superior)
  */
-router.put('/', authMiddleware, requireRole(['manager', 'admin']), validate(updateMinisiteSchema), async (req, res) => {
+router.put('/', authMiddleware, requireRole(['manager', 'admin']), requireFeature('minisite'), validate(updateMinisiteSchema), async (req, res) => {
   const tenantId = req.user.tenant_id;
   try {
     const updated = await updateMinisiteSettings(tenantId, req.body);

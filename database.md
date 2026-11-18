@@ -84,6 +84,24 @@ CREATE TABLE public.cap_refresh_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_cap_refresh_tokens_device ON public.cap_refresh_tokens(device_id);
 
+-- 2.1.2 Tabela de Cupons SaaS & Campanhas Promocionais (Fase 50 / G39)
+CREATE TABLE public.cap_saas_coupons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT,
+    discount_type VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
+    discount_value NUMERIC(10, 2) NOT NULL CHECK (discount_value > 0),
+    applies_to VARCHAR(30) NOT NULL DEFAULT 'first_month' CHECK (applies_to IN ('first_month', 'all_months', 'yearly')),
+    plan_slugs JSONB DEFAULT '[]'::jsonb, -- Ex: '["essencial"]', vazio aplica a todos
+    max_uses INT DEFAULT NULL,            -- NULL significa ilimitado
+    current_uses INT DEFAULT 0,
+    expires_at TIMESTAMPTZ DEFAULT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cap_saas_coupons_code ON public.cap_saas_coupons(code);
+CREATE INDEX IF NOT EXISTS idx_cap_saas_coupons_active ON public.cap_saas_coupons(is_active);
+
 -- 2.2 Tabela de Configurações Globais da Plataforma
 CREATE TABLE public.cap_platform_settings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -527,6 +545,9 @@ CREATE TABLE public.cap_invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES public.cap_tenants(id) ON DELETE CASCADE,
     amount NUMERIC NOT NULL,
+    original_amount NUMERIC(10, 2), -- Valor base antes de descontos ou cupons
+    discount_amount NUMERIC(10, 2) DEFAULT 0.00, -- Valor total do desconto aplicado
+    applied_coupon_code VARCHAR(50), -- Código do cupom SaaS ou justificativa de desconto manual
     status TEXT DEFAULT 'pending', -- 'pending', 'paid', 'overdue', 'cancelled'
     due_date DATE NOT NULL,
     paid_at TIMESTAMPTZ,
@@ -899,6 +920,24 @@ CREATE TABLE IF NOT EXISTS public.cap_refresh_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cap_refresh_tokens_device ON public.cap_refresh_tokens(device_id);
+
+-- 2.1.2 Tabela de Cupons SaaS & Campanhas Promocionais (Fase 50 / G39)
+CREATE TABLE public.cap_saas_coupons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT,
+    discount_type VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
+    discount_value NUMERIC(10, 2) NOT NULL CHECK (discount_value > 0),
+    applies_to VARCHAR(30) NOT NULL DEFAULT 'first_month' CHECK (applies_to IN ('first_month', 'all_months', 'yearly')),
+    plan_slugs JSONB DEFAULT '[]'::jsonb, -- Ex: '["essencial"]', vazio aplica a todos
+    max_uses INT DEFAULT NULL,            -- NULL significa ilimitado
+    current_uses INT DEFAULT 0,
+    expires_at TIMESTAMPTZ DEFAULT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cap_saas_coupons_code ON public.cap_saas_coupons(code);
+CREATE INDEX IF NOT EXISTS idx_cap_saas_coupons_active ON public.cap_saas_coupons(is_active);
 ```
 
 ---

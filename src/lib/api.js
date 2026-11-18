@@ -1247,6 +1247,58 @@ export const api = {
       return request(`/invoices/${id}/refresh-pix`, {
         method: 'POST'
       });
+    },
+    async verifyPayment(id) {
+      return request(`/invoices/${id}/verify-payment`, {
+        method: 'POST'
+      });
+    },
+    async validateCoupon(payload) {
+      return request('/invoices/validate-coupon', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+    async applyCoupon(id, code) {
+      return request(`/invoices/${id}/apply-coupon`, {
+        method: 'POST',
+        body: JSON.stringify({ code })
+      });
+    },
+    async applyManualDiscount(id, payload) {
+      return request(`/invoices/${id}/manual-discount`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+    async testGateway() {
+      return request('/invoices/test-gateway', {
+        method: 'POST'
+      });
+    }
+  },
+
+  // Cupons SaaS e Campanhas Super Admin (Fase 50)
+  saasCoupons: {
+    async list() {
+      return request('/superadmin/saas-coupons');
+    },
+    async create(payload) {
+      return request('/superadmin/saas-coupons', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    },
+    async toggleStatus(id, isActive) {
+      return request(`/superadmin/saas-coupons/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: isActive })
+      });
+    },
+    async delete(id) {
+      return request(`/superadmin/saas-coupons/${id}`, {
+        method: 'DELETE'
+      });
     }
   },
 

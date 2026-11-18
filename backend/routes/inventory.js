@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { validate } from '../middlewares/validate.js';
 import { authMiddleware, requireRole } from '../middlewares/auth.js';
+import { requireFeature } from '../middlewares/featureFlagMiddleware.js';
 import { logAudit } from '../services/auditService.js';
 import {
   listInventory,
@@ -11,6 +12,8 @@ import {
 } from '../services/inventoryService.js';
 
 const router = express.Router();
+
+router.use(authMiddleware, requireFeature('estoque'));
 
 const inventoryItemSchema = z.object({
   body: z.object({

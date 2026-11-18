@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { validate } from '../middlewares/validate.js';
 import { authMiddleware, requireRole } from '../middlewares/auth.js';
+import { requireFeature } from '../middlewares/featureFlagMiddleware.js';
 import {
   getCurrentCashRegister,
   openCashRegister,
@@ -12,6 +13,8 @@ import {
 } from '../services/cashRegisterService.js';
 
 const router = express.Router();
+
+router.use(authMiddleware, requireFeature('financeiro'));
 const staffOnly = requireRole(['manager', 'superadmin', 'professional']);
 const managerOnly = requireRole(['manager', 'superadmin']);
 

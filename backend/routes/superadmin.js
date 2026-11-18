@@ -769,4 +769,56 @@ router.patch('/privacy/requests/:id', async (req, res) => {
   }
 });
 
+// ==========================================
+// 12. GESTÃO DE CUPONS SAAS & CAMPANHAS (FASE 50)
+// ==========================================
+
+router.get('/saas-coupons', async (req, res) => {
+  try {
+    const { listSaaSCoupons } = await import('../services/saasCouponService.js');
+    const coupons = await listSaaSCoupons();
+    return res.json(coupons);
+  } catch (error) {
+    req.log?.error?.(error, 'Erro ao listar cupons SaaS');
+    return res.status(500).json({ error: 'Erro ao listar cupons SaaS.' });
+  }
+});
+
+router.post('/saas-coupons', async (req, res) => {
+  try {
+    const { createSaaSCoupon } = await import('../services/saasCouponService.js');
+    const newCoupon = await createSaaSCoupon(req.body);
+    return res.status(201).json(newCoupon);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error?.(error, 'Erro ao criar cupom SaaS');
+    return res.status(500).json({ error: error.message || 'Erro ao criar cupom SaaS.' });
+  }
+});
+
+router.patch('/saas-coupons/:id/status', async (req, res) => {
+  try {
+    const { toggleSaaSCoupon } = await import('../services/saasCouponService.js');
+    const { is_active } = req.body;
+    const updated = await toggleSaaSCoupon(req.params.id, is_active);
+    return res.json(updated);
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error?.(error, 'Erro ao alterar status do cupom SaaS');
+    return res.status(500).json({ error: error.message || 'Erro ao alterar status do cupom.' });
+  }
+});
+
+router.delete('/saas-coupons/:id', async (req, res) => {
+  try {
+    const { deleteSaaSCoupon } = await import('../services/saasCouponService.js');
+    const deleted = await deleteSaaSCoupon(req.params.id);
+    return res.json({ message: 'Cupom excluído com sucesso.', deleted });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    req.log?.error?.(error, 'Erro ao excluir cupom SaaS');
+    return res.status(500).json({ error: error.message || 'Erro ao excluir cupom.' });
+  }
+});
+
 export default router;

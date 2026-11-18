@@ -25,17 +25,19 @@ export const getMinisiteData = async (rawSlug) => {
   // 1. Dados institucionais do Salão
   const tenantRes = await pool.query(
     `SELECT 
-        id, slug, name, status, logo_url,
-        theme_id, brand_hex, primary_color, secondary_color, tertiary_color,
-        banners, welcome_message,
-        address, social_instagram, social_facebook, social_whatsapp,
-        google_review_url, google_maps_url,
-        headline, about_text, minisite_gallery,
-        meta_title, meta_description, meta_image_url,
-        minisite_enabled,
-        waiting_menu_enabled, waiting_menu_items
-     FROM public.cap_tenants
-     WHERE slug = $1 LIMIT 1`,
+        t.id, t.slug, t.name, t.status, t.logo_url,
+        t.theme_id, t.brand_hex, t.primary_color, t.secondary_color, t.tertiary_color,
+        t.banners, t.welcome_message,
+        t.address, t.social_instagram, t.social_facebook, t.social_whatsapp,
+        t.google_review_url, t.google_maps_url,
+        t.headline, t.about_text, t.minisite_gallery,
+        t.meta_title, t.meta_description, t.meta_image_url,
+        t.minisite_enabled,
+        t.waiting_menu_enabled, t.waiting_menu_items,
+        p.features as plan_features
+     FROM public.cap_tenants t
+     LEFT JOIN public.cap_plans p ON p.id = t.plan_id
+     WHERE t.slug = $1 LIMIT 1`,
     [slug]
   );
 
@@ -49,6 +51,15 @@ export const getMinisiteData = async (rawSlug) => {
 
   if (tenant.status !== 'active') {
     const error = new Error('Este estabelecimento está temporariamente indisponível.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  // Validação de Plano: Mini-site requer feature 'minisite' (Plano Essencial ou superior)
+  const planFeatures = tenant.plan_features || [];
+  const hasMinisiteFeature = isDemo || (Array.isArray(planFeatures) && planFeatures.includes('minisite'));
+  if (!hasMinisiteFeature) {
+    const error = new Error('O Mini-site institucional está disponível a partir do plano Essencial.');
     error.statusCode = 403;
     throw error;
   }

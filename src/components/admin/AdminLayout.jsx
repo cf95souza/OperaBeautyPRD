@@ -42,6 +42,15 @@ const AdminLayout = () => {
 
   const isManager = !session || session?.role === 'manager' || session?.role === 'admin';
 
+  const hasFeature = (key) => {
+    if (tenant?.is_demo) return true;
+    if (!tenant?.features) return false;
+    if (Array.isArray(tenant.features)) {
+      return tenant.features.includes(key);
+    }
+    return Boolean(tenant.features[key]);
+  };
+
   // J1 (P1): Navegação Agrupada Canônica (§9.2 e §9.6)
   const navGroups = [
     {
@@ -50,36 +59,84 @@ const AdminLayout = () => {
         ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/dashboard`, icon: 'dashboard', label: 'Dashboard' }] : []),
         { to: `/${tenant_slug}/staff/agenda-profissional`, icon: 'calendar_today', label: isManager ? 'Agenda do Salão' : 'Minha Agenda' },
         ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/clientes`, icon: 'groups', label: 'Clientes' }] : []),
-        ...(isManager && tenant?.features?.pdv ? [{ to: `/${tenant_slug}/staff/admin/pdv`, icon: 'point_of_sale', label: 'PDV (Caixa)' }] : []),
+        ...(isManager ? [{ 
+          to: hasFeature('pdv') ? `/${tenant_slug}/staff/admin/pdv` : `/${tenant_slug}/staff/admin/assinatura`, 
+          icon: 'point_of_sale', 
+          label: 'PDV (Caixa)',
+          locked: !hasFeature('pdv'),
+          requiredPlan: 'Premium'
+        }] : []),
       ]
     },
     {
       title: 'Catálogo',
       items: [
         ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/servicos`, icon: 'content_cut', label: 'Serviços' }] : []),
-        ...(isManager && (tenant?.features?.packages || tenant?.features?.PACKAGES || (Array.isArray(tenant?.features) && tenant?.features?.includes('packages'))) ? [{ to: `/${tenant_slug}/staff/admin/pacotes`, icon: 'layers', label: 'Pacotes de Sessões' }] : []),
-        ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/estoque`, icon: 'inventory_2', label: 'Estoque' }] : []),
-        ...(isManager && tenant?.features?.clube ? [{ to: `/${tenant_slug}/staff/admin/assinaturas`, icon: 'card_membership', label: 'Clube do Salão' }] : []),
-        ...(isManager && tenant?.features?.giftcards ? [{ to: `/${tenant_slug}/staff/admin/giftcards`, icon: 'card_giftcard', label: 'Vales-Presente' }] : []),
-        ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/anamnese`, icon: 'assignment', label: 'Ficha de Anamnese' }] : []),
+        ...(isManager ? [{ 
+          to: hasFeature('packages') ? `/${tenant_slug}/staff/admin/pacotes` : `/${tenant_slug}/staff/admin/assinatura`, 
+          icon: 'layers', 
+          label: 'Pacotes de Sessões',
+          locked: !hasFeature('packages'),
+          requiredPlan: 'Premium'
+        }] : []),
+        ...(isManager ? [{ 
+          to: hasFeature('estoque') ? `/${tenant_slug}/staff/admin/estoque` : `/${tenant_slug}/staff/admin/assinatura`, 
+          icon: 'inventory_2', 
+          label: 'Estoque',
+          locked: !hasFeature('estoque'),
+          requiredPlan: 'Essencial'
+        }] : []),
+        ...(isManager ? [{ 
+          to: hasFeature('clube') ? `/${tenant_slug}/staff/admin/assinaturas` : `/${tenant_slug}/staff/admin/assinatura`, 
+          icon: 'card_membership', 
+          label: 'Clube do Salão',
+          locked: !hasFeature('clube'),
+          requiredPlan: 'Premium'
+        }] : []),
+        ...(isManager ? [{ 
+          to: hasFeature('giftcards') ? `/${tenant_slug}/staff/admin/giftcards` : `/${tenant_slug}/staff/admin/assinatura`, 
+          icon: 'card_giftcard', 
+          label: 'Vales-Presente',
+          locked: !hasFeature('giftcards'),
+          requiredPlan: 'Premium'
+        }] : []),
+        ...(isManager ? [{ 
+          to: hasFeature('anamnesis') ? `/${tenant_slug}/staff/admin/anamnese` : `/${tenant_slug}/staff/admin/assinatura`, 
+          icon: 'assignment', 
+          label: 'Ficha de Anamnese',
+          locked: !hasFeature('anamnesis'),
+          requiredPlan: 'Essencial'
+        }] : []),
       ]
     },
     {
       title: 'Gestão',
       items: [
-        ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/financeiro`, icon: 'payments', label: 'Financeiro' }] : []),
+        ...(isManager ? [{ 
+          to: hasFeature('financeiro') ? `/${tenant_slug}/staff/admin/financeiro` : `/${tenant_slug}/staff/admin/assinatura`, 
+          icon: 'payments', 
+          label: 'Financeiro',
+          locked: !hasFeature('financeiro'),
+          requiredPlan: 'Essencial'
+        }] : []),
         ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/campanhas`, icon: 'campaign', label: 'Campanhas & Retenção' }] : []),
         ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/indicacoes`, icon: 'share', label: 'Indicações & Amigas' }] : []),
         ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/avaliacoes`, icon: 'star', label: 'Avaliações & Google' }] : []),
         { to: `/${tenant_slug}/staff/comissoes`, icon: 'account_balance_wallet', label: 'Minhas Comissões' },
         ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/equipe`, icon: 'badge', label: 'Equipe' }] : []),
-        ...(isManager && tenant?.features?.bi_reports ? [{ to: `/${tenant_slug}/staff/admin/relatorios-bi`, icon: 'insights', label: 'Relatórios BI' }] : []),
+        ...(isManager && hasFeature('bi_reports') ? [{ to: `/${tenant_slug}/staff/admin/relatorios-bi`, icon: 'insights', label: 'Relatórios BI' }] : []),
       ]
     },
     {
       title: 'Configurações',
       items: [
-        ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/minisite`, icon: 'public', label: 'Mini-site & SEO' }] : []),
+        ...(isManager ? [{ 
+          to: hasFeature('minisite') ? `/${tenant_slug}/staff/admin/minisite` : `/${tenant_slug}/staff/admin/assinatura`, 
+          icon: 'public', 
+          label: 'Mini-site & SEO',
+          locked: !hasFeature('minisite'),
+          requiredPlan: 'Essencial'
+        }] : []),
         ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/lookbook`, icon: 'photo_library', label: 'Lookbook' }] : []),
         ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/configuracoes`, icon: 'tune', label: 'Operacional' }] : []),
         ...(isManager ? [{ to: `/${tenant_slug}/staff/admin/branding`, icon: 'palette', label: 'Branding' }] : []),
@@ -154,22 +211,42 @@ const AdminLayout = () => {
                   const isActive = location.pathname === link.to;
                   return (
                     <Link 
-                      key={link.to}
+                      key={link.to + link.label}
                       to={link.to} 
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        if (link.locked) {
+                          setNotificationToast({
+                            show: true,
+                            message: `O recurso "${link.label}" está disponível no Plano ${link.requiredPlan}. Faça upgrade para liberar.`
+                          });
+                        }
+                      }}
+                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                         isActive 
                           ? 'bg-brand-tint text-brand font-semibold shadow-xs' 
-                          : 'text-ink-soft hover:bg-surface-variant/60 hover:text-ink'
+                          : link.locked
+                            ? 'text-ink-soft/70 hover:bg-stone-100 hover:text-ink'
+                            : 'text-ink-soft hover:bg-surface-variant/60 hover:text-ink'
                       }`}
                     >
-                      <span 
-                        className={`material-symbols-outlined text-[20px] ${isActive ? 'text-brand' : 'text-ink-soft'}`} 
-                        style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}
-                      >
-                        {link.icon}
-                      </span>
-                      <span className="truncate">{link.label}</span>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span 
+                          className={`material-symbols-outlined text-[20px] ${isActive ? 'text-brand' : link.locked ? 'text-stone-400' : 'text-ink-soft'}`} 
+                          style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}
+                        >
+                          {link.icon}
+                        </span>
+                        <span className={`truncate ${link.locked ? 'text-ink-soft/80' : ''}`}>{link.label}</span>
+                      </div>
+                      {link.locked && (
+                        <span 
+                          className="material-symbols-outlined text-[15px] text-stone-400 shrink-0" 
+                          title={`Disponível no Plano ${link.requiredPlan}`}
+                        >
+                          lock
+                        </span>
+                      )}
                     </Link>
                   );
                 })}

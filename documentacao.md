@@ -2895,3 +2895,38 @@ Com o container rodando, você deve aplicar o DDL (script que cria as tabelas) d
     * Criada a suíte `backend/tests/sessionStabilityGracePeriod.test.js` (5/5 testes aprovados).
     * Testes de regressão `sessaoCelularC3.test.js` (15/15), `coverUrlBranding.test.js` (6/6), `resendEmailRecovery.test.js` (11/11).
     * Build de produção Vite concluído em 3.95s com bundle gerado em `dist/`.
+
+- **18/11/2026 - Nova Grade de 3 Planos, Travas Rígidas por Módulo, Cupons SaaS no Super Admin, SEO Google e Blindagem do Gateway de Pagamento - G39 [Concluída]:**
+  - **1. Reposicionamento Estratégico da Grade Comercial (Redução de 4 para 3 Planos Oficiais)**:
+    * Desativação do plano `Signature` (`is_active = FALSE`).
+    * Grade enxuta e altamente competitiva contra concorrentes de mercado:
+      - **Básico**: R$ 39,90/mês | R$ 399,00/ano (*"Custa menos que 1 serviço"*). Limite: **até 2 profissionais**. Agendamentos e serviços ilimitados, link exclusivo, app White-Label e suporte via WhatsApp. **Sem mini-site, sem ficha de anamnese, sem estoque e sem financeiro**.
+      - **Essencial**: R$ 59,90/mês | R$ 599,00/ano (oferta de aquisição: **30% OFF no 1º mês = R$ 41,93** via cupom `ESSENCIAL30`). Limite: **até 5 profissionais**. Ganha Mini-site público institucional (`/[slug]/site`), Ficha de Anamnese digital & termos com assinatura, controle de estoque de insumos, fluxo de caixa e comissões da equipe.
+      - **Premium**: R$ 79,90/mês | R$ 799,00/ano (oferta de aquisição: **40% OFF no 1º mês = R$ 47,94** via cupom `PREMIUM40`). Limite: **até 15 profissionais**. Tudo liberado: Clube de Fidelidade, Cashback automático, Pacotes de Sessões pré-pagos, PDV unificado com conferência cega, Vales-presente digitais (Gift Cards), Avaliações Google Reviews e Relatórios BI analíticos avançados.
+  - **2. Correção da Incoerência Comercial e Trava Rígida de Profissionais**:
+    * Eliminado o texto contraditório "Profissionais ilimitados" no plano Básico.
+    * Validação server-side estrita no serviço `backend/services/staffService.js`: se o salão tentar cadastrar além do limite `max_professionals` de seu plano, o backend bloqueia com HTTP 403 Forbidden (*"Seu plano permite no máximo X profissionais ativos"*). Salões com mais de 2 profissionais são impossibilitados de usar o plano Básico, forçando a adesão aos planos Essencial e Premium.
+  - **3. Feature Gates no Backend e Frontend (Travamento Estrito de Recursos)**:
+    * Protegidas as rotas administrativas no backend via middleware `requireFeature`:
+      - `backend/routes/inventory.js`: `requireFeature('estoque')`.
+      - `backend/routes/anamnesis.js`: `requireFeature('anamnesis')`.
+      - `backend/routes/cashRegister.js`: `requireFeature('financeiro')`.
+      - `backend/routes/minisite.js` e `minisiteService.js`: `requireFeature('minisite')`.
+    * No menu lateral do gestor (`src/components/admin/AdminLayout.jsx`), os recursos não contemplados no plano exibem um ícone de cadeado elegante. Ao clicar, o sistema exibe notificação explicativa e direciona o usuário diretamente para a aba de upgrade em "Minha Assinatura".
+  - **4. Motor de Cupons SaaS e Campanhas Promocionais no Super Admin**:
+    * Criada a tabela `public.cap_saas_coupons` na migração `migrations/phase50_plans_v2_and_saas_coupons.sql`.
+    * Criado o serviço `backend/services/saasCouponService.js` com suporte a cupons percentuais e fixos, limites de utilização, elegibilidade por plano e expiração.
+    * Inseridos cupons sementes oficiais: `ESSENCIAL30` (30% no 1º mês do Essencial) e `PREMIUM40` (40% no 1º mês do Premium).
+    * Adicionada a aba **"Cupons & Campanhas SaaS"** em `src/pages/superadmin/PlanosAdmin.jsx` permitindo criar, ativar, pausar e excluir cupons com facilidade.
+    * Adicionado campo de cupom no modal de pagamento PIX (`ModalPagamentoPixSaaS.jsx`), com recálculo automático da fatura e regeneração instantânea do QR Code com o desconto aplicado.
+    * Adicionado botão de **"Desconto"** manual na listagem de faturas de salões no Super Admin (`TenantDetailAdmin.jsx`).
+  - **5. Diagnóstico e Verificação Proativa do Gateway de Pagamento (Mercado Pago PIX)**:
+    * Criada a função `verifySaaSInvoicePayment` em `backend/services/saasBillingService.js` e endpoint `POST /api/invoices/:id/verify-payment`.
+    * Adicionado o botão **"Já fiz o PIX, verificar agora"** no modal de pagamento, consultando o status diretamente na API do Mercado Pago e dando baixa imediata caso o webhook sofra oscilações.
+    * Adicionada aba **"Diagnóstico Gateway (Mercado Pago)"** em `PlanosAdmin.jsx` com ferramenta de teste de conectividade e credenciais em tempo real (`POST /api/invoices/test-gateway`).
+  - **6. Correção de SEO e Indexação no Google**:
+    * Resolvida a discrepância de domínio: substituídas todas as referências de `operabeauty.com.br` por `https://operabeauty.tech/` no `index.html`, `public/robots.txt` e `public/sitemap.xml`, permitindo o rastreamento correto pelo Googlebot e Google Search Console.
+  - **7. Qualidade, Testes e Verificação**:
+    * Criada a suíte `backend/tests/plansV2AndSaasCoupons.test.js` com 10 testes (100% de aprovação).
+    * Suítes de regressão aprovadas: `sessionStabilityGracePeriod.test.js` (5/5), `coverUrlBranding.test.js` (6/6), `resendEmailRecovery.test.js` (11/11).
+    * Compilação Vite para produção (`npm run build`) concluída com sucesso em 4.46s.

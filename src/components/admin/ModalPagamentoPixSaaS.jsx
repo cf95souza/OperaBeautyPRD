@@ -33,10 +33,49 @@ const ModalPagamentoPixSaaS = ({
   const [copied, setCopied] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [couponInput, setCouponInput] = useState('');
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     setCurrentInvoice(invoice);
   }, [invoice]);
+
+  const handleApplyCoupon = async () => {
+    if (!couponInput.trim() || !currentInvoice?.id) return;
+    setApplyingCoupon(true);
+    try {
+      const res = await api.invoices.applyCoupon(currentInvoice.id, couponInput.trim());
+      if (res?.invoice) {
+        setCurrentInvoice(res.invoice);
+        showSuccess(res.message || 'Cupom aplicado com sucesso!');
+        setCouponInput('');
+      }
+    } catch (err) {
+      showError(err.message || 'Falha ao aplicar cupom.');
+    } finally {
+      setApplyingCoupon(false);
+    }
+  };
+
+  const handleVerifyPayment = async () => {
+    if (!currentInvoice?.id) return;
+    setVerifying(true);
+    try {
+      const res = await api.invoices.verifyPayment(currentInvoice.id);
+      if (res?.paid) {
+        showSuccess(res.message || 'Pagamento confirmado com sucesso!');
+        if (onPaymentSuccess) onPaymentSuccess();
+        onClose();
+      } else {
+        showError(res.message || 'Pagamento ainda não detectado. Aguarde alguns instantes e tente novamente.');
+      }
+    } catch (err) {
+      showError(err.message || 'Erro ao consultar status no gateway.');
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const isSuperAdmin = session?.role === 'superadmin';
   const isSandbox = Boolean(billingStatus?.is_sandbox);
@@ -197,13 +236,53 @@ const ModalPagamentoPixSaaS = ({
               <p className="text-xs text-ink-soft mt-0.5">
                 Vencimento: <strong className="text-ink">{formatDate(currentInvoice.due_date)}</strong>
               </p>
+              {Number(currentInvoice.discount_amount || 0) > 0 && (
+                <span className="inline-block mt-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  Cupom {currentInvoice.applied_coupon_code} aplicado (-{formatCurrency(currentInvoice.discount_amount)})
+                </span>
+              )}
             </div>
             <div className="text-right">
+              {Number(currentInvoice.discount_amount || 0) > 0 && currentInvoice.original_amount && (
+                <span className="block text-xs text-stone-400 line-through">
+                  {formatCurrency(currentInvoice.original_amount)}
+                </span>
+              )}
               <span className="font-display font-bold text-2xl sm:text-3xl text-brand tabular-nums">
                 {formatCurrency(currentInvoice.amount)}
               </span>
             </div>
           </div>
+
+          {/* Campo de Cupom Promocional SaaS (Fase 50) */}
+          {Number(currentInvoice.discount_amount || 0) === 0 && (
+            <div className="p-3.5 rounded-2xl bg-[#FBF7F5] border border-line/70 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-ink flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-brand" /> Possui cupom promocional?
+                </span>
+                <span className="text-[11px] text-ink-soft">Ex: ESSENCIAL30, PREMIUM40</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text"
+                  placeholder="DIGITE O CUPOM AQUI"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                  disabled={applyingCoupon}
+                  className="flex-1 text-xs font-mono uppercase bg-white px-3 py-2 rounded-xl border border-line focus:outline-none focus:border-brand"
+                />
+                <button
+                  type="button"
+                  disabled={!couponInput.trim() || applyingCoupon}
+                  onClick={handleApplyCoupon}
+                  className="px-4 py-2 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {applyingCoupon ? 'Aplicando...' : 'Aplicar'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* QR Code PIX Central */}
           <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-line shadow-2xs">
@@ -312,6 +391,18 @@ const ModalPagamentoPixSaaS = ({
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Botão de Verificação Proativa Imediata */}
+            <button
+              type="button"
+              disabled={verifying}
+              onClick={handleVerifyPayment}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-full border border-brand bg-brand-tint/60 hover:bg-brand-tint text-brand text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+              title="Consulta imediatamente o status no Mercado Pago caso o webhook tenha demorado"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${verifying ? 'animate-spin' : ''}`} />
+              <span>{verifying ? 'Consultando...' : 'Já fiz o PIX, verificar agora'}</span>
+            </button>
+
             {/* Botão de teste Sandbox / Homologação (Oculto em produção para clientes do salão) */}
             {canSimulate && (
               <button

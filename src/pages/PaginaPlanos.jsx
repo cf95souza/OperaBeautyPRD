@@ -115,53 +115,54 @@ const PaginaPlanos = () => {
     {
       category: 'Estrutura & Limites',
       items: [
-        { label: 'Profissionais Inclusos', solo: '1 profissional', essencial: 'Até 3', premium: 'Até 6', signature: 'Até 12' },
-        { label: 'Profissional Adicional', solo: '—', essencial: 'R$ 15/mês', premium: 'R$ 15/mês', signature: 'R$ 15/mês' },
-        { label: 'Banners no Aplicativo', solo: '1 banner', essencial: '2 banners', premium: '3 banners', signature: '5 banners' },
-        { label: 'Disparos de WhatsApp/mês', solo: 'Opcional', essencial: 'Opcional', premium: '200 inclusos', signature: '500 inclusos' },
-        { label: 'Mini-site Público com SEO', solo: true, essencial: true, premium: true, signature: true },
+        { label: 'Profissionais Inclusos', basico: 'Até 2', essencial: 'Até 5', premium: 'Até 15' },
+        { label: 'Agendamentos & Clientes', basico: 'Ilimitados', essencial: 'Ilimitados', premium: 'Ilimitados' },
+        { label: 'Serviços Cadastrados', basico: 'Ilimitados', essencial: 'Ilimitados', premium: 'Ilimitados' },
+        { label: 'Profissional Adicional', basico: 'R$ 15/mês', essencial: 'R$ 15/mês', premium: 'R$ 15/mês' },
+        { label: 'Banners no Aplicativo', basico: '1 banner', essencial: '2 banners', premium: '5 banners' },
+        { label: 'Mini-site Público (/[slug]/site) com SEO', basico: false, essencial: true, premium: true },
       ]
     },
     {
-      category: 'Agenda & Atendimento',
+      category: 'Agenda & Atendimento Online',
       items: [
-        { label: 'Agendamentos & Clientes Ilimitados', solo: true, essencial: true, premium: true, signature: true },
-        { label: 'Lembretes Automáticos por Push', solo: true, essencial: true, premium: true, signature: true },
-        { label: 'Vários Serviços por Visita (Carrinho)', solo: true, essencial: true, premium: true, signature: true },
-        { label: 'Variações de Preço & Extras (Upsell)', solo: true, essencial: true, premium: true, signature: true },
-        { label: 'Lista de Espera Inteligente', solo: false, essencial: false, premium: true, signature: true },
-        { label: 'Política de Cancelamento & Faltas', solo: true, essencial: true, premium: true, signature: true },
+        { label: 'Agenda Digital Inteligente com Link Próprio', basico: true, essencial: true, premium: true },
+        { label: 'App com a Marca e Cores do Salão (White-Label)', basico: true, essencial: true, premium: true },
+        { label: 'Lembretes Automáticos por Push', basico: true, essencial: true, premium: true },
+        { label: 'Vários Serviços por Visita (Carrinho Multi-Serviço)', basico: true, essencial: true, premium: true },
+        { label: 'Cupons de Desconto para Clientes', basico: true, essencial: true, premium: true },
+        { label: 'Política de Cancelamento & Faltas', basico: true, essencial: true, premium: true },
+        { label: 'Lista de Espera Inteligente', basico: false, essencial: false, premium: true },
       ]
     },
     {
-      category: 'Retenção & Receita',
+      category: 'Operação, Estoque & Financeiro',
       items: [
-        { label: 'Cupons de Desconto Promocionais', solo: true, essencial: true, premium: true, signature: true },
-        { label: 'Clube de Fidelidade & Cashback', solo: false, essencial: false, premium: true, signature: true },
-        { label: 'Pacotes de Sessões Pré-Pagos', solo: false, essencial: false, premium: true, signature: true },
-        { label: 'Campanhas de Aniversário & Retorno', solo: false, essencial: false, premium: true, signature: true },
-        { label: 'Programa Indique e Ganhe', solo: false, essencial: false, premium: true, signature: true },
-        { label: 'Vales-Presente Digitais (Gift Cards)', solo: false, essencial: false, premium: false, signature: true },
+        { label: 'Controle de Estoque & Insumos', basico: false, essencial: true, premium: true },
+        { label: 'Controle de Caixa & Fluxo Financeiro', basico: false, essencial: true, premium: true },
+        { label: 'Cálculo Automático de Comissões da Equipe', basico: false, essencial: true, premium: true },
+        { label: 'Ficha de Anamnese Digital & Termos com Assinatura', basico: false, essencial: true, premium: true },
+        { label: 'Relatórios Gerenciais de Faturamento & Ticket Médio', basico: false, essencial: true, premium: true },
       ]
     },
     {
-      category: 'Operação, Caixa & Saúde',
+      category: 'Fidelização, Retenção & Vendas',
       items: [
-        { label: 'Controle de Estoque & Insumos', solo: false, essencial: true, premium: true, signature: true },
-        { label: 'Controle de Caixa & Fluxo Financeiro', solo: false, essencial: true, premium: true, signature: true },
-        { label: 'Comissões Automáticas da Equipe', solo: false, essencial: true, premium: true, signature: true },
-        { label: 'Anamnese Dinâmica & Termos com Assinatura', solo: false, essencial: false, premium: true, signature: true },
-        { label: 'Avaliações & Impulsionador Google Reviews', solo: false, essencial: false, premium: true, signature: true },
-        { label: 'PDV com Conferência Cega de Caixa & Split', solo: false, essencial: false, premium: false, signature: true },
-        { label: 'Relatórios Analíticos Avançados & BI', solo: false, essencial: false, premium: false, signature: true },
-        { label: 'Gateway Nativo de WhatsApp Conectado', solo: false, essencial: false, premium: false, signature: true },
+        { label: 'Clube de Fidelidade & Cashback Automático', basico: false, essencial: false, premium: true },
+        { label: 'Pacotes de Sessões Pré-Pagos', basico: false, essencial: false, premium: true },
+        { label: 'PDV Unificado com Conferência Cega de Caixa', basico: false, essencial: false, premium: true },
+        { label: 'Vales-Presente Digitais (Gift Cards)', basico: false, essencial: false, premium: true },
+        { label: 'Avaliações & Impulsionador Google Reviews', basico: false, essencial: false, premium: true },
+        { label: 'Campanhas Automáticas (Aniversário & Retorno)', basico: false, essencial: false, premium: true },
+        { label: 'Programa Indique e Ganhe', basico: false, essencial: false, premium: true },
+        { label: 'Relatórios Analíticos Avançados & BI', basico: false, essencial: false, premium: true },
       ]
     },
     {
       category: 'Suporte & Implantação',
       items: [
-        { label: 'Suporte por WhatsApp', solo: 'Horário comercial', essencial: 'Horário comercial', premium: 'Prioritário', signature: 'Gerente VIP' },
-        { label: 'Treinamento & Importação Assistida', solo: 'Guias e vídeos', essencial: 'Planilha modelo', premium: 'Suporte dedicado', signature: 'Consultoria 1:1' },
+        { label: 'Suporte por WhatsApp', basico: 'Horário comercial', essencial: 'Horário comercial', premium: 'Prioritário' },
+        { label: 'Treinamento & Importação Assistida', basico: 'Guias e vídeos', essencial: 'Planilha modelo', premium: 'Suporte VIP' },
       ]
     }
   ];
@@ -290,17 +291,21 @@ const PaginaPlanos = () => {
         </div>
       </section>
 
-      {/* Grid dos 4 Cards Oficiais */}
+      {/* Grid dos 3 Cards Oficiais */}
       <section className="max-w-6xl mx-auto px-6 pb-20">
         {loading ? (
           <div className="py-16 text-center text-sm text-[#6F6168]">Carregando catálogo de planos oficiais...</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7 items-stretch">
             {plans.map((plan) => {
               const isFeatured = plan.is_featured;
               const monthlyPrice = billingCycle === 'yearly' && plan.yearly_price
                 ? parseFloat(plan.yearly_price) / 12
                 : parseFloat(plan.price);
+
+              const isBasico = plan.slug === 'basico' || plan.slug === 'solo';
+              const isEssencial = plan.slug === 'essencial';
+              const isPremium = plan.slug === 'premium';
 
               const marketingList = Array.isArray(plan.marketing_features) && plan.marketing_features.length > 0
                 ? plan.marketing_features
@@ -309,27 +314,45 @@ const PaginaPlanos = () => {
               return (
                 <div
                   key={plan.id}
-                  className={`rounded-[26px] p-6 sm:p-7 flex flex-col justify-between transition-all relative ${
+                  className={`rounded-[28px] p-6 sm:p-8 flex flex-col justify-between transition-all relative ${
                     isFeatured
-                      ? 'bg-white border-2 border-[#8E3B4E] shadow-xl lg:-translate-y-2'
+                      ? 'bg-white border-2 border-[#8E3B4E] shadow-2xl lg:-translate-y-2'
                       : 'bg-white/80 border border-[#EADFDC] hover:border-[#8E3B4E]/40 shadow-xs'
                   }`}
                 >
                   {isFeatured && (
-                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#8E3B4E] text-white text-[10px] font-extrabold uppercase tracking-wider px-3.5 py-1 rounded-full shadow-xs flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" />
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#8E3B4E] text-white text-[10px] font-extrabold uppercase tracking-wider px-4 py-1 rounded-full shadow-md flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-200" />
                       <span>{plan.badge_label || 'Mais Escolhido'}</span>
                     </div>
                   )}
 
                   <div>
                     <div className="mb-4">
-                      <h3 className="font-serif font-bold text-2xl text-[#2B2327]">{plan.name}</h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-serif font-bold text-2xl text-[#2B2327]">{plan.name}</h3>
+                        {isBasico && (
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Super Econômico
+                          </span>
+                        )}
+                        {isEssencial && (
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-50 text-[#8E3B4E] border border-rose-200">
+                            30% OFF 1º Mês
+                          </span>
+                        )}
+                        {isPremium && (
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                            40% OFF 1º Mês
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-[#6F6168] mt-1.5 leading-relaxed min-h-[36px]">
                         {plan.description}
                       </p>
                     </div>
 
+                    {/* Preço e Oferta Especial */}
                     <div className="my-5 pt-4 border-t border-[#EADFDC]">
                       <div className="flex items-baseline gap-1">
                         <span className="font-serif font-bold text-3xl sm:text-4xl text-[#2B2327] tabular-nums">
@@ -337,13 +360,34 @@ const PaginaPlanos = () => {
                         </span>
                         <span className="text-xs text-[#6F6168] font-medium">/mês</span>
                       </div>
-                      {billingCycle === 'yearly' && plan.yearly_price ? (
-                        <p className="text-[11px] font-semibold text-[#8E3B4E] mt-1">
-                          Total anual: {formatCurrency(plan.yearly_price)} (economia de R$ {(parseFloat(plan.price) * 2).toFixed(2).replace('.', ',')})
-                        </p>
-                      ) : (
-                        <p className="text-[11px] text-[#6F6168] mt-1">Cobrança mensal flexível sem fidelidade</p>
+
+                      {/* Estratégia de Cupom Promocional (Print 3) */}
+                      {isEssencial && billingCycle === 'monthly' && (
+                        <div className="mt-2 py-1.5 px-2.5 rounded-lg bg-rose-50/70 border border-rose-100 flex items-center justify-between text-xs">
+                          <span className="text-[#8E3B4E] font-medium">1º mês com cupom <strong className="font-mono">ESSENCIAL30</strong>:</span>
+                          <strong className="text-[#8E3B4E] text-sm">R$ 41,93</strong>
+                        </div>
                       )}
+
+                      {isPremium && billingCycle === 'monthly' && (
+                        <div className="mt-2 py-1.5 px-2.5 rounded-lg bg-amber-50/70 border border-amber-100 flex items-center justify-between text-xs">
+                          <span className="text-amber-900 font-medium">1º mês com cupom <strong className="font-mono">PREMIUM40</strong>:</span>
+                          <strong className="text-amber-900 text-sm">R$ 47,94</strong>
+                        </div>
+                      )}
+
+                      {isBasico && (
+                        <p className="text-[11px] font-semibold text-emerald-700 mt-2 flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Custa menos que 1 serviço!</span>
+                        </p>
+                      )}
+
+                      {billingCycle === 'yearly' && plan.yearly_price ? (
+                        <p className="text-[11px] font-semibold text-[#8E3B4E] mt-2">
+                          Total anual: {formatCurrency(plan.yearly_price)} (2 meses grátis)
+                        </p>
+                      ) : null}
                     </div>
 
                     {/* Especificações Rápidas */}
@@ -429,21 +473,18 @@ const PaginaPlanos = () => {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-[#EADFDC] bg-[#FBF7F5]">
-                  <th className="p-4 sm:p-5 font-serif font-bold text-sm text-[#2B2327] w-2/5">
-                    Funcionalidade
+                  <th className="p-4 sm:p-5 font-serif font-bold text-sm text-[#2B2327] w-[40%]">
+                    Recurso
                   </th>
-                  <th className="p-4 sm:p-5 font-bold text-center text-[#2B2327] w-[15%]">
-                    Solo
+                  <th className="p-4 sm:p-5 font-bold text-center text-[#2B2327] w-[20%]">
+                    Básico
                   </th>
-                  <th className="p-4 sm:p-5 font-bold text-center text-[#2B2327] w-[15%]">
+                  <th className="p-4 sm:p-5 font-bold text-center text-[#2B2327] w-[20%]">
                     Essencial
                   </th>
-                  <th className="p-4 sm:p-5 font-bold text-center text-[#8E3B4E] bg-[#F6E4E4]/40 w-[15%]">
+                  <th className="p-4 sm:p-5 font-bold text-center text-[#8E3B4E] bg-[#F6E4E4]/40 w-[20%]">
                     <span className="block text-[10px] uppercase font-extrabold text-[#8E3B4E]">Mais Escolhido</span>
                     Premium
-                  </th>
-                  <th className="p-4 sm:p-5 font-bold text-center text-[#2B2327] w-[15%]">
-                    Signature
                   </th>
                 </tr>
               </thead>
@@ -451,7 +492,7 @@ const PaginaPlanos = () => {
                 {comparisonFeatures.map((cat, catIdx) => (
                   <React.Fragment key={catIdx}>
                     <tr className="bg-stone-50/80">
-                      <td colSpan={5} className="py-2.5 px-4 sm:px-5 font-bold text-[11px] text-[#6F6168] uppercase tracking-wider">
+                      <td colSpan={4} className="py-2.5 px-4 sm:px-5 font-bold text-[11px] text-[#6F6168] uppercase tracking-wider">
                         {cat.category}
                       </td>
                     </tr>
@@ -461,10 +502,10 @@ const PaginaPlanos = () => {
                           {item.label}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          {typeof item.solo === 'boolean' ? (
-                            item.solo ? <Check className="w-4 h-4 text-[#8E3B4E] mx-auto" /> : <CloseIcon className="w-3.5 h-3.5 text-stone-300 mx-auto" />
+                          {typeof item.basico === 'boolean' ? (
+                            item.basico ? <Check className="w-4 h-4 text-[#8E3B4E] mx-auto" /> : <CloseIcon className="w-3.5 h-3.5 text-stone-300 mx-auto" />
                           ) : (
-                            <span className="font-semibold text-[#2B2327]">{item.solo}</span>
+                            <span className="font-semibold text-[#2B2327]">{item.basico}</span>
                           )}
                         </td>
                         <td className="py-3 px-4 text-center">
@@ -479,13 +520,6 @@ const PaginaPlanos = () => {
                             item.premium ? <Check className="w-4 h-4 text-[#8E3B4E] mx-auto" /> : <CloseIcon className="w-3.5 h-3.5 text-stone-300 mx-auto" />
                           ) : (
                             <span className="text-[#8E3B4E] font-bold">{item.premium}</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-center font-semibold text-[#2B2327]">
-                          {typeof item.signature === 'boolean' ? (
-                            item.signature ? <Check className="w-4 h-4 text-[#8E3B4E] mx-auto" /> : <CloseIcon className="w-3.5 h-3.5 text-stone-300 mx-auto" />
-                          ) : (
-                            <span>{item.signature}</span>
                           )}
                         </td>
                       </tr>

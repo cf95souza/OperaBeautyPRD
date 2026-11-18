@@ -807,3 +807,86 @@ export const refreshSaaSInvoicePix = async (invoiceId) => {
     }
   };
 };
+
+/**
+ * Consulta manual em tempo real da fatura no gateway Mercado Pago (Verificação Proativa)
+ */
+export const verifySaaSInvoicePayment = async (invoiceId) => {
+  const invRes = await pool.query(
+    `SELECT id, tenant_id, amount, status, gateway_transaction_id, reference_month 
+     FROM public.cap_invoices 
+     WHERE id = $1`,
+    [invoiceId]
+  );
+
+  if (invRes.rows.length === 0) {
+    const error = new Error('Fatura não encontrada.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const invoice = invRes.rows[0];
+  if (invoice.status === 'paid') {
+    return { paid: true, message: 'Fatura já está quitada.', invoice };
+  }
+
+  if (!invoice.gateway_transaction_id) {
+    return { 
+      paid: false, 
+      status: 'pending', 
+      message: 'Cobrança gerada com chave institucional. Aguarde a confirmação ou solicite baixa manual ao suporte.' 
+    };
+  }
+
+  // Buscar token do Mercado Pago
+  const platformRes = await pool.query('SELECT gateway_api_key, payment_gateway FROM public.cap_platform_settings LIMIT 1');
+  const encryptedKey = platformRes.rows[0]?.gateway_api_key;
+  let token = null;
+  if (encryptedKey) {
+    try { token = decrypt(encryptedKey); } catch (_) { token = encryptedKey; }
+  }
+  if (!token) {
+    return { paid: false, status: 'pending', message: 'Gateway de pagamento não configurado no painel.' };
+  }
+
+  try {
+    const mpCheck = await fetch(`https://api.mercadopago.com/v1/payments/${invoice.gateway_transaction_id}`, {
+      headers: { 'Authorization': `Bearer ${token.trim()}` }
+    });
+
+    if (!mpCheck.ok) {
+      return { 
+        paid: false, 
+        status: 'pending', 
+        message: 'Não foi possível consultar o status junto ao gateway no momento. Tente novamente em instantes.' 
+      };
+    }
+
+    const mpData = await mpCheck.json();
+    if (mpData.status === 'approved') {
+      const payResult = await paySaaSInvoice({
+        invoiceId: invoice.id,
+        paymentMethod: 'pix',
+        gatewayTransactionId: String(mpData.id),
+        source: 'manual_verification'
+      });
+      return { 
+        paid: true, 
+        message: 'Pagamento identificado e compensado com sucesso! Sua assinatura foi regularizada.', 
+        ...payResult 
+      };
+    }
+
+    return {
+      paid: false,
+      status: mpData.status || 'pending',
+      message: mpData.status === 'in_process' 
+        ? 'O pagamento está em análise pela sua instituição bancária. Aguarde alguns instantes.'
+        : 'Pagamento ainda não confirmado no Mercado Pago. Se você já fez a transferência via PIX, aguarde alguns segundos e clique novamente.'
+    };
+  } catch (err) {
+    console.error('Erro ao verificar pagamento no Mercado Pago:', err);
+    return { paid: false, status: 'pending', message: 'Erro na conexão com o gateway de pagamento.' };
+  }
+};
+

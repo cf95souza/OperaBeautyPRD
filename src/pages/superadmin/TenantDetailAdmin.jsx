@@ -523,6 +523,24 @@ const TenantDetailAdmin = () => {
     }
   };
 
+  const handleApplyDiscount = async (invoiceId) => {
+    const val = window.prompt('Digite o valor do desconto a abater em Reais (R$):', '10.00');
+    if (!val) return;
+    const num = parseFloat(val.replace(',', '.'));
+    if (isNaN(num) || num <= 0) {
+      showError('Valor de desconto inválido.');
+      return;
+    }
+    const reason = window.prompt('Motivo do desconto (ex: Campanha, Bonificação):', 'Bonificação comercial') || 'Ajuste Super Admin';
+    try {
+      await api.invoices.applyManualDiscount(invoiceId, { discount_amount: num, reason });
+      showSuccess('Desconto aplicado e fatura atualizada!');
+      fetchInvoices();
+    } catch (err) {
+      showError(err.message || 'Erro ao aplicar desconto.');
+    }
+  };
+
   const handlePlanChange = (planId) => {
     const selectedPlan = plans.find(p => p.id === planId);
     if (selectedPlan) {
@@ -1318,13 +1336,23 @@ const TenantDetailAdmin = () => {
                             </td>
                             <td className="py-3.5 px-4 text-right">
                               {inv.status !== 'paid' ? (
-                                <button 
-                                  type="button"
-                                  onClick={() => handleMarkAsPaid(inv.id)}
-                                  className="text-xs text-[#7C3A4D] hover:underline font-semibold cursor-pointer"
-                                >
-                                  Dar Baixa Manual
-                                </button>
+                                <div className="flex items-center justify-end gap-3">
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleApplyDiscount(inv.id)}
+                                    className="text-xs text-stone-600 hover:text-stone-900 font-medium hover:underline cursor-pointer"
+                                    title="Conceder desconto manual nesta fatura"
+                                  >
+                                    Desconto
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleMarkAsPaid(inv.id)}
+                                    className="text-xs text-[#7C3A4D] hover:underline font-semibold cursor-pointer"
+                                  >
+                                    Baixa Manual
+                                  </button>
+                                </div>
                               ) : (
                                 <span className="text-stone-400 text-xs">Pago em {new Date(inv.paid_at).toLocaleDateString('pt-BR')}</span>
                               )}
